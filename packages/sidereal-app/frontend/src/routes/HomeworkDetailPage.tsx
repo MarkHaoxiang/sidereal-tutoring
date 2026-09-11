@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { ArtefactDetail } from "@/components/artefacts/ArtefactDetail";
 import { DueDateField } from "@/components/artefacts/DueDateField";
 import { HomeworkQuestions } from "@/components/artefacts/HomeworkQuestions";
+import { Submission } from "@/components/artefacts/Submission";
 import { HOMEWORK_NEXT } from "@/components/artefacts/transitions";
 import { Spinner, StatusChip } from "@/components/ui";
 import { apiError } from "@/lib/api";
@@ -72,6 +73,7 @@ export function HomeworkDetailPage() {
             },
           }
         : {})}
+      above={<Submission submittedAt={homework.submitted_at} submission={homework.submission} />}
       details={
         <DueDateField
           value={homework.due_on}

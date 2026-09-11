@@ -1,7 +1,7 @@
 # sidereal-mcp
 
-MCP server exposing the tutoring operations to LLM agents: students, documents, ingestion, generation
-and generation jobs.
+MCP server exposing the tutoring operations to LLM agents: students, student logins, documents,
+ingestion, generation and generation jobs.
 
 ## Configuration
 

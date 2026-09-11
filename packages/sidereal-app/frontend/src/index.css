@@ -40,6 +40,9 @@
   --radius-card: 0.625rem;
   --radius-pill: 999px;
   --font-sans: "Inter Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* The student view sets its shell to this instead of the body's 14px: a little larger
+     to read, and the only place the base text size differs. */
+  --font-size-student: 0.9375rem;
 }
 
 body[data-theme="dark"] {

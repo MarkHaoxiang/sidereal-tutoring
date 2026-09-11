@@ -92,6 +92,14 @@ export function unwrap<T>(result: { data?: T; error?: unknown; response: Respons
   return result.data;
 }
 
+/** Who the signed-in user is to this app, and which of the two views they get. */
+export type Me = components["schemas"]["Identity"];
+export type CallerRole = components["schemas"]["CallerRole"];
+
+export async function getMe(): Promise<Me> {
+  return unwrap(await api.GET("/api/me"));
+}
+
 /** The request and response shapes of POST /api/documents, straight from the contract. */
 export type DocumentSource = components["schemas"]["DocumentSourceRequest"];
 export type CreateDocumentBody = components["schemas"]["DocumentRequest"];

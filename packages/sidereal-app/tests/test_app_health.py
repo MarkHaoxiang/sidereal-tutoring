@@ -24,6 +24,9 @@ def test_the_schema_names_every_route(client: TestClient) -> None:
 
     assert set(paths) == {
         "/api/health",
+        "/api/me",
+        "/api/students/{student_id}/login",
+        "/api/students/{student_id}/login/password",
         "/api/documents",
         "/api/documents/{document_id}/process",
         "/api/jobs/{kind}",

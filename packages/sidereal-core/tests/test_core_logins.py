@@ -1,0 +1,241 @@
+from __future__ import annotations
+
+from typing import Any
+from uuid import UUID
+
+import httpx
+import pytest
+from sidereal_core.directus import DirectusClient, DirectusUnavailableError
+from sidereal_core.logins import (
+    CallerRole,
+    InvalidEmailError,
+    LoginExistsError,
+    LoginMissingError,
+    LoginRefusedError,
+    StudentRoleMissingError,
+    WeakPasswordError,
+    create_login,
+    remove_login,
+    reset_password,
+    whoami,
+)
+from sidereal_core.models import Collection, DirectusUser, Student
+from sidereal_core.testing import DEFAULT_USER_ID, FakeDirectus
+
+EMAIL = "tutee@sidereal.example.com"
+PASSWORD = "correct-horse"
+
+
+def seeded() -> tuple[FakeDirectus, UUID]:
+    fake = FakeDirectus()
+    fake.seed(Collection.DIRECTUS_ROLES, {"name": "Student"})
+    row = fake.seed(Collection.STUDENTS, {"name": "A. Tutee", "status": "active"})
+    return fake, UUID(row["id"])
+
+
+def user_rows(fake: FakeDirectus) -> list[dict[str, Any]]:
+    return fake.rows(Collection.DIRECTUS_USERS)
+
+
+async def student_row(client: DirectusClient, student_id: UUID) -> Student:
+    return await client.get_item(Collection.STUDENTS, Student, student_id)
+
+
+async def test_create_login_makes_a_student_role_user_and_links_it() -> None:
+    fake, student_id = seeded()
+    role = fake.rows(Collection.DIRECTUS_ROLES)[0]
+
+    async with fake.client() as client:
+        login = await create_login(client, student_id, EMAIL, PASSWORD)
+
+        assert login.email == EMAIL
+        assert (await student_row(client, student_id)).user == login.user_id
+
+    created = user_rows(fake)[0]
+    assert created["role"] == role["id"]
+    assert created["first_name"] == "A. Tutee"
+    assert created["password"] == PASSWORD
+
+
+async def test_a_second_login_is_refused() -> None:
+    fake, student_id = seeded()
+
+    async with fake.client() as client:
+        await create_login(client, student_id, EMAIL, PASSWORD)
+
+        with pytest.raises(LoginExistsError):
+            await create_login(client, student_id, "other@sidereal.example.com", PASSWORD)
+
+    assert len(user_rows(fake)) == 1
+
+
+async def test_a_short_password_is_refused_before_anything_is_written() -> None:
+    fake, student_id = seeded()
+
+    async with fake.client() as client:
+        with pytest.raises(WeakPasswordError):
+            await create_login(client, student_id, EMAIL, "short")
+
+    assert user_rows(fake) == []
+
+
+@pytest.mark.parametrize("email", ["nobody", "@sidereal.example.com", "a@b", "a@.com"])
+async def test_a_bad_email_is_refused(email: str) -> None:
+    fake, student_id = seeded()
+
+    async with fake.client() as client:
+        with pytest.raises(InvalidEmailError):
+            await create_login(client, student_id, email, PASSWORD)
+
+    assert user_rows(fake) == []
+
+
+async def test_without_a_student_role_no_user_is_created() -> None:
+    fake = FakeDirectus()
+    row = fake.seed(Collection.STUDENTS, {"name": "A. Tutee"})
+
+    async with fake.client() as client:
+        with pytest.raises(StudentRoleMissingError):
+            await create_login(client, UUID(row["id"]), EMAIL, PASSWORD)
+
+    assert user_rows(fake) == []
+
+
+async def test_reset_password_writes_the_new_one() -> None:
+    fake, student_id = seeded()
+
+    async with fake.client() as client:
+        login = await create_login(client, student_id, EMAIL, PASSWORD)
+        again = await reset_password(client, student_id, "a-longer-one")
+
+    assert again.user_id == login.user_id
+    assert again.email == EMAIL
+    assert user_rows(fake)[0]["password"] == "a-longer-one"
+
+
+async def test_reset_password_needs_a_login_and_a_long_enough_password() -> None:
+    fake, student_id = seeded()
+
+    async with fake.client() as client:
+        with pytest.raises(LoginMissingError):
+            await reset_password(client, student_id, PASSWORD)
+        await create_login(client, student_id, EMAIL, PASSWORD)
+        with pytest.raises(WeakPasswordError):
+            await reset_password(client, student_id, "short")
+
+    assert user_rows(fake)[0]["password"] == PASSWORD
+
+
+async def test_remove_login_deletes_the_user_and_unlinks_the_student() -> None:
+    fake, student_id = seeded()
+
+    async with fake.client() as client:
+        await create_login(client, student_id, EMAIL, PASSWORD)
+
+        student = await remove_login(client, student_id)
+
+        assert student.user is None
+        assert (await student_row(client, student_id)).user is None
+    assert user_rows(fake) == []
+
+
+async def test_remove_login_needs_a_login() -> None:
+    fake, student_id = seeded()
+
+    async with fake.client() as client:
+        with pytest.raises(LoginMissingError):
+            await remove_login(client, student_id)
+
+
+async def test_whoami_is_a_student_when_a_student_row_points_at_the_caller() -> None:
+    fake, student_id = seeded()
+    fake.items[Collection.STUDENTS][str(student_id)]["user"] = str(DEFAULT_USER_ID)
+
+    async with fake.client() as client:
+        identity = await whoami(client)
+
+    assert identity.role is CallerRole.STUDENT
+    assert identity.student_id == student_id
+    assert identity.id == DEFAULT_USER_ID
+
+
+async def test_whoami_is_a_tutor_otherwise() -> None:
+    fake, _ = seeded()
+
+    async with fake.client() as client:
+        identity = await whoami(client)
+
+    assert identity.role is CallerRole.TUTOR
+    assert identity.student_id is None
+
+
+class Refuses(FakeDirectus):
+    """A Directus that answers one method and path prefix with a refusal."""
+
+    def __init__(self, method: str, prefix: str, status: int) -> None:
+        super().__init__()
+        self.refused = (method, prefix, status)
+
+    def handle(self, request: httpx.Request) -> httpx.Response:
+        method, prefix, status = self.refused
+        if request.method == method and request.url.path.startswith(prefix):
+            return httpx.Response(
+                status, json={"errors": [{"message": "no", "extensions": {"code": "FORBIDDEN"}}]}
+            )
+        return super().handle(request)
+
+
+def refusing(method: str, prefix: str, status: int) -> tuple[Refuses, UUID]:
+    fake = Refuses(method, prefix, status)
+    fake.seed(Collection.DIRECTUS_ROLES, {"name": "Student"})
+    return fake, UUID(fake.seed(Collection.STUDENTS, {"name": "A. Tutee"})["id"])
+
+
+async def test_an_unlinkable_login_is_not_left_behind() -> None:
+    fake, student_id = refusing("PATCH", "/items/students/", 403)
+
+    async with fake.client() as client:
+        with pytest.raises(LoginRefusedError, match="could not be given"):
+            await create_login(client, student_id, EMAIL, PASSWORD)
+
+    assert user_rows(fake) == []
+
+
+async def test_a_refused_user_creation_is_a_plain_sentence() -> None:
+    fake, student_id = refusing("POST", "/users", 400)
+
+    async with fake.client() as client:
+        with pytest.raises(LoginRefusedError, match="already be in use") as raised:
+            await create_login(client, student_id, EMAIL, PASSWORD)
+
+    assert raised.value.status == 400
+
+
+async def test_a_student_directus_will_not_show_is_not_found() -> None:
+    fake, student_id = refusing("GET", "/items/students/", 403)
+
+    async with fake.client() as client:
+        with pytest.raises(LoginRefusedError, match="could not be found") as raised:
+            await create_login(client, student_id, EMAIL, PASSWORD)
+
+    assert raised.value.status == 404
+
+
+async def test_directus_being_unreachable_stays_a_directus_failure() -> None:
+    fake, student_id = seeded()
+    fake.unavailable_after = 2
+
+    async with fake.client() as client:
+        with pytest.raises(DirectusUnavailableError):
+            await create_login(client, student_id, EMAIL, PASSWORD)
+
+
+async def test_directus_user_model_reads_a_created_user() -> None:
+    fake, student_id = seeded()
+
+    async with fake.client() as client:
+        login = await create_login(client, student_id, EMAIL, PASSWORD)
+        user = await client.update_user(login.user_id, {"first_name": "Tutee"})
+
+    assert isinstance(user, DirectusUser)
+    assert user.first_name == "Tutee"

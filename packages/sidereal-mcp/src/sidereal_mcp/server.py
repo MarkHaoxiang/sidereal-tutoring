@@ -7,6 +7,7 @@ from datetime import date
 from uuid import UUID
 
 from mcp.server.mcpserver import MCPServer
+from sidereal_core.logins import Identity, StudentLogin
 from sidereal_core.models import (
     Document,
     DocumentKind,
@@ -37,6 +38,26 @@ def create_server(services: Services | None = None) -> MCPServer:
     async def get_student(student_id: UUID) -> Student:
         """Read one student by id."""
         return await tools.get_student(resolved, student_id)
+
+    @server.tool()
+    async def whoami() -> Identity:
+        """Who this server's token belongs to, and the student row it is, if it is one."""
+        return await tools.whoami(resolved)
+
+    @server.tool()
+    async def create_student_login(student_id: UUID, email: str, password: str) -> StudentLogin:
+        """Give a student a login in the Student role. The password is shared out of band."""
+        return await tools.create_student_login(resolved, student_id, email, password)
+
+    @server.tool()
+    async def reset_student_password(student_id: UUID, password: str) -> StudentLogin:
+        """Set a new password on a student's existing login."""
+        return await tools.reset_student_password(resolved, student_id, password)
+
+    @server.tool()
+    async def remove_student_login(student_id: UUID) -> Student:
+        """Delete a student's login. Their work stays; only the way in goes."""
+        return await tools.remove_student_login(resolved, student_id)
 
     @server.tool()
     async def list_documents(

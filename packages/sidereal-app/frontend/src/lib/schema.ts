@@ -38,6 +38,7 @@ export interface Student extends AuditFields {
   subjects: string[] | null;
   notes: string | null;
   tutor: string | DirectusUser | null;
+  user: string | DirectusUser | null;
   status: StudentStatus;
 }
 
@@ -93,6 +94,8 @@ export interface Homework extends AuditFields {
   content: string | null;
   due_on: string | null;
   status: HomeworkStatus;
+  submission: string | null;
+  submitted_at: string | null;
   generated_from: GenerationProvenance | null;
   // Alias m2m field through the `homework_questions` junction.
   questions: string[] | HomeworkQuestion[];

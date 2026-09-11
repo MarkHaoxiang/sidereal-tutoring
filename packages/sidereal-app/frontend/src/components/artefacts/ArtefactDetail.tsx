@@ -25,6 +25,8 @@ export interface ArtefactDetailProps {
   onSaveContent: (content: string) => Promise<void>;
   /** The one step the tutor may take from this status, if there is one. */
   advance?: { label: string; run: () => Promise<void> };
+  /** A card to read before the content — what the student handed in. */
+  above?: ReactNode;
   /** Fields that belong to this kind alone — a due date, a period. */
   details?: ReactNode;
   /** Anything below the content, such as the questions of a homework. */
@@ -45,6 +47,7 @@ export function ArtefactDetail({
   emptyContent,
   onSaveContent,
   advance,
+  above,
   details,
   children,
   deleteTitle,
@@ -176,6 +179,7 @@ export function ArtefactDetail({
         ) : null}
       </div>
 
+      {above}
       {details}
 
       <section className={styles.section}>

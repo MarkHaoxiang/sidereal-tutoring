@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import UUID
+
 import pytest
 from sidereal_core.directus import DirectusError, DirectusUnavailableError
 from sidereal_core.models import Collection, Student, StudentDraft, StudentStatus
@@ -75,3 +77,21 @@ async def test_the_server_can_fail_partway_through() -> None:
         await client.me()
         with pytest.raises(DirectusUnavailableError):
             await client.me()
+
+
+async def test_roles_and_users_answer_off_items() -> None:
+    fake = FakeDirectus()
+    role = fake.seed(Collection.DIRECTUS_ROLES, {"name": "Student"})
+
+    async with fake.client() as client:
+        found = await client.find_role("Student")
+        missing = await client.find_role("Nobody")
+        created = await client.create_user({"email": "tutee@example.test", "role": role["id"]})
+        updated = await client.update_user(created.id, {"first_name": "A."})
+        await client.delete_user(created.id)
+
+    assert found is not None
+    assert found.id == UUID(role["id"])
+    assert missing is None
+    assert updated.first_name == "A."
+    assert fake.rows(Collection.DIRECTUS_USERS) == []

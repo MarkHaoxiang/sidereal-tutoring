@@ -11,7 +11,7 @@ from uuid import UUID
 import httpx
 from pydantic import BaseModel, ConfigDict, Field
 
-from sidereal_core.models import DirectusFile, DirectusUser, Draft
+from sidereal_core.models import DirectusFile, DirectusRole, DirectusUser, Draft
 
 M = TypeVar("M", bound=BaseModel)
 
@@ -96,17 +96,9 @@ class DirectusClient:
         limit: int | None = None,
         sort: Sequence[str] | None = None,
     ) -> list[M]:
-        params: dict[str, str | int] = {}
-        if filter is not None:
-            params["filter"] = json.dumps(filter)
-        if limit is not None:
-            params["limit"] = limit
-        if sort:
-            params["sort"] = ",".join(sort)
-        data = await self._request("GET", f"/items/{collection}", params=params)
-        if not isinstance(data, list):
-            raise DirectusError(200, message=f"{collection}: expected a list of items")
-        return [model.model_validate(item) for item in data]
+        return await self._list(
+            f"/items/{collection}", model, filter=filter, limit=limit, sort=sort
+        )
 
     async def get_item(self, collection: str, model: type[M], item_id: str | UUID) -> M:
         data = await self._request("GET", f"/items/{collection}/{item_id}")
@@ -135,6 +127,26 @@ class DirectusClient:
         data = await self._request("GET", "/users/me")
         return DirectusUser.model_validate(data)
 
+    async def list_roles(self) -> list[DirectusRole]:
+        """`directus_roles` is a system collection: it answers on `/roles`, not `/items`."""
+        return await self._list("/roles", DirectusRole)
+
+    async def find_role(self, name: str) -> DirectusRole | None:
+        roles = await self._list("/roles", DirectusRole, filter={"name": {"_eq": name}}, limit=1)
+        return roles[0] if roles else None
+
+    async def create_user(self, data: Mapping[str, Any]) -> DirectusUser:
+        """`directus_users` is a system collection: it answers on `/users`, not `/items`."""
+        created = await self._request("POST", "/users", json=dict(data))
+        return DirectusUser.model_validate(created)
+
+    async def update_user(self, user_id: str | UUID, data: Mapping[str, Any]) -> DirectusUser:
+        updated = await self._request("PATCH", f"/users/{user_id}", json=dict(data))
+        return DirectusUser.model_validate(updated)
+
+    async def delete_user(self, user_id: str | UUID) -> None:
+        await self._request("DELETE", f"/users/{user_id}")
+
     async def get_file(self, file_id: str | UUID) -> DirectusFile:
         """`directus_files` is a system collection: it answers on `/files`, not `/items`."""
         data = await self._request("GET", f"/files/{file_id}")
@@ -145,6 +157,27 @@ class DirectusClient:
         name = (await self.get_file(file_id)).filename_download
         response = await self._send("GET", f"/assets/{file_id}", params={"download": "true"})
         return name, response.content
+
+    async def _list(
+        self,
+        path: str,
+        model: type[M],
+        *,
+        filter: Mapping[str, Any] | None = None,
+        limit: int | None = None,
+        sort: Sequence[str] | None = None,
+    ) -> list[M]:
+        params: dict[str, str | int] = {}
+        if filter is not None:
+            params["filter"] = json.dumps(filter)
+        if limit is not None:
+            params["limit"] = limit
+        if sort:
+            params["sort"] = ",".join(sort)
+        data = await self._request("GET", path, params=params)
+        if not isinstance(data, list):
+            raise DirectusError(200, message=f"{path}: expected a list of items")
+        return [model.model_validate(item) for item in data]
 
     async def _request(
         self,

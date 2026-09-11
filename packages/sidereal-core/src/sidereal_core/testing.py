@@ -14,12 +14,14 @@ import httpx
 from sidereal_core.directus import DirectusClient
 
 BASE_URL = "http://directus.test"
+# Directus's own collections answer outside `/items`; the rows are stored the same way.
+SYSTEM_ROUTES = {"users": "directus_users", "roles": "directus_roles"}
 DEFAULT_TOKEN = "tutor-token"  # noqa: S105 - a test double's token, not a credential.
 DEFAULT_USER_ID = UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
 
 
 class FakeDirectus:
-    """Items CRUD and `/users/me` over `httpx.MockTransport`.
+    """Items, `/users` and `/roles` CRUD over `httpx.MockTransport`.
 
     Filters understand one shape — `{"field": {"_eq": value}}` — which is all the
     workspace asks of Directus.
@@ -102,6 +104,8 @@ class FakeDirectus:
             return httpx.Response(200, json={"data": self.user})
         if parts[0] in ("files", "assets") and len(parts) == 2:
             return self._file(parts[0], parts[1])
+        if parts[0] in SYSTEM_ROUTES and len(parts) in (1, 2):
+            parts = ["items", SYSTEM_ROUTES[parts[0]], *parts[1:]]
         if parts[0] != "items" or len(parts) not in (2, 3):
             return _error(404, f"Route {request.url.path} does not exist.", "ROUTE_NOT_FOUND")
 

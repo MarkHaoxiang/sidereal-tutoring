@@ -7,7 +7,7 @@ from enum import StrEnum
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class Collection(StrEnum):
@@ -21,6 +21,7 @@ class Collection(StrEnum):
     GENERATION_JOBS = "generation_jobs"
     HOMEWORK_QUESTIONS = "homework_questions"
     DIRECTUS_USERS = "directus_users"
+    DIRECTUS_ROLES = "directus_roles"
 
 
 class StudentStatus(StrEnum):
@@ -108,6 +109,13 @@ class DirectusUser(Record):
     status: str | None = None
 
 
+class DirectusRole(Record):
+    """A row of Directus's own `directus_roles`, read through `/roles`."""
+
+    name: str
+    description: str | None = None
+
+
 class DirectusFile(Record):
     """A row of Directus's own `directus_files`, read through `/files/{id}`."""
 
@@ -124,7 +132,14 @@ class StudentDraft(Draft):
     subjects: list[str] = Field(default_factory=list)
     notes: str | None = None
     tutor: UUID | None = None
+    user: UUID | None = None
     status: StudentStatus = StudentStatus.ACTIVE
+
+    @field_validator("subjects", mode="before")
+    @classmethod
+    def _null_is_empty(cls, value: Any) -> Any:
+        """A student with no subjects is `null` in Directus, not `[]`."""
+        return [] if value is None else value
 
 
 class Student(Record, StudentDraft):
@@ -181,6 +196,8 @@ class HomeworkDraft(Draft):
     content: str
     due_on: date | None = None
     status: HomeworkStatus = HomeworkStatus.DRAFT
+    submission: str | None = None
+    submitted_at: datetime | None = None
     generated_from: dict[str, Any] | None = None
 
 

@@ -1,0 +1,34 @@
+.login {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.5rem 0 0;
+  color: var(--color-fg-muted);
+}
+
+.loginLabel {
+  color: var(--color-fg);
+  font-weight: 500;
+}
+
+.email {
+  color: var(--color-fg);
+  overflow-wrap: anywhere;
+}
+
+.separator {
+  color: var(--color-border);
+}
+
+.passwordRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.password {
+  flex: 1 1 10rem;
+  font-family: ui-monospace, "SFMono-Regular", "Menlo", monospace;
+  letter-spacing: 0.04em;
+}

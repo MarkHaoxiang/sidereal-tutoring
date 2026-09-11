@@ -2279,7 +2279,7 @@ fields:
       readonly: true
       required: false
       searchable: true
-      sort: 9
+      sort: 11
       special:
         - user-created
       translations: null
@@ -2321,7 +2321,7 @@ fields:
       readonly: true
       required: false
       searchable: true
-      sort: 10
+      sort: 12
       special:
         - date-created
       translations: null
@@ -2363,7 +2363,7 @@ fields:
       readonly: true
       required: false
       searchable: true
-      sort: 11
+      sort: 13
       special:
         - user-updated
       translations: null
@@ -2405,7 +2405,7 @@ fields:
       readonly: true
       required: false
       searchable: true
-      sort: 12
+      sort: 14
       special:
         - date-updated
       translations: null
@@ -2454,6 +2454,86 @@ fields:
       validation: null
       validation_message: null
       width: full
+  - collection: homework
+    field: submission
+    type: text
+    meta:
+      collection: homework
+      conditions: null
+      display: null
+      display_options: null
+      field: submission
+      group: null
+      hidden: false
+      interface: input-rich-text-md
+      note: What the student handed in.
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 9
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: submission
+      table: homework
+      data_type: text
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: homework
+    field: submitted_at
+    type: timestamp
+    meta:
+      collection: homework
+      conditions: null
+      display: datetime
+      display_options: null
+      field: submitted_at
+      group: null
+      hidden: false
+      interface: datetime
+      note: When the student handed it in.
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 10
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: submitted_at
+      table: homework
+      data_type: timestamp with time zone
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
   - collection: homework_questions
     field: id
     type: uuid
@@ -4550,7 +4630,7 @@ fields:
       readonly: true
       required: false
       searchable: true
-      sort: 8
+      sort: 9
       special:
         - user-created
       translations: null
@@ -4592,7 +4672,7 @@ fields:
       readonly: true
       required: false
       searchable: true
-      sort: 9
+      sort: 10
       special:
         - date-created
       translations: null
@@ -4634,7 +4714,7 @@ fields:
       readonly: true
       required: false
       searchable: true
-      sort: 10
+      sort: 11
       special:
         - user-updated
       translations: null
@@ -4676,7 +4756,7 @@ fields:
       readonly: true
       required: false
       searchable: true
-      sort: 11
+      sort: 12
       special:
         - date-updated
       translations: null
@@ -4700,6 +4780,48 @@ fields:
       has_auto_increment: false
       foreign_key_table: null
       foreign_key_column: null
+  - collection: students
+    field: user
+    type: uuid
+    meta:
+      collection: students
+      conditions: null
+      display: user
+      display_options: null
+      field: user
+      group: null
+      hidden: false
+      interface: select-dropdown-m2o
+      note: The student's login, if any.
+      options:
+        template: '{{avatar.$thumbnail}} {{first_name}} {{last_name}}'
+      readonly: false
+      required: false
+      searchable: true
+      sort: 8
+      special:
+        - m2o
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: user
+      table: students
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: true
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: directus_users
+      foreign_key_column: id
 systemFields:
   - collection: directus_activity
     field: timestamp
@@ -5405,5 +5527,26 @@ relations:
       foreign_key_table: directus_users
       foreign_key_column: id
       constraint_name: students_user_updated_foreign
+      on_update: NO ACTION
+      on_delete: SET NULL
+  - collection: students
+    field: user
+    related_collection: directus_users
+    meta:
+      junction_field: null
+      many_collection: students
+      many_field: user
+      one_allowed_collections: null
+      one_collection: directus_users
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: null
+      sort_field: null
+    schema:
+      table: students
+      column: user
+      foreign_key_table: directus_users
+      foreign_key_column: id
+      constraint_name: students_user_foreign
       on_update: NO ACTION
       on_delete: SET NULL

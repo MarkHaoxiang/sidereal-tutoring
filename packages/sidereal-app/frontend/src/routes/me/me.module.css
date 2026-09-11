@@ -1,0 +1,126 @@
+/* Page furniture for the student view. Roomier than the tutor app's: fewer things on a
+   page, more air between them. */
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.heading {
+  margin: 0;
+  font-size: 1.5rem;
+  overflow-wrap: anywhere;
+}
+
+.subheading {
+  margin: 0.25rem 0 0;
+  color: var(--color-fg-muted);
+}
+
+.planTitle {
+  margin: 0;
+  font-size: 1.125rem;
+}
+
+.planContent {
+  margin-top: 0.75rem;
+}
+
+.sectionHeading {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  color: var(--color-fg-muted);
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--color-fg-muted);
+  text-decoration: none;
+}
+
+.back:hover {
+  color: var(--color-accent);
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.5rem 0 0;
+  color: var(--color-fg-muted);
+}
+
+.status {
+  margin: 0;
+  color: var(--color-fg-muted);
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  color: var(--color-fg-muted);
+}
+
+.line {
+  margin: 0;
+}
+
+.strong {
+  font-weight: 600;
+}
+
+.questions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+  counter-reset: question;
+}
+
+.question {
+  padding-left: 1.75rem;
+  text-indent: -1.75rem;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+}
+
+.question::before {
+  counter-increment: question;
+  content: counter(question) ". ";
+  color: var(--color-fg-muted);
+}
+
+.past {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-bg-raised);
+}
+
+.pastSummary {
+  padding: 0.75rem;
+  color: var(--color-fg-muted);
+  cursor: pointer;
+}
+
+.pastBody {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 0 0.75rem 0.75rem;
+}

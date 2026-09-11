@@ -8,6 +8,8 @@ from enum import Enum
 from typing import Any
 from uuid import UUID
 
+from sidereal_core import logins
+from sidereal_core.logins import Identity, StudentLogin
 from sidereal_core.models import (
     Collection,
     Document,
@@ -37,6 +39,26 @@ async def list_students(
 
 async def get_student(services: Services, student_id: UUID) -> Student:
     return await services.directus.get_item(Collection.STUDENTS, Student, student_id)
+
+
+async def whoami(services: Services) -> Identity:
+    return await logins.whoami(services.directus)
+
+
+async def create_student_login(
+    services: Services, student_id: UUID, email: str, password: str
+) -> StudentLogin:
+    return await logins.create_login(services.directus, student_id, email, password)
+
+
+async def reset_student_password(
+    services: Services, student_id: UUID, password: str
+) -> StudentLogin:
+    return await logins.reset_password(services.directus, student_id, password)
+
+
+async def remove_student_login(services: Services, student_id: UUID) -> Student:
+    return await logins.remove_login(services.directus, student_id)
 
 
 async def list_documents(

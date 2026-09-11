@@ -7,6 +7,12 @@
 //   feedback  useFeedbackList({...}) · useFeedback(id) · useUpdateFeedback · useDeleteFeedback
 //   plans     usePlans({...}) · usePlan(id) · useUpdatePlan · useDeletePlan
 //   jobs      useCreateJob() then useJob(jobId) — it polls until succeeded/failed
+//   logins    the student's sign-in, through the FastAPI app rather than Directus:
+//             useCreateStudentLogin · useResetStudentPassword · useRemoveStudentLogin
+//   me        the student view's own hooks, taking no student id (Directus filters to the
+//             caller's own rows): useMyStudent · useMyHomeworkList · useMyHomework(id) ·
+//             useMyFeedbackList · useMyFeedback(id) · useMyPlans · useMySessions ·
+//             useSaveAnswers · useHandInHomework
 // Documents and jobs poll themselves while unsettled (see pollWhile); every update
 // takes `{id, patch}`, and failures are reported through `apiError(err)` from
 // "@/lib/api" in a sonner toast.
@@ -14,6 +20,8 @@ export * from "./documents";
 export * from "./feedback";
 export * from "./homework";
 export * from "./jobs";
+export * from "./logins";
+export * from "./me";
 export * from "./plans";
 export * from "./poll";
 export * from "./sessions";

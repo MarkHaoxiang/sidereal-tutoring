@@ -8,6 +8,7 @@ from sidereal_core.directus import (
 from sidereal_core.models import (
     Collection,
     DirectusFile,
+    DirectusRole,
     DirectusUser,
     Document,
     DocumentDraft,
@@ -49,6 +50,7 @@ __all__ = [
     "DirectusError",
     "DirectusErrorDetail",
     "DirectusFile",
+    "DirectusRole",
     "DirectusSettings",
     "DirectusUnavailableError",
     "DirectusUser",

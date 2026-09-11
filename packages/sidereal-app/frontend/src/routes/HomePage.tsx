@@ -45,7 +45,8 @@ export function HomePage() {
 
   const students = useStudents({ status: "active" });
   const sessions = useSessions({ status: "scheduled", from, to, sort: "scheduled_at" });
-  const homework = useHomeworkList({ status: ["draft"], limit: 10 });
+  // Handed-in homework is a review too, so it sits beside the drafts.
+  const homework = useHomeworkList({ status: ["draft", "submitted"], limit: 10 });
   const feedback = useFeedbackList({ status: ["draft"], limit: 10 });
   const plans = usePlans({ status: ["draft"], limit: 10 });
   const material = useDocuments({ status: ["pending", "processing", "failed"], limit: 20 });
@@ -132,6 +133,9 @@ export function HomePage() {
                 )}
                 <span className={styles.rowMeta}>
                   <StatusChip status={artefact.kind} />
+                  {artefact.status === "submitted" ? (
+                    <span className={styles.note}>handed in</span>
+                  ) : null}
                   {artefact.student ? <span>{artefact.student.name}</span> : null}
                 </span>
               </li>

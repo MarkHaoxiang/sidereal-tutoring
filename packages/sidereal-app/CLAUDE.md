@@ -18,5 +18,7 @@ Top layer. Imports core, ingest and generate; never sidereal-mcp.
   not the response, carries the outcome.
 - `POST /api/documents` returns 202 with the pending row and reads the material in the background; the
   row carries the outcome. Filing and reading the row are `sidereal_ingest.documents`, not app logic.
+- The login endpoints hold no logic: `sidereal_core.logins` does the work, and a
+  `StudentLoginError` becomes a status and a `code` in `main.py`, nowhere else.
 - Tests override `get_http_client`, `get_generators` and `get_ingesters` only: the auth dependency
   itself is exercised, never stubbed.

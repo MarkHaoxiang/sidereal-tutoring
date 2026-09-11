@@ -16,6 +16,8 @@ from sidereal_core.models import Collection, Student, StudentDraft, StudentStatu
 BASE_URL = "http://directus.test"
 STUDENT_ID = UUID("11111111-1111-4111-8111-111111111111")
 STUDENT_ROW = {"id": str(STUDENT_ID), "name": "A. Tutee", "status": "active"}
+ROLE_ROW = {"id": "22222222-2222-4222-8222-222222222222", "name": "Student"}
+USER_ROW = {"id": "33333333-3333-4333-8333-333333333333", "email": "tutee@example.test"}
 
 Handler = Callable[[httpx.Request], httpx.Response]
 
@@ -164,3 +166,41 @@ async def test_an_injected_http_client_is_not_closed_by_the_wrapper() -> None:
 
     assert not http_client.is_closed
     await http_client.aclose()
+
+
+async def test_roles_and_users_are_system_routes_not_items() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        if request.url.path == "/roles":
+            return httpx.Response(200, json={"data": [ROLE_ROW]})
+        if request.method == "DELETE":
+            return httpx.Response(204)
+        return httpx.Response(200, json={"data": USER_ROW})
+
+    async with client_for(handler) as client:
+        role = await client.find_role("Student")
+        roles = await client.list_roles()
+        created = await client.create_user({"email": "tutee@example.test"})
+        updated = await client.update_user(created.id, {"first_name": "A."})
+        await client.delete_user(created.id)
+
+    assert role is not None
+    assert role.name == "Student"
+    assert [each.name for each in roles] == ["Student"]
+    assert created.email == "tutee@example.test"
+    assert updated.id == created.id
+    assert [(request.method, request.url.path) for request in seen] == [
+        ("GET", "/roles"),
+        ("GET", "/roles"),
+        ("POST", "/users"),
+        ("PATCH", f"/users/{created.id}"),
+        ("DELETE", f"/users/{created.id}"),
+    ]
+    assert json.loads(seen[0].url.params["filter"]) == {"name": {"_eq": "Student"}}
+
+
+async def test_find_role_is_none_when_the_name_is_unknown() -> None:
+    async with client_for(lambda _: httpx.Response(200, json={"data": []})) as client:
+        assert await client.find_role("Student") is None

@@ -40,6 +40,8 @@ function fetchHomework(id: string) {
         "content",
         "status",
         "due_on",
+        "submission",
+        "submitted_at",
         "generated_from",
         "date_created",
         { student: ["id", "name"] },

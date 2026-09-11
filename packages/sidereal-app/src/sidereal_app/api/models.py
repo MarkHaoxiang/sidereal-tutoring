@@ -23,6 +23,19 @@ class JobRequest(BaseModel):
     period_end: date | None = None
 
 
+class LoginRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: str
+    password: str
+
+
+class PasswordRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    password: str
+
+
 class FileSourceRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

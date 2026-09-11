@@ -28,7 +28,18 @@ function fetchStudents(params: StudentListParams) {
 function fetchStudent(id: string) {
   return directus.request(
     readItem("students", id, {
-      fields: ["id", "name", "level", "subjects", "notes", "status", "date_created", "date_updated"],
+      fields: [
+        "id",
+        "name",
+        "level",
+        "subjects",
+        "notes",
+        "status",
+        "date_created",
+        "date_updated",
+        // The id of the student's login, if they have one; `useStudentLogin` reads its email.
+        "user",
+      ],
     })
   );
 }

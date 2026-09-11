@@ -54,6 +54,10 @@
   gap: 0.5rem;
 }
 
+.note {
+  color: var(--color-fg-muted);
+}
+
 .error {
   color: var(--color-danger);
 }

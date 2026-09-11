@@ -3,9 +3,10 @@ import { Link, Outlet, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
 import { StudentDialog } from "@/components/students/StudentDialog";
+import { StudentLogin } from "@/components/students/StudentLogin";
 import { Button, ConfirmDialog, Spinner, StatusChip, TabPanel, Tabs } from "@/components/ui";
 import { apiError } from "@/lib/api";
-import { useStudent, useUpdateStudent } from "@/lib/queries";
+import { useStudent, useStudentLogin, useUpdateStudent } from "@/lib/queries";
 
 import pageStyles from "./page.module.css";
 import styles from "./StudentDetailPage.module.css";
@@ -16,6 +17,9 @@ export function StudentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { data: student, isLoading, isError } = useStudent(id);
   const updateStudent = useUpdateStudent();
+  // `user` comes back as an id; its email is a `directus_users` read of its own.
+  const loginUserId = typeof student?.user === "string" ? student.user : null;
+  const login = useStudentLogin(loginUserId);
   const [editOpen, setEditOpen] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
 
@@ -93,6 +97,12 @@ export function StudentDetailPage() {
               </span>
             ))}
           </p>
+          <StudentLogin
+            studentId={student.id}
+            studentName={student.name}
+            userId={loginUserId}
+            email={login.data?.email ?? null}
+          />
         </header>
       ) : null}
 

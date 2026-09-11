@@ -85,3 +85,9 @@ def test_job_status_values_are_the_wire_tokens() -> None:
         "succeeded",
         "failed",
     ]
+
+
+def test_a_student_with_no_subjects_reads_back_as_an_empty_list() -> None:
+    student = Student.model_validate({"id": STUDENT_ID, "name": "A. Tutee", "subjects": None})
+
+    assert student.subjects == []

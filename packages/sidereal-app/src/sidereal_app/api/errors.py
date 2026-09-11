@@ -6,6 +6,13 @@ DIRECTUS_UNAVAILABLE = "directus_unavailable"
 BAD_CREDENTIALS = "invalid_token"
 NO_CREDENTIALS = "missing_token"
 DIRECTUS_REJECTED = "directus_rejected"
+LOGIN_EXISTS = "login_exists"
+LOGIN_MISSING = "login_missing"
+INVALID_EMAIL = "invalid_email"
+WEAK_PASSWORD = "weak_password"  # noqa: S105 - an error code, not a password.
+STUDENT_ROLE_MISSING = "student_role_missing"
+LOGIN_REFUSED = "login_refused"
+LOGIN_FAILED = "login_failed"
 
 
 def detail(code: str, message: str) -> dict[str, Any]:

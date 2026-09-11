@@ -21,12 +21,16 @@ Admin app: http://localhost:8055 — sign in with `ADMIN_EMAIL` / `ADMIN_PASSWOR
 ./scripts/directus-schema-snapshot.sh /tmp/x.yaml  # ... or anywhere else
 ```
 
-## Tutor role and agent token
+## Roles and agent token
 
 ```sh
-./scripts/directus-bootstrap.sh                 # creates the role, policy, permissions, agent user
+./scripts/directus-bootstrap.sh                 # creates the Tutor and Student roles, their
+                                                # policies and permissions, and the agent user
 ./scripts/directus-bootstrap.sh --rotate-token  # issue a fresh static token
 ```
+
+The Student permissions need a licensed instance; unlicensed, the script says so and skips
+them.
 
 It prints a `SIDEREAL_DIRECTUS_TOKEN=` line; copy the value into `.env`. Directus conceals an
 existing static token, so a plain re-run cannot reprint it — rotate instead.
