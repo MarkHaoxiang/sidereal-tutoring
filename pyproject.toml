@@ -1,0 +1,83 @@
+[project]
+name = "sidereal-tutoring"
+version = "0.1.0"
+description = "Tutoring assistant: Directus system of record, Python ingestion and generation"
+requires-python = ">=3.12"
+
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+sidereal-core = { workspace = true }
+sidereal-ingest = { workspace = true }
+sidereal-generate = { workspace = true }
+sidereal-mcp = { workspace = true }
+sidereal-app = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "sidereal-core",
+    "sidereal-ingest",
+    "sidereal-generate",
+    "sidereal-mcp",
+    "sidereal-app",
+    "pytest>=8",
+    # The Anthropic SDK's HTTP layer. Named here so sidereal-generate's tests can hand
+    # it a MockTransport instead of reaching the network.
+    "httpx2",
+    "pytest-asyncio",
+    "pytest-cov",
+    "mypy",
+    "ruff",
+    "pre-commit",
+]
+
+[tool.ruff]
+line-length = 100
+# Pinned so the per-package `ruff.toml` files (which extend this one, for the layering
+# bans) inherit it instead of defaulting to their own directory: otherwise isort would
+# call `sidereal_core` first-party inside sidereal-core and third-party everywhere else,
+# and the same import block would be sorted two different ways depending on which config won.
+src = ["."]
+# pre-commit passes changed files by name, and ruff ignores excludes for paths given
+# explicitly unless told otherwise.
+force-exclude = true
+
+[tool.ruff.lint]
+extend-select = [
+    "I", "B", "UP", "C4", "SIM", "RUF",
+    "S", "A", "ASYNC", "BLE", "DTZ", "ERA", "EXE", "FA", "G", "ICN", "INT",
+    "LOG", "PGH", "PIE", "PTH", "PYI", "Q", "RSE", "SLF", "SLOT", "TID", "YTT",
+    "ISC", "PERF", "RET", "T20", "FURB", "PT",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# `filter` is Directus's own query parameter name; renaming it would hide the wire API.
+"packages/sidereal-core/src/sidereal_core/directus.py" = ["A002"]
+# Writes the schema to stdout so a generator can redirect it; the print is the API.
+"packages/sidereal-app/src/sidereal_app/api/openapi.py" = ["T20"]
+# S101: assert is what a test is. PT018: compound asserts read better than split ones
+# when the two halves are one fact. S603: subprocess with a literal argv.
+# S105/S106: fixture tokens, not real credentials.
+"packages/*/tests/**" = ["S101", "PT018", "S603", "S105", "S106"]
+
+[tool.mypy]
+strict = true
+# So bare `uv run mypy` checks the workspace, as CLAUDE.md documents. Without
+# this it exits "Missing target module" unless every package is named on the CLI.
+files = ["packages/*/src", "packages/*/tests"]
+disallow_any_explicit = false
+warn_unreachable = true
+disallow_any_unimported = true
+enable_error_code = [
+    "ignore-without-code",
+    "truthy-iterable",
+    "unused-awaitable",
+    "mutable-override",
+    "deprecated",
+    "exhaustive-match",
+    "redundant-expr",
+    "truthy-bool",
+    "possibly-undefined",
+]
+mypy_path = "packages/sidereal-core/src:packages/sidereal-ingest/src:packages/sidereal-generate/src:packages/sidereal-mcp/src:packages/sidereal-app/src"

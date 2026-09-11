@@ -1,0 +1,51 @@
+# Local development only. The credentials in .env are plaintext dev placeholders and must
+# not be reused anywhere that is reachable from outside this machine.
+#
+# Postgres uses pgvector/pgvector:pg17 so `CREATE EXTENSION vector` works out of the box;
+# Directus itself does not need it, later retrieval over `documents` does.
+#
+# See directus/README.md for bringing the stack up, applying the schema and minting the
+# agent token.
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    env_file:
+      - path: .env
+        required: true
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sidereal} -d ${POSTGRES_DB:-sidereal}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  directus:
+    image: directus/directus:12.3.1
+    env_file:
+      - path: .env
+        required: true
+    environment:
+      EXTENSIONS_AUTO_RELOAD: "true"
+    ports:
+      - "8055:8055"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - directus-uploads:/directus/uploads
+      # Read/write: scripts/directus-schema-snapshot.sh writes the snapshot back out here.
+      - ./directus/schema:/directus/schema
+      - ./directus/extensions:/directus/extensions
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8055/server/ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+volumes:
+  postgres-data:
+  directus-uploads:

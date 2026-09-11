@@ -1,0 +1,5 @@
+extend = "../../pyproject.toml"
+
+# sidereal-app and sidereal-mcp are siblings: neither may reach across.
+[lint.flake8-tidy-imports.banned-api]
+"sidereal_mcp".msg = "sidereal-app and sidereal-mcp are siblings; neither imports the other."

@@ -1,0 +1,16 @@
+{
+  "name": "sidereal-audit",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "directus:extension": {
+    "type": "hook",
+    "path": "dist/index.js",
+    "source": "src/index.ts",
+    "host": "^12.0.0"
+  },
+  "scripts": {
+    "build": "directus-extension build",
+    "dev": "directus-extension build --watch --no-minify"
+  }
+}

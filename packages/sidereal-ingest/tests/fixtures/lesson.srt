@@ -1,0 +1,7 @@
+1
+00:00:01,000 --> 00:00:03,500
+Let's look at the homework first.
+
+2
+00:00:03,600 --> 00:00:06,000
+Question three asked for the roots.

@@ -1,0 +1,27 @@
+[project]
+name = "sidereal-ingest"
+version = "0.1.0"
+description = "Turns transcripts, web pages and tutor uploads into sidereal-tutoring documents"
+requires-python = ">=3.12"
+dependencies = [
+    "sidereal-core",
+    "httpx",
+    "selectolax",
+    "pypdf",
+    "python-docx",
+]
+
+[tool.uv.sources]
+sidereal-core = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--cov=sidereal_ingest --cov-report=term-missing --strict-markers --strict-config"
+xfail_strict = true
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+filterwarnings = ["error"]

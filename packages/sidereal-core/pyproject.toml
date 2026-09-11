@@ -1,0 +1,22 @@
+[project]
+name = "sidereal-core"
+version = "0.1.0"
+description = "Domain models and the Directus client for sidereal-tutoring"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2",
+    "httpx",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--cov=sidereal_core --cov-report=term-missing --strict-markers --strict-config"
+xfail_strict = true
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+# A warning nobody reads is a warning nobody fixes.
+filterwarnings = ["error"]

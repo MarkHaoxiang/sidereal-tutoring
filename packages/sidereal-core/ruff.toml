@@ -1,0 +1,8 @@
+extend = "../../pyproject.toml"
+
+# The bottom of the one-way layering: core imports nothing above it.
+[lint.flake8-tidy-imports.banned-api]
+"sidereal_ingest".msg = "sidereal-core is the bottom layer; it must not import sidereal-ingest."
+"sidereal_generate".msg = "sidereal-core is the bottom layer; it must not import sidereal-generate."
+"sidereal_mcp".msg = "sidereal-core is the bottom layer; it must not import sidereal-mcp."
+"sidereal_app".msg = "sidereal-core is the bottom layer; it must not import sidereal-app."

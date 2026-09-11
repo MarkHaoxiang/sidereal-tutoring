@@ -1,0 +1,83 @@
+/* Tailwind v4 without Preflight: theme.css (tokens/keyframes) and utilities.css
+   (the utility classes) only — never the full "tailwindcss" import, which would pull
+   in Preflight's element resets on top of the tokens defined below. */
+@import "tailwindcss/theme.css";
+@import "tailwindcss/utilities.css";
+
+@import "@fontsource-variable/inter";
+
+/* `dark:` fires when the element is, or is inside, body[data-theme="dark"] — the only
+   theme switch in this app. There is no ".dark" class. */
+@custom-variant dark (&:where(body[data-theme="dark"], body[data-theme="dark"] *));
+
+/* Design tokens — the single source of truth. Tailwind's utilities alias onto these
+   via @theme inline below; nothing here restates a Tailwind default. */
+:root {
+  --color-bg: #f8f9fb;
+  --color-bg-raised: #ffffff;
+  --color-fg: #14181f;
+  --color-fg-muted: #5b6472;
+  --color-border: #dde1e7;
+  --color-accent: #3555d1;
+  --color-accent-fg: #ffffff;
+  --color-danger: #c23636;
+  --color-success: #237a4b;
+  --font-sans: "Inter Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+body[data-theme="dark"] {
+  --color-bg: #131720;
+  --color-bg-raised: #1b212c;
+  --color-fg: #e7eaef;
+  --color-fg-muted: #97a1b0;
+  --color-border: #2b323f;
+  --color-accent: #7f9bff;
+  --color-accent-fg: #10131a;
+  --color-danger: #e5837f;
+  --color-success: #63c793;
+}
+
+@theme inline {
+  --color-bg: var(--color-bg);
+  --color-bg-raised: var(--color-bg-raised);
+  --color-fg: var(--color-fg);
+  --color-fg-muted: var(--color-fg-muted);
+  --color-border: var(--color-border);
+  --color-accent: var(--color-accent);
+  --color-accent-fg: var(--color-accent-fg);
+  --color-danger: var(--color-danger);
+  --color-success: var(--color-success);
+  --font-sans: var(--font-sans);
+}
+
+/* Preflight is off, so the handful of resets it would have given us are reapplied
+   explicitly here instead. */
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+  color: inherit;
+}
+
+a {
+  color: inherit;
+}

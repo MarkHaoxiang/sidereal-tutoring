@@ -1,0 +1,27 @@
+[project]
+name = "sidereal-generate"
+version = "0.1.0"
+description = "LLM generation of homework, feedback and plans for sidereal-tutoring"
+requires-python = ">=3.12"
+dependencies = [
+    "sidereal-core",
+    "sidereal-ingest",
+    "anthropic",
+    "pydantic>=2",
+]
+
+[tool.uv.sources]
+sidereal-core = { workspace = true }
+sidereal-ingest = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--cov=sidereal_generate --cov-report=term-missing --strict-markers --strict-config"
+xfail_strict = true
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+filterwarnings = ["error"]

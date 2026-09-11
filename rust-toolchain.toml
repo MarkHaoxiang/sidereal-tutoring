@@ -1,0 +1,5 @@
+[toolchain]
+# Pinned so every machine and CI job compiles with the same rustc. Bump deliberately —
+# rustup installs whatever this file names.
+channel = "1.97.1"
+components = ["rustfmt", "clippy"]

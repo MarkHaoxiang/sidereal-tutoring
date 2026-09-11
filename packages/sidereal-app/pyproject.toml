@@ -1,0 +1,35 @@
+[project]
+name = "sidereal-app"
+version = "0.1.0"
+description = "FastAPI app for the sidereal-tutoring tutoring workflows"
+requires-python = ">=3.12"
+dependencies = [
+    "sidereal-core",
+    "sidereal-ingest",
+    "sidereal-generate",
+    "fastapi",
+    "uvicorn[standard]",
+    "httpx",
+]
+
+[tool.uv.sources]
+sidereal-core = { workspace = true }
+sidereal-ingest = { workspace = true }
+sidereal-generate = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--cov=sidereal_app --cov-report=term-missing --strict-markers --strict-config"
+xfail_strict = true
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+filterwarnings = [
+    "error",
+    # starlette's TestClient touches a deprecated anyio alias at import time. Matched by
+    # message, not by category: DeprecationWarning as a whole must stay an error.
+    "ignore:The anyio.abc.BlockingPortal alias is deprecated:DeprecationWarning",
+]

@@ -1,0 +1,5 @@
+extend = "../../pyproject.toml"
+
+[lint.flake8-tidy-imports.banned-api]
+"sidereal_mcp".msg = "sidereal-generate is below sidereal-mcp; the dependency runs the other way."
+"sidereal_app".msg = "sidereal-generate is below sidereal-app; the dependency runs the other way."

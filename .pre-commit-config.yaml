@@ -1,0 +1,46 @@
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check --fix
+        language: system
+        types: [python]
+      - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format
+        language: system
+        types: [python]
+      # Bare, so the `files` setting in pyproject.toml decides the target set. Naming
+      # paths here would silently override it.
+      - id: mypy
+        name: mypy
+        entry: uv run mypy
+        language: system
+        types: [python]
+        pass_filenames: false
+      # The cargo workspace is one unit: fmt and clippy run over all of it, not over the
+      # changed files, so a touched .rs file only decides *whether* they run.
+      - id: cargo-fmt
+        name: cargo fmt
+        entry: cargo fmt --check
+        language: system
+        types: [rust]
+        pass_filenames: false
+      - id: cargo-clippy
+        name: cargo clippy
+        entry: cargo clippy --workspace --all-targets -- -D warnings
+        language: system
+        types: [rust]
+        pass_filenames: false
+
+  - repo: local
+    hooks:
+      - id: shellcheck
+        name: shellcheck
+        # The upstream koalaman hook needs a Docker daemon; shellcheck-py ships the
+        # same binary as a wheel.
+        entry: shellcheck
+        language: python
+        additional_dependencies: [shellcheck-py]
+        types: [shell]

@@ -1,0 +1,51 @@
+# Cargo workspace, alongside (not inside) the uv workspace in pyproject.toml.
+# Python does ingestion and LLM generation; Rust builds the long-running workers.
+#
+#   crates/   shared libraries, never deployed
+#   services/ deployable processes
+[workspace]
+resolver = "3"
+members = ["crates/*", "services/*"]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.97"
+publish = false
+
+# Every member writes `[lints] workspace = true`, so these hold across the whole Rust tree.
+# Test targets opt out of `unwrap_used`/`panic` at their own crate or module roots.
+[workspace.lints.clippy]
+unwrap_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+dbg_macro = "deny"
+print_stdout = "deny"
+exit = "deny"
+float_cmp = "deny"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.dependencies]
+sidereal-common = { path = "crates/sidereal-common" }
+sidereal-directus = { path = "crates/sidereal-directus" }
+
+tokio = { version = "1.53", features = ["macros", "rt-multi-thread", "signal"] }
+axum = "0.8"
+# reqwest 0.13 renamed the TLS features: `rustls` is what 0.12 called `rustls-tls`, and the
+# root store is now its own feature. No default features, so the TLS tree stays rustls-only.
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls", "webpki-roots", "http2"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["serde", "v4"] }
+url = "2.5"
+
+# An HTTP stub for the tests of anything that talks to Directus. Registered here because two
+# members share it; it is a dev-dependency everywhere and never links into a binary.
+wiremock = "0.6"
