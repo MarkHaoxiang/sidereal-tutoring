@@ -39,8 +39,9 @@ services:
         condition: service_healthy
     volumes:
       - directus-uploads:/directus/uploads
-      # Read/write: scripts/directus-schema-snapshot.sh writes the snapshot back out here.
-      - ./directus/schema:/directus/schema
+      # Read-only: the container never writes here. scripts/directus-schema-snapshot.sh has
+      # the CLI write inside the container and streams the result out.
+      - ./directus/schema:/directus/schema:ro
       - ./directus/extensions:/directus/extensions
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8055/server/ping"]

@@ -37,4 +37,7 @@
 - The runtime image ships no `npm`/`npx`; invoke the CLI as `node /directus/cli.js`.
 - The compose stack is local dev only. Every credential in `.env.example` is a placeholder.
 - Extensions build to `dist/` and are loaded from the bind mount; `dist/` and `node_modules/`
-  are never committed.
+  are never committed. Build before bringing the stack up: an unbuilt extension makes the
+  loader throw a module-not-found on every CLI invocation.
+- The schema directory is mounted read-only, so nothing in the container may write to it; the
+  snapshot script has the CLI write inside the container and streams the file out.

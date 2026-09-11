@@ -98,9 +98,22 @@ jobs:
       # docker-compose.yml declares .env as required, and every value in it is a dev
       # placeholder, so the example file is exactly what CI should use.
       - run: cp .env.example .env
+      # directus/extensions is bind-mounted, so an unbuilt extension makes the loader throw on
+      # every CLI invocation and buries real errors. Building it here also proves it loads on
+      # the pinned Directus, which the directus-extensions job cannot show.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: directus/extensions/package-lock.json
+      - run: npm ci
+        working-directory: directus/extensions
+      - run: npm run build
+        working-directory: directus/extensions
       # No LICENSE_KEY is set here: CI deliberately runs Directus on the Core tier, so the
       # grant's finite activations are never spent on a throwaway runner.
       - run: docker compose up -d --wait
+      - run: docker compose logs --no-color directus | grep -q "Loaded extensions: sidereal-audit"
       - run: ./scripts/directus-schema-apply.sh
       # Round-trip: the committed snapshot, applied to a fresh Directus and snapshotted
       # back, must come back byte-identical. A hand-edit that Directus would normalise
