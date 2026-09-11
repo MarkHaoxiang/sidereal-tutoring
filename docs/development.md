@@ -86,6 +86,40 @@ Every one of these is required: `docker-compose.yml` declares `.env` as `require
 the stack will not start without it. All of the values in `.env.example` are placeholders, and
 the stack is meant to be reachable from localhost only.
 
+### The Directus license key
+
+It is not in this repository and cannot be. `LICENSE_KEY` lives in
+`~/.config/sidereal-tutoring/env` (mode 600), deliberately outside the tree, so that no
+`git add` can reach it. Load it into the shell before bringing the stack up:
+
+```sh
+set -a; . ~/.config/sidereal-tutoring/env; set +a
+docker compose up -d
+```
+
+`docker-compose.yml` passes it through as `LICENSE_KEY: ${LICENSE_KEY:-}`, so an unset
+variable is an empty string and Directus runs on the Core tier. Never put the value in `.env`,
+`.env.example`, a fixture or a log line. When `LICENSE_KEY` is set, Directus disables in-app
+license management — the key is configuration, not something to edit in the admin app.
+
+**Activations are finite.** An activation binds the key to the project id — minted in the
+database on first bootstrap — and to `PUBLIC_URL`, and the Open Innovation Grant allows five.
+`docker compose down -v` destroys the database, so the next boot mints a *new* project id and
+burns another slot; once they are gone the API refuses to start with
+`403 Activation Limit Exceeded`. Two rules follow:
+
+- With the key loaded, stop the stack with `docker compose down` — volumes kept. Never
+  `down -v`.
+- If the database must be wiped while licensed, deactivate first (`DELETE /license` as admin)
+  to free the slot, or run the wipe-and-reapply cycle with `LICENSE_KEY` unset. The latter is
+  the normal path: everything in `scripts/` works on the Core tier, and CI is never given the
+  key, so it always runs unlicensed.
+
+The tier does change behaviour. On the Core tier Directus rejects any permission row that
+narrows `fields` below `["*"]` or carries a `permissions`, `validation` or `presets` rule, so
+per-tutor row scoping is unavailable; with the grant key loaded those become usable. Whatever
+`scripts/directus-bootstrap.sh` grows to do, it has to keep working without the key.
+
 ### The application
 
 | Variable | Unset | |

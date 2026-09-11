@@ -101,7 +101,9 @@ process through the environment only, and tests and CI run with no key set.
   account are not in snapshots — they live in `scripts/directus-bootstrap.sh`.
 - **No secrets in the tree.** `.env.example` carries dev-only placeholders and `.env` is
   git-ignored. A real key reaches a process through the environment, never a file under
-  version control, a fixture or a log line.
+  version control, a fixture or a log line — the Directus `LICENSE_KEY` included, which lives
+  in `~/.config/sidereal-tutoring/env` (mode 600) and is loaded into the shell before
+  `docker compose up`.
 - **Tests and CI never touch the network.** Ingest tests inject responses, generation tests use
   a fake generator, Rust tests run against a `wiremock` stub. `./run_tests.sh` must pass with
   no credentials set anywhere, and must keep doing so.

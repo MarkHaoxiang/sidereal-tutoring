@@ -29,6 +29,9 @@ services:
         required: true
     environment:
       EXTENSIONS_AUTO_RELOAD: "true"
+      # From the invoking shell, never from .env — see docs/development.md. Empty means the
+      # Core tier, which is what CI runs on.
+      LICENSE_KEY: ${LICENSE_KEY:-}
     ports:
       - "8055:8055"
     depends_on:

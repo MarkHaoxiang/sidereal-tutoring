@@ -98,6 +98,8 @@ jobs:
       # docker-compose.yml declares .env as required, and every value in it is a dev
       # placeholder, so the example file is exactly what CI should use.
       - run: cp .env.example .env
+      # No LICENSE_KEY is set here: CI deliberately runs Directus on the Core tier, so the
+      # grant's finite activations are never spent on a throwaway runner.
       - run: docker compose up -d --wait
       - run: ./scripts/directus-schema-apply.sh
       # Round-trip: the committed snapshot, applied to a fresh Directus and snapshotted

@@ -20,9 +20,18 @@
   rows by hand except through the m2m alias fields.
 - Directus 12's core (unlicensed) entitlements reject any `directus_permissions` row that
   narrows `fields` below `["*"]` or carries a `permissions`, `validation` or `presets` rule,
-  unless it matches one of Directus's own recommended app permissions. Per-tutor row scoping
-  therefore cannot live in Directus permissions; enforce it in the app layer or buy the
-  entitlement. `scripts/directus-bootstrap.sh` grants unfiltered CRUD for that reason.
+  unless it matches one of Directus's own recommended app permissions. `scripts/directus-bootstrap.sh`
+  grants unfiltered CRUD for that reason.
+- `LICENSE_KEY` reaches Directus from the invoking shell only (`~/.config/sidereal-tutoring/env`,
+  mode 600). It is never in `.env`, `.env.example` or CI, and CI runs unlicensed.
+- With a license, custom permission rules (row filters, field lists) become available and the
+  bootstrap script may use them — but the schema scripts and the bootstrap must still pass
+  unlicensed.
+- An activation binds the key to the project id (minted on first bootstrap) and `PUBLIC_URL`,
+  and there are five. With the key loaded, stop with `docker compose down`, never `down -v`:
+  a wiped database mints a new project id and burns a slot, and an exhausted key fails to boot
+  with `403 Activation Limit Exceeded`. Wipe licensed only after `DELETE /license`; otherwise
+  run the wipe-and-reapply cycle with `LICENSE_KEY` unset.
 - New permission rows are served from a system cache that their creation does not invalidate,
   so anything that writes permissions must finish with `POST /utils/cache/clear?system`.
 - The runtime image ships no `npm`/`npx`; invoke the CLI as `node /directus/cli.js`.
