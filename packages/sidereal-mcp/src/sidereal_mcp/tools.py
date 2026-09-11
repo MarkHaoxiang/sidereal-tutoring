@@ -12,7 +12,6 @@ from sidereal_core.models import (
     Collection,
     Document,
     DocumentKind,
-    DocumentStatus,
     GenerationJob,
     GenerationKind,
     JobStatus,
@@ -20,7 +19,8 @@ from sidereal_core.models import (
     StudentStatus,
 )
 from sidereal_generate.jobs import JobInput, run_job, start_job
-from sidereal_ingest import pick
+from sidereal_ingest.documents import PathSource, UrlSource, create_document, process_document
+from sidereal_ingest.web import SCHEMES
 
 from sidereal_mcp.services import Services
 
@@ -61,23 +61,19 @@ async def ingest_source(
     student_id: UUID | None = None,
     session_id: UUID | None = None,
 ) -> Document:
-    """Turn a transcript file, URL or upload into a `documents` row.
+    """Turn a transcript file, URL or upload into a `documents` row, read to completion.
 
-    `kind` overrides how the result is filed; which ingester runs is decided by `source`.
+    `kind` overrides how the row is filed; which ingester runs is decided by `source`. A
+    source that could not be read comes back as a `failed` row carrying the reason.
     """
-    draft = await pick(services.ingesters, source).ingest(source)
-    payload = draft.payload()
-    payload.update(
-        {
-            "kind": (kind or draft.kind).value,
-            "status": DocumentStatus.READY.value,
-        }
+    document = await create_document(
+        services.directus,
+        UrlSource(source) if source.startswith(SCHEMES) else PathSource(source),
+        kind=kind,
+        student=student_id,
+        session=session_id,
     )
-    if student_id is not None:
-        payload["student"] = str(student_id)
-    if session_id is not None:
-        payload["session"] = str(session_id)
-    return await services.directus.create_item(Collection.DOCUMENTS, Document, payload)
+    return await process_document(services.directus, services.ingesters, document.id)
 
 
 async def generate_homework(

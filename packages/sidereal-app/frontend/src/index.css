@@ -11,8 +11,16 @@
 @custom-variant dark (&:where(body[data-theme="dark"], body[data-theme="dark"] *));
 
 /* Design tokens — the single source of truth. Tailwind's utilities alias onto these
-   via @theme inline below; nothing here restates a Tailwind default. */
+   via @theme inline below; nothing here restates a Tailwind default.
+
+   Convention for every CSS module in this app: spacing is the 8px scale written in
+   rem — 0.25/0.5/0.75/1/1.5/2/3rem, no other values; radius comes from the three
+   --radius-* tokens (control = inputs and buttons, card = cards, dialogs and panels,
+   pill = chips and tabs), never a literal; colour comes from a --color-* token,
+   never a literal. A `-tint` colour is a background that carries its non-tint
+   sibling as the foreground on top of it. */
 :root {
+  color-scheme: light;
   --color-bg: #f8f9fb;
   --color-bg-raised: #ffffff;
   --color-fg: #14181f;
@@ -20,12 +28,22 @@
   --color-border: #dde1e7;
   --color-accent: #3555d1;
   --color-accent-fg: #ffffff;
+  --color-accent-tint: #e5eafa;
   --color-danger: #c23636;
+  --color-danger-tint: #fae5e5;
   --color-success: #237a4b;
+  --color-success-tint: #e0f1e7;
+  --color-warning: #8f5a10;
+  --color-warning-tint: #faeedb;
+  --color-muted-tint: #eceff3;
+  --radius-control: 0.5rem;
+  --radius-card: 0.625rem;
+  --radius-pill: 999px;
   --font-sans: "Inter Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 body[data-theme="dark"] {
+  color-scheme: dark;
   --color-bg: #131720;
   --color-bg-raised: #1b212c;
   --color-fg: #e7eaef;
@@ -33,8 +51,14 @@ body[data-theme="dark"] {
   --color-border: #2b323f;
   --color-accent: #7f9bff;
   --color-accent-fg: #10131a;
+  --color-accent-tint: #232d47;
   --color-danger: #e5837f;
+  --color-danger-tint: #3b2326;
   --color-success: #63c793;
+  --color-success-tint: #16332a;
+  --color-warning: #e2b063;
+  --color-warning-tint: #362c1a;
+  --color-muted-tint: #242b37;
 }
 
 @theme inline {
@@ -45,8 +69,17 @@ body[data-theme="dark"] {
   --color-border: var(--color-border);
   --color-accent: var(--color-accent);
   --color-accent-fg: var(--color-accent-fg);
+  --color-accent-tint: var(--color-accent-tint);
   --color-danger: var(--color-danger);
+  --color-danger-tint: var(--color-danger-tint);
   --color-success: var(--color-success);
+  --color-success-tint: var(--color-success-tint);
+  --color-warning: var(--color-warning);
+  --color-warning-tint: var(--color-warning-tint);
+  --color-muted-tint: var(--color-muted-tint);
+  --radius-control: var(--radius-control);
+  --radius-card: var(--radius-card);
+  --radius-pill: var(--radius-pill);
   --font-sans: var(--font-sans);
 }
 
@@ -67,6 +100,7 @@ body {
   background-color: var(--color-bg);
   color: var(--color-fg);
   font-family: var(--font-sans);
+  font-size: 14px;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -75,9 +109,122 @@ input,
 select,
 textarea {
   font-family: inherit;
+  font-size: inherit;
   color: inherit;
 }
 
 a {
   color: inherit;
+}
+
+/* The one global block: generated markdown is rendered as raw HTML by <Markdown>,
+   so its elements cannot carry CSS-module class names. */
+.prose {
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.prose > :first-child {
+  margin-top: 0;
+}
+
+.prose > :last-child {
+  margin-bottom: 0;
+}
+
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4 {
+  margin: 1.5rem 0 0.5rem;
+  line-height: 1.3;
+}
+
+.prose h1 {
+  font-size: 1.25rem;
+}
+
+.prose h2 {
+  font-size: 1.125rem;
+}
+
+.prose h3,
+.prose h4 {
+  font-size: 1rem;
+}
+
+.prose p,
+.prose ul,
+.prose ol,
+.prose blockquote,
+.prose pre,
+.prose table {
+  margin: 0 0 1rem;
+}
+
+.prose ul,
+.prose ol {
+  padding-left: 1.5rem;
+}
+
+.prose li {
+  margin-bottom: 0.25rem;
+}
+
+.prose a {
+  color: var(--color-accent);
+}
+
+.prose blockquote {
+  padding: 0.25rem 0 0.25rem 1rem;
+  border-left: 2px solid var(--color-border);
+  color: var(--color-fg-muted);
+}
+
+.prose code {
+  padding: 0.125rem 0.25rem;
+  border-radius: var(--radius-control);
+  background: var(--color-muted-tint);
+  font-size: 0.9em;
+}
+
+.prose pre {
+  padding: 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-muted-tint);
+  overflow-x: auto;
+}
+
+.prose pre code {
+  padding: 0;
+  background: none;
+}
+
+.prose table {
+  display: block;
+  width: 100%;
+  border-collapse: collapse;
+  overflow-x: auto;
+}
+
+.prose th,
+.prose td {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-border);
+  text-align: left;
+}
+
+.prose th {
+  background: var(--color-muted-tint);
+}
+
+.prose hr {
+  margin: 1.5rem 0;
+  border: none;
+  border-top: 1px solid var(--color-border);
+}
+
+.prose img {
+  max-width: 100%;
 }

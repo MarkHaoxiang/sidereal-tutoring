@@ -35,7 +35,7 @@ def test_an_accepted_token_reaches_the_route(client: TestClient, auth: dict[str,
     response = client.get(f"/api/jobs/{JOB_ID}", headers=auth)
 
     assert response.status_code == 404
-    assert response.json()["code"] == "directus_rejected"
+    assert response.json()["detail"]["code"] == "directus_rejected"
 
 
 def test_directus_failing_after_auth_is_503_from_the_handler(
@@ -46,4 +46,4 @@ def test_directus_failing_after_auth_is_503_from_the_handler(
     response = client.get(f"/api/jobs/{JOB_ID}", headers=auth)
 
     assert response.status_code == 503
-    assert response.json()["code"] == "directus_unavailable"
+    assert response.json()["detail"]["code"] == "directus_unavailable"

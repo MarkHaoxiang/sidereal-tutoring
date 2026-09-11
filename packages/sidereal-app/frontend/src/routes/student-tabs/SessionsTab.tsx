@@ -1,46 +1,120 @@
-import { readItems } from "@directus/sdk";
-import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 
-import { EmptyState } from "@/components/EmptyState";
-import { directus } from "@/lib/directus";
-import { formatDateTime } from "@/lib/format";
+import { SessionCard } from "@/components/sessions/SessionCard";
+import { SessionDialog } from "@/components/sessions/SessionDialog";
+import { Button, EmptyState, Spinner } from "@/components/ui";
+import { useSessionLinks, useSessions } from "@/lib/queries";
+import type { SessionListItem } from "@/lib/queries";
 
-import styles from "./TabList.module.css";
+import { useStudentTab } from "./context";
+import styles from "./SessionsTab.module.css";
+import listStyles from "./TabList.module.css";
 
-export function SessionsTab({ studentId }: { studentId: string }) {
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ["sessions", studentId],
-    queryFn: () =>
-      directus.request(
-        readItems("sessions", {
-          filter: { student: { _eq: studentId } },
-          sort: ["-scheduled_at"],
-        })
-      ),
-  });
+function isUpcoming(session: SessionListItem, now: number): boolean {
+  return session.status === "scheduled" && session.scheduled_at !== null && Date.parse(session.scheduled_at) >= now;
+}
 
-  if (isLoading) {
-    return <p className={styles.status}>Loading sessions…</p>;
-  }
-  if (isError) {
-    return <p className={styles.status}>Could not load sessions.</p>;
-  }
-  if (!data || data.length === 0) {
-    return <EmptyState message="No sessions booked yet for this student." />;
-  }
+export function SessionsTab() {
+  const { studentId } = useStudentTab();
+  const { data, isLoading, isError } = useSessions({ studentId });
+  const links = useSessionLinks(studentId);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<SessionListItem | null>(null);
+
+  const { upcoming, past } = useMemo(() => {
+    const now = Date.now();
+    const rows = data ?? [];
+    return {
+      // Soonest first while they are still ahead, most recent first once they are not.
+      upcoming: rows.filter((row) => isUpcoming(row, now)).reverse(),
+      past: rows.filter((row) => !isUpcoming(row, now)),
+    };
+  }, [data]);
+
+  const schedule = () => {
+    setEditing(null);
+    setDialogOpen(true);
+  };
+
+  const edit = (session: SessionListItem) => {
+    setEditing(session);
+    setDialogOpen(true);
+  };
 
   return (
-    <ul className={styles.list}>
-      {data.map((session) => (
-        <li key={session.id} className={styles.item}>
-          <span className={styles.itemTitle}>{formatDateTime(session.scheduled_at)}</span>
-          <span className={styles.itemMeta}>
-            {session.status}
-            {session.duration_minutes ? ` · ${session.duration_minutes} min` : ""}
-          </span>
-          {session.notes ? <p className={styles.itemBody}>{session.notes}</p> : null}
-        </li>
-      ))}
-    </ul>
+    <div className={styles.panel}>
+      <div className={styles.toolbar}>
+        <Button variant="primary" onClick={schedule}>
+          Schedule a session
+        </Button>
+      </div>
+
+      {isLoading ? (
+        <p className={listStyles.meta}>
+          <Spinner /> Loading sessions…
+        </p>
+      ) : null}
+      {isError ? <p className={listStyles.meta}>Could not load sessions.</p> : null}
+
+      {data && data.length === 0 ? (
+        <EmptyState
+          message="No sessions yet. Schedule the first one and it will show up here."
+          action={
+            <Button variant="primary" onClick={schedule}>
+              Schedule a session
+            </Button>
+          }
+        />
+      ) : null}
+
+      {data && data.length > 0 ? (
+        <>
+          <section className={styles.section}>
+            <h2 className={styles.heading}>Upcoming</h2>
+            {upcoming.length > 0 ? (
+              <div className={styles.list}>
+                {upcoming.map((session) => (
+                  <SessionCard
+                    key={session.id}
+                    session={session}
+                    links={links.data?.[session.id]}
+                    onEdit={edit}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className={listStyles.meta}>Nothing scheduled yet.</p>
+            )}
+          </section>
+
+          <section className={styles.section}>
+            <h2 className={styles.heading}>Past</h2>
+            {past.length > 0 ? (
+              <div className={styles.list}>
+                {past.map((session) => (
+                  <SessionCard
+                    key={session.id}
+                    session={session}
+                    links={links.data?.[session.id]}
+                    onEdit={edit}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className={listStyles.meta}>No sessions have happened yet.</p>
+            )}
+          </section>
+        </>
+      ) : null}
+
+      <SessionDialog
+        open={dialogOpen}
+        onClose={() => {
+          setDialogOpen(false);
+        }}
+        studentId={studentId}
+        session={editing}
+      />
+    </div>
   );
 }

@@ -77,10 +77,12 @@ export interface Question extends AuditFields {
   homework: string[] | HomeworkQuestion[];
 }
 
+// Written by `sidereal_generate.jobs`: ids as strings, `questions` on homework only.
 export interface GenerationProvenance {
-  job_id?: string;
-  model?: string;
-  document_ids?: string[];
+  job: string;
+  model: string;
+  documents: string[];
+  questions?: string[];
 }
 
 export interface Homework extends AuditFields {

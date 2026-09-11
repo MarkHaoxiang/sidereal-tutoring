@@ -1,12 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 
 export type Theme = "light" | "dark";
 
 const STORAGE_KEY = "sidereal-theme";
-
-function prefersDark(): boolean {
-  return window.matchMedia("(prefers-color-scheme: dark)").matches;
-}
 
 function readStoredTheme(): Theme | null {
   try {
@@ -17,21 +13,45 @@ function readStoredTheme(): Theme | null {
   }
 }
 
+// One module-level store rather than per-component state: the toggle and anything that
+// has to follow the theme (the toast layer, for one) must see the same value.
+let theme: Theme = readStoredTheme() ?? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+const listeners = new Set<() => void>();
+
+function apply() {
+  document.body.dataset["theme"] = theme;
+  try {
+    localStorage.setItem(STORAGE_KEY, theme);
+  } catch {
+    // Best-effort only — a private window or blocked storage should not break the toggle.
+  }
+}
+
+apply();
+
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+function setTheme(next: Theme) {
+  theme = next;
+  apply();
+  for (const listener of listeners) {
+    listener();
+  }
+}
+
 export function useTheme(): [Theme, () => void] {
-  const [theme, setTheme] = useState<Theme>(() => readStoredTheme() ?? (prefersDark() ? "dark" : "light"));
-
-  useEffect(() => {
-    document.body.dataset["theme"] = theme;
-    try {
-      localStorage.setItem(STORAGE_KEY, theme);
-    } catch {
-      // Best-effort only — a private window or blocked storage should not break the toggle.
-    }
-  }, [theme]);
-
+  const current = useSyncExternalStore(
+    subscribe,
+    () => theme,
+    () => theme
+  );
   const toggle = useCallback(() => {
-    setTheme((current) => (current === "dark" ? "light" : "dark"));
+    setTheme(theme === "dark" ? "light" : "dark");
   }, []);
-
-  return [theme, toggle];
+  return [current, toggle];
 }

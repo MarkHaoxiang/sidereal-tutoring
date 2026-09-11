@@ -12,4 +12,6 @@ Sits beside sidereal-app. Imports core, ingest and generate; never sidereal-app.
 - `Services` is constructed once per server, never per call.
 - A generation tool runs the job to completion and returns the `GenerationJob`; `output_collection` and
   `output_id` say where the artefact landed.
-- `ingest_source` routes on the source string; its `kind` argument only changes how the row is filed.
+- `ingest_source` routes on the source string and runs the same `create_document` / `process_document`
+  path the app does, to completion: an unreadable source is a `failed` row, not an exception. Its
+  `kind` argument only changes how the row is filed.

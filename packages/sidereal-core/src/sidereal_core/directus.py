@@ -11,7 +11,7 @@ from uuid import UUID
 import httpx
 from pydantic import BaseModel, ConfigDict, Field
 
-from sidereal_core.models import DirectusUser, Draft
+from sidereal_core.models import DirectusFile, DirectusUser, Draft
 
 M = TypeVar("M", bound=BaseModel)
 
@@ -135,6 +135,17 @@ class DirectusClient:
         data = await self._request("GET", "/users/me")
         return DirectusUser.model_validate(data)
 
+    async def get_file(self, file_id: str | UUID) -> DirectusFile:
+        """`directus_files` is a system collection: it answers on `/files`, not `/items`."""
+        data = await self._request("GET", f"/files/{file_id}")
+        return DirectusFile.model_validate(data)
+
+    async def download_file(self, file_id: str | UUID) -> tuple[str, bytes]:
+        """The asset's bytes, and the name Directus says it was uploaded under."""
+        name = (await self.get_file(file_id)).filename_download
+        response = await self._send("GET", f"/assets/{file_id}", params={"download": "true"})
+        return name, response.content
+
     async def _request(
         self,
         method: str,
@@ -143,16 +154,7 @@ class DirectusClient:
         params: Mapping[str, str | int] | None = None,
         json: Mapping[str, Any] | None = None,
     ) -> Any:
-        headers = {"Authorization": f"Bearer {self.token}"} if self.token else {}
-        try:
-            response = await self._client.request(
-                method, f"{self.base_url}{path}", params=params, json=json, headers=headers
-            )
-        except httpx.HTTPError as exc:
-            raise DirectusUnavailableError(f"{self.base_url}{path}: {exc}") from exc
-
-        if response.status_code >= httpx.codes.BAD_REQUEST:
-            raise DirectusError(response.status_code, _details(response))
+        response = await self._send(method, path, params=params, json=json)
         if response.status_code == httpx.codes.NO_CONTENT or not response.content:
             return None
 
@@ -160,6 +162,25 @@ class DirectusClient:
         if not isinstance(body, dict) or "data" not in body:
             raise DirectusError(response.status_code, message=f"{path}: no data envelope")
         return body["data"]
+
+    async def _send(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: Mapping[str, str | int] | None = None,
+        json: Mapping[str, Any] | None = None,
+    ) -> httpx.Response:
+        headers = {"Authorization": f"Bearer {self.token}"} if self.token else {}
+        try:
+            response = await self._client.request(
+                method, f"{self.base_url}{path}", params=params, json=json, headers=headers
+            )
+        except httpx.HTTPError as exc:
+            raise DirectusUnavailableError(f"{self.base_url}{path}: {exc}") from exc
+        if response.status_code >= httpx.codes.BAD_REQUEST:
+            raise DirectusError(response.status_code, _details(response))
+        return response
 
 
 def _body(data: Draft | Mapping[str, Any]) -> dict[str, Any]:

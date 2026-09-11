@@ -108,6 +108,16 @@ class DirectusUser(Record):
     status: str | None = None
 
 
+class DirectusFile(Record):
+    """A row of Directus's own `directus_files`, read through `/files/{id}`."""
+
+    filename_download: str
+    filename_disk: str | None = None
+    title: str | None = None
+    type: str | None = None
+    filesize: int | None = None
+
+
 class StudentDraft(Draft):
     name: str
     level: str | None = None
@@ -175,6 +185,16 @@ class HomeworkDraft(Draft):
 
 
 class Homework(Record, HomeworkDraft):
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+
+class HomeworkQuestionDraft(Draft):
+    homework: UUID
+    question: UUID
+    sort: int | None = None
+
+
+class HomeworkQuestion(Record, HomeworkQuestionDraft):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
 

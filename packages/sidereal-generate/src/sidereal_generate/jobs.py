@@ -2,13 +2,22 @@
 
 from __future__ import annotations
 
+import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
 from typing import Any
 from uuid import UUID
 
+from anthropic import (
+    APIConnectionError,
+    APIError,
+    AuthenticationError,
+    PermissionDeniedError,
+    RateLimitError,
+)
 from pydantic import BaseModel, ConfigDict
-from sidereal_core.directus import DirectusClient
+from sidereal_core.directus import DirectusClient, DirectusError, DirectusUnavailableError
 from sidereal_core.models import (
     Collection,
     Document,
@@ -18,6 +27,8 @@ from sidereal_core.models import (
     GenerationKind,
     Homework,
     HomeworkDraft,
+    HomeworkQuestion,
+    HomeworkQuestionDraft,
     JobStatus,
     Plan,
     PlanDraft,
@@ -26,14 +37,28 @@ from sidereal_core.models import (
     Student,
 )
 
-from sidereal_generate.base import FeedbackGenerator, HomeworkGenerator, PlanGenerator
+from sidereal_generate.base import (
+    FeedbackGenerator,
+    GenerationError,
+    HomeworkGenerator,
+    PlanGenerator,
+)
 from sidereal_generate.claude import feedback_generator, homework_generator, plan_generator
+from sidereal_generate.fake import (
+    FakeFeedbackGenerator,
+    FakeHomeworkGenerator,
+    FakePlanGenerator,
+)
 from sidereal_generate.models import (
     FeedbackOutput,
     GenerationRequest,
     HomeworkOutput,
     PlanOutput,
 )
+from sidereal_generate.settings import GenerateBackend, generate_settings
+
+logger = logging.getLogger(__name__)
+MATERIAL_GONE = (401, 403, 404)
 
 
 class JobInput(BaseModel):
@@ -65,9 +90,18 @@ class Generators:
 
 
 def default_generators() -> Generators:
-    return Generators(
-        homework=homework_generator(), feedback=feedback_generator(), plan=plan_generator()
-    )
+    """`SIDEREAL_GENERATE_BACKEND` decides: `claude` calls Anthropic, `fake` calls nothing."""
+    match generate_settings().backend:
+        case GenerateBackend.FAKE:
+            return Generators(
+                homework=FakeHomeworkGenerator(),
+                feedback=FakeFeedbackGenerator(),
+                plan=FakePlanGenerator(),
+            )
+        case GenerateBackend.CLAUDE:
+            return Generators(
+                homework=homework_generator(), feedback=feedback_generator(), plan=plan_generator()
+            )
 
 
 async def start_job(
@@ -94,11 +128,10 @@ async def run_job(client: DirectusClient, generators: Generators, job_id: UUID) 
         job_input = JobInput.model_validate(job.input)
         request = await _load(client, job_input)
         collection, output_id = await _generate(client, generators, job, job_input, request)
-    except Exception as exc:  # noqa: BLE001 - a job records its failure, it does not raise it.
+    except Exception as exc:  # A job records its failure; it does not raise it.
+        logger.exception("generation job %s failed", job_id)
         return await _patch(
-            client,
-            job_id,
-            {"status": JobStatus.FAILED.value, "error": f"{type(exc).__name__}: {exc}"},
+            client, job_id, {"status": JobStatus.FAILED.value, "error": _message(exc)}
         )
     return await _patch(
         client,
@@ -110,6 +143,29 @@ async def run_job(client: DirectusClient, generators: Generators, job_id: UUID) 
             "error": None,
         },
     )
+
+
+def _message(exc: BaseException) -> str:
+    """What the tutor reads in `error`. The technical detail is logged, never stored."""
+    match exc:
+        case DirectusUnavailableError():
+            return "The material library could not be reached. Try again shortly."
+        case DirectusError() if exc.status in MATERIAL_GONE:
+            return "Some of the selected material could no longer be read."
+        case DirectusError():
+            return "The material library refused this request."
+        case AuthenticationError() | PermissionDeniedError():
+            return "The generation service refused the request."
+        case RateLimitError():
+            return "The generation service is busy; try again in a minute."
+        case APIConnectionError():
+            return "The generation service could not be reached. Try again shortly."
+        case APIError():
+            return "The generation service could not finish this request."
+        case GenerationError():
+            return "The generated result could not be used. Try again."
+        case _:
+            return "Generation failed unexpectedly."
 
 
 async def _patch(client: DirectusClient, job_id: UUID, data: dict[str, Any]) -> GenerationJob:
@@ -193,7 +249,20 @@ async def _write_homework(
             generated_from={**provenance, "questions": [str(qid) for qid in question_ids]},
         ),
     )
+    await _link_questions(client, homework.id, question_ids)
     return homework.id
+
+
+async def _link_questions(
+    client: DirectusClient, homework_id: UUID, question_ids: Sequence[UUID]
+) -> None:
+    """The m2m rows the `questions` alias reads, in the order the model produced them."""
+    for position, question_id in enumerate(question_ids, start=1):
+        await client.create_item(
+            Collection.HOMEWORK_QUESTIONS,
+            HomeworkQuestion,
+            HomeworkQuestionDraft(homework=homework_id, question=question_id, sort=position),
+        )
 
 
 async def _write_feedback(

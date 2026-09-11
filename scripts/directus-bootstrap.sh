@@ -157,9 +157,11 @@ for collection in "${app_collections[@]}"; do
   done
 done
 
-# Uploads referenced by documents.
-ensure_permission directus_files read '["*"]' '{}'
-ensure_permission directus_files create '["*"]' '{}'
+# Uploads referenced by documents. Delete is needed too: without it, deleting the material
+# that owns a file leaves the file orphaned in storage.
+for action in create read update delete; do
+  ensure_permission directus_files "$action" '["*"]' '{}'
+done
 
 # directus_users read is deliberately not granted here. Directus 12's core (unlicensed)
 # entitlements reject any permission row that narrows `fields` or carries a `permissions`,

@@ -3,8 +3,20 @@ from __future__ import annotations
 from datetime import date
 from uuid import UUID
 
+import httpx2
+import pytest
+from anthropic import (
+    APIConnectionError,
+    APIStatusError,
+    AuthenticationError,
+    InternalServerError,
+    PermissionDeniedError,
+    RateLimitError,
+)
+from sidereal_core.directus import DirectusError, DirectusUnavailableError
 from sidereal_core.models import Collection, GenerationKind, JobStatus
 from sidereal_core.testing import FakeDirectus
+from sidereal_generate.base import GenerationError
 from sidereal_generate.fake import FailingGenerator, FakeGenerator
 from sidereal_generate.jobs import Generators, JobInput, run_job, start_job
 from sidereal_generate.models import (
@@ -25,6 +37,13 @@ HOMEWORK = HomeworkOutput(
 )
 FEEDBACK = FeedbackOutput(content="Strong on factorising.")
 PLAN = PlanOutput(title="Spring term", content="Six weeks of algebra.")
+ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
+
+
+def _anthropic[E: APIStatusError](error: type[E], status: int) -> E:
+    """An SDK error built the way the SDK builds one, without a request going out."""
+    request = httpx2.Request("POST", ANTHROPIC_URL)
+    return error("refused", response=httpx2.Response(status, request=request), body=None)
 
 
 def generators() -> Generators:
@@ -76,6 +95,39 @@ async def test_a_homework_job_writes_questions_then_homework_then_succeeds() -> 
     assert homework["generated_from"]["model"] == "fake-homework"
     assert homework["generated_from"]["documents"] == [str(job_input.documents[0])]
     assert homework["generated_from"]["questions"] == [questions[0]["id"]]
+
+    links = fake.rows(Collection.HOMEWORK_QUESTIONS)
+    assert [(link["homework"], link["question"], link["sort"]) for link in links] == [
+        (homework["id"], questions[0]["id"], 1)
+    ]
+
+
+async def test_every_generated_question_is_linked_to_the_homework_in_order() -> None:
+    fake, job_input = seeded()
+    three = HomeworkOutput(
+        title="Quadratics: week 3",
+        content="## Quadratics",
+        questions=tuple(
+            GeneratedQuestion(text=f"Question {n}.", answer=None, topic=None, difficulty=None)
+            for n in (1, 2, 3)
+        ),
+    )
+    all_generators = Generators(
+        homework=FakeGenerator(three, model="fake-homework"),
+        feedback=FakeGenerator(FEEDBACK),
+        plan=FakeGenerator(PLAN),
+    )
+
+    async with fake.client() as client:
+        job = await start_job(client, GenerationKind.HOMEWORK, job_input, model="fake-homework")
+        await run_job(client, all_generators, job.id)
+
+    homework = fake.rows(Collection.HOMEWORK)[0]
+    questions = fake.rows(Collection.QUESTIONS)
+    links = fake.rows(Collection.HOMEWORK_QUESTIONS)
+    assert [link["sort"] for link in links] == [1, 2, 3]
+    assert [link["question"] for link in links] == [question["id"] for question in questions]
+    assert {link["homework"] for link in links} == {homework["id"]}
 
 
 async def test_the_generator_sees_the_student_and_the_documents() -> None:
@@ -131,8 +183,7 @@ async def test_a_failing_generator_marks_the_job_failed_and_writes_nothing() -> 
         finished = await run_job(client, failing, job.id)
 
     assert finished.status is JobStatus.FAILED
-    assert finished.error is not None
-    assert "model refused" in finished.error
+    assert finished.error == "Generation failed unexpectedly."
     assert fake.rows(Collection.HOMEWORK) == []
 
 
@@ -147,8 +198,7 @@ async def test_a_job_whose_input_is_unusable_fails_rather_than_raising() -> None
         finished = await run_job(client, generators(), UUID(row["id"]))
 
     assert finished.status is JobStatus.FAILED
-    assert finished.error is not None
-    assert "ValidationError" in finished.error
+    assert finished.error == "Generation failed unexpectedly."
 
 
 def test_for_kind_reports_each_generators_model() -> None:
@@ -157,3 +207,57 @@ def test_for_kind_reports_each_generators_model() -> None:
     assert all_generators.for_kind(GenerationKind.HOMEWORK) == "fake-homework"
     assert all_generators.for_kind(GenerationKind.FEEDBACK) == "fake"
     assert all_generators.for_kind(GenerationKind.PLAN) == "fake"
+
+
+@pytest.mark.parametrize(
+    ("error", "message"),
+    [
+        (DirectusUnavailableError("refused"), "The material library could not be reached."),
+        (DirectusError(403, message="forbidden"), "Some of the selected material could no"),
+        (DirectusError(404, message="gone"), "Some of the selected material could no"),
+        (DirectusError(400, message="bad"), "The material library refused this request."),
+        (_anthropic(AuthenticationError, 401), "The generation service refused the request."),
+        (_anthropic(PermissionDeniedError, 403), "The generation service refused the request."),
+        (_anthropic(RateLimitError, 429), "The generation service is busy"),
+        (
+            APIConnectionError(request=httpx2.Request("POST", ANTHROPIC_URL)),
+            "The generation service could not be reached.",
+        ),
+        (
+            _anthropic(InternalServerError, 500),
+            "The generation service could not finish this request.",
+        ),
+        (GenerationError("no tool call"), "The generated result could not be used."),
+        (RuntimeError("model refused"), "Generation failed unexpectedly."),
+    ],
+)
+async def test_a_failure_reaches_the_tutor_as_a_sentence_not_a_traceback(
+    error: Exception, message: str
+) -> None:
+    fake, job_input = seeded()
+    failing = Generators(
+        homework=FailingGenerator(error),
+        feedback=FakeGenerator(FEEDBACK),
+        plan=FakeGenerator(PLAN),
+    )
+
+    async with fake.client() as client:
+        job = await start_job(client, GenerationKind.HOMEWORK, job_input, model="fake")
+        finished = await run_job(client, failing, job.id)
+
+    assert finished.error is not None
+    assert finished.error.startswith(message)
+    assert type(error).__name__ not in finished.error
+
+
+async def test_material_the_job_may_no_longer_read_is_said_plainly() -> None:
+    """The generator is never reached: Directus refuses the document the job names."""
+    fake, job_input = seeded()
+    fake.items[Collection.DOCUMENTS] = {}
+
+    async with fake.client() as client:
+        job = await start_job(client, GenerationKind.HOMEWORK, job_input, model="fake")
+        finished = await run_job(client, generators(), job.id)
+
+    assert finished.status is JobStatus.FAILED
+    assert finished.error == "Some of the selected material could no longer be read."

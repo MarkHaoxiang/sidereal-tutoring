@@ -9,5 +9,10 @@ DIRECTUS_REJECTED = "directus_rejected"
 
 
 def detail(code: str, message: str) -> dict[str, Any]:
-    """Every error body a client branches on. It reads the `code`, never the sentence."""
+    """What a client branches on. It reads the `code`, never the sentence."""
     return {"code": code, "message": message}
+
+
+def error_body(code: str, message: str) -> dict[str, Any]:
+    """The whole body, for a handler answering without `HTTPException` to wrap it."""
+    return {"detail": detail(code, message)}

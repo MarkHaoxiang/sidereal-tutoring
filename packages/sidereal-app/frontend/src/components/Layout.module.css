@@ -11,3 +11,9 @@
   margin: 0 auto;
   padding: 1.5rem;
 }
+
+@media (max-width: 40rem) {
+  .content {
+    padding: 1rem;
+  }
+}

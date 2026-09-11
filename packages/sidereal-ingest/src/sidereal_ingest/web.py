@@ -53,6 +53,8 @@ class HttpxFetcher:
         try:
             response = await self._client.get(url, headers={"User-Agent": USER_AGENT})
             response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise IngestError(f"{url}: {exc}", status=exc.response.status_code) from exc
         except httpx.HTTPError as exc:
             raise IngestError(f"{url}: {exc}") from exc
         self._cache.write(url, response.text)

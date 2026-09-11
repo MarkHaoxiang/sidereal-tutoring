@@ -22,4 +22,10 @@ def test_health_answers_while_directus_is_down(
 def test_the_schema_names_every_route(client: TestClient) -> None:
     paths = client.get("/openapi.json").json()["paths"]
 
-    assert set(paths) == {"/api/health", "/api/jobs/{kind}", "/api/jobs/{job_id}"}
+    assert set(paths) == {
+        "/api/health",
+        "/api/documents",
+        "/api/documents/{document_id}/process",
+        "/api/jobs/{kind}",
+        "/api/jobs/{job_id}",
+    }

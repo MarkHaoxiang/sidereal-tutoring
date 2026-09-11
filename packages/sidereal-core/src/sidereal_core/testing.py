@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -32,6 +33,7 @@ class FakeDirectus:
             "status": "active",
         }
         self.items: dict[str, dict[str, dict[str, Any]]] = {}
+        self.files: dict[str, tuple[dict[str, Any], bytes]] = {}
         self.requests: list[httpx.Request] = []
         self.unavailable = False
         self.unavailable_after: int | None = None
@@ -42,6 +44,29 @@ class FakeDirectus:
         self.items.setdefault(collection, {})[str(stored["id"])] = stored
         return stored
 
+    def register_file(
+        self,
+        filename: str,
+        content: bytes,
+        *,
+        file_id: str | None = None,
+        media_type: str = "text/plain",
+    ) -> str:
+        """An uploaded asset: its `/files/{id}` row and the bytes `/assets/{id}` returns."""
+        identifier = file_id or str(uuid4())
+        self.files[identifier] = (
+            {
+                "id": identifier,
+                "filename_download": filename,
+                "filename_disk": f"{identifier}{Path(filename).suffix}",
+                "title": Path(filename).stem,
+                "type": media_type,
+                "filesize": len(content),
+            },
+            content,
+        )
+        return identifier
+
     def rows(self, collection: str) -> list[dict[str, Any]]:
         return list(self.items.get(collection, {}).values())
 
@@ -50,6 +75,15 @@ class FakeDirectus:
 
     def client(self, token: str | None = DEFAULT_TOKEN) -> DirectusClient:
         return DirectusClient(BASE_URL, token, transport=self.transport())
+
+    def _file(self, route: str, file_id: str) -> httpx.Response:
+        stored = self.files.get(file_id)
+        if stored is None:
+            return _error(404, f"File {file_id} not found", "FORBIDDEN")
+        row, content = stored
+        if route == "files":
+            return httpx.Response(200, json={"data": row})
+        return _file_response(row["filename_download"], content, str(row["type"]))
 
     def handle(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
@@ -66,6 +100,8 @@ class FakeDirectus:
         parts = request.url.path.strip("/").split("/")
         if parts == ["users", "me"]:
             return httpx.Response(200, json={"data": self.user})
+        if parts[0] in ("files", "assets") and len(parts) == 2:
+            return self._file(parts[0], parts[1])
         if parts[0] != "items" or len(parts) not in (2, 3):
             return _error(404, f"Route {request.url.path} does not exist.", "ROUTE_NOT_FOUND")
 
@@ -91,6 +127,17 @@ class FakeDirectus:
             del rows[parts[2]]
             return httpx.Response(204)
         return _error(405, f"{request.method} not allowed", "METHOD_NOT_ALLOWED")
+
+
+def _file_response(name: str, content: bytes, media_type: str) -> httpx.Response:
+    return httpx.Response(
+        200,
+        content=content,
+        headers={
+            "Content-Type": media_type,
+            "Content-Disposition": f'attachment; filename="{name}"',
+        },
+    )
 
 
 def _now() -> str:

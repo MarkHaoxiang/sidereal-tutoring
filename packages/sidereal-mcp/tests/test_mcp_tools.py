@@ -3,9 +3,14 @@ from __future__ import annotations
 from datetime import date
 from uuid import UUID
 
-import pytest
 from mcp_doubles import FIXTURES, build_services, seed_student
-from sidereal_core.models import Collection, DocumentKind, JobStatus, StudentStatus
+from sidereal_core.models import (
+    Collection,
+    DocumentKind,
+    DocumentStatus,
+    JobStatus,
+    StudentStatus,
+)
 from sidereal_core.testing import FakeDirectus
 from sidereal_mcp import tools
 
@@ -116,6 +121,9 @@ async def test_list_and_update_generation_jobs() -> None:
     assert reopened.error == "tutor rejected it"
 
 
-async def test_an_unroutable_source_raises() -> None:
-    with pytest.raises(Exception, match="no ingester"):
-        await tools.ingest_source(build_services(FakeDirectus()), "notes.md")
+async def test_an_unroutable_source_comes_back_as_a_failed_row() -> None:
+    document = await tools.ingest_source(build_services(FakeDirectus()), "notes.md")
+
+    assert document.status is DocumentStatus.FAILED
+    assert document.error is not None
+    assert document.error.startswith("notes.md cannot be read.")

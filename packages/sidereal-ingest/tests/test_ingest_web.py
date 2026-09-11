@@ -100,13 +100,32 @@ async def test_fetcher_rate_limits_before_each_uncached_request(tmp_path: Path) 
     assert slept == [1.0]
 
 
-async def test_an_http_failure_is_an_ingest_error(tmp_path: Path) -> None:
+async def test_an_http_failure_is_an_ingest_error_carrying_the_status(tmp_path: Path) -> None:
     fetcher = HttpxFetcher(
         cache=FetchCache(tmp_path / "web"),
         bucket=TokenBucket(rate=1000.0),
         transport=httpx.MockTransport(lambda _: httpx.Response(404)),
     )
 
-    with pytest.raises(IngestError):
+    with pytest.raises(IngestError) as raised:
         await fetcher.fetch(URL)
     await fetcher.aclose()
+
+    assert raised.value.status == 404
+
+
+async def test_a_site_that_never_answers_has_no_status(tmp_path: Path) -> None:
+    def refuse(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused", request=request)
+
+    fetcher = HttpxFetcher(
+        cache=FetchCache(tmp_path / "web"),
+        bucket=TokenBucket(rate=1000.0),
+        transport=httpx.MockTransport(refuse),
+    )
+
+    with pytest.raises(IngestError) as raised:
+        await fetcher.fetch(URL)
+    await fetcher.aclose()
+
+    assert raised.value.status is None

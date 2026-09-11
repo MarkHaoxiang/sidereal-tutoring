@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 
+import { Button, Field, Input } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 
 import styles from "./LoginPage.module.css";
@@ -20,11 +21,6 @@ export function LoginPage() {
     return <Navigate to={from} replace />;
   }
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    void submit();
-  };
-
   const submit = async () => {
     setError(null);
     setIsSubmitting(true);
@@ -38,15 +34,21 @@ export function LoginPage() {
     }
   };
 
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    void submit();
+  };
+
   return (
     <div className={styles.page}>
       <form className={styles.card} onSubmit={handleSubmit}>
-        <h1 className={styles.title}>Sidereal Tutoring</h1>
-        <p className={styles.subtitle}>Sign in with your tutor account</p>
+        <div>
+          <h1 className={styles.title}>Sidereal Tutoring</h1>
+          <p className={styles.subtitle}>Sign in with your tutor account</p>
+        </div>
 
-        <label className={styles.field}>
-          <span>Email</span>
-          <input
+        <Field label="Email">
+          <Input
             type="email"
             required
             autoComplete="username"
@@ -55,11 +57,10 @@ export function LoginPage() {
               setEmail(event.target.value);
             }}
           />
-        </label>
+        </Field>
 
-        <label className={styles.field}>
-          <span>Password</span>
-          <input
+        <Field label="Password" error={error}>
+          <Input
             type="password"
             required
             autoComplete="current-password"
@@ -68,13 +69,11 @@ export function LoginPage() {
               setPassword(event.target.value);
             }}
           />
-        </label>
+        </Field>
 
-        {error ? <p className={styles.error}>{error}</p> : null}
-
-        <button type="submit" className={styles.submit} disabled={isSubmitting}>
+        <Button type="submit" variant="primary" loading={isSubmitting}>
           {isSubmitting ? "Signing in…" : "Sign in"}
-        </button>
+        </Button>
       </form>
     </div>
   );

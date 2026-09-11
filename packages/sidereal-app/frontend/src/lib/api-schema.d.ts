@@ -24,6 +24,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Document
+         * @description File the material as pending and answer immediately; the row carries the outcome.
+         */
+        post: operations["add_document_api_documents_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/documents/{document_id}/process": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reprocess Document
+         * @description Read the material again — what a tutor's Retry on a failed row does.
+         */
+        post: operations["reprocess_document_api_documents__document_id__process_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/jobs/{kind}": {
         parameters: {
             query?: never;
@@ -65,6 +105,77 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** Document */
+        Document: {
+            /** Title */
+            title: string;
+            kind: components["schemas"]["DocumentKind"];
+            /** Source Url */
+            source_url?: string | null;
+            /** File */
+            file?: string | null;
+            /** Text */
+            text?: string | null;
+            /** Student */
+            student?: string | null;
+            /** Session */
+            session?: string | null;
+            /** @default pending */
+            status: components["schemas"]["DocumentStatus"];
+            /** Error */
+            error?: string | null;
+            /** Metadata */
+            metadata?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Date Created */
+            date_created?: string | null;
+            /** Date Updated */
+            date_updated?: string | null;
+            /** User Created */
+            user_created?: string | null;
+            /** User Updated */
+            user_updated?: string | null;
+        };
+        /**
+         * DocumentKind
+         * @enum {string}
+         */
+        DocumentKind: "transcript" | "web_page" | "question_bank" | "upload";
+        /** DocumentRequest */
+        DocumentRequest: {
+            /** Student Id */
+            student_id?: string | null;
+            /** Session Id */
+            session_id?: string | null;
+            /** Title */
+            title?: string | null;
+            source: components["schemas"]["DocumentSourceRequest"];
+        };
+        DocumentSourceRequest: components["schemas"]["FileSourceRequest"] | components["schemas"]["UrlSourceRequest"] | components["schemas"]["TextSourceRequest"];
+        /**
+         * DocumentStatus
+         * @enum {string}
+         */
+        DocumentStatus: "pending" | "processing" | "ready" | "failed";
+        /** FileSourceRequest */
+        FileSourceRequest: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "file";
+            /**
+             * File Id
+             * Format: uuid
+             */
+            file_id: string;
+        };
         /** GenerationJob */
         GenerationJob: {
             kind: components["schemas"]["GenerationKind"];
@@ -140,6 +251,26 @@ export interface components {
          * @enum {string}
          */
         JobStatus: "queued" | "running" | "succeeded" | "failed";
+        /** TextSourceRequest */
+        TextSourceRequest: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "text";
+            /** Text */
+            text: string;
+        };
+        /** UrlSourceRequest */
+        UrlSourceRequest: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "url";
+            /** Url */
+            url: string;
+        };
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -178,6 +309,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Health"];
+                };
+            };
+        };
+    };
+    add_document_api_documents_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Document"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reprocess_document_api_documents__document_id__process_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Document"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

@@ -1,80 +1,129 @@
-import { readItem } from "@directus/sdk";
-import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useMemo, useState } from "react";
+import { Link, Outlet, useParams } from "react-router-dom";
+import { toast } from "sonner";
 
-import { directus } from "@/lib/directus";
+import { StudentDialog } from "@/components/students/StudentDialog";
+import { Button, ConfirmDialog, Spinner, StatusChip, TabPanel, Tabs } from "@/components/ui";
+import { apiError } from "@/lib/api";
+import { useStudent, useUpdateStudent } from "@/lib/queries";
 
+import pageStyles from "./page.module.css";
 import styles from "./StudentDetailPage.module.css";
-import { DocumentsTab } from "./student-tabs/DocumentsTab";
-import { FeedbackTab } from "./student-tabs/FeedbackTab";
-import { HomeworkTab } from "./student-tabs/HomeworkTab";
-import { PlansTab } from "./student-tabs/PlansTab";
-import { SessionsTab } from "./student-tabs/SessionsTab";
 
-const TABS = [
-  { key: "sessions", label: "Sessions" },
-  { key: "documents", label: "Documents" },
-  { key: "homework", label: "Homework" },
-  { key: "feedback", label: "Feedback" },
-  { key: "plans", label: "Plans" },
-] as const;
-
-type TabKey = (typeof TABS)[number]["key"];
+const PANEL_ID = "student-sections";
 
 export function StudentDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const [activeTab, setActiveTab] = useState<TabKey>("sessions");
+  const { data: student, isLoading, isError } = useStudent(id);
+  const updateStudent = useUpdateStudent();
+  const [editOpen, setEditOpen] = useState(false);
+  const [confirmArchive, setConfirmArchive] = useState(false);
 
-  const { data: student, isLoading } = useQuery({
-    queryKey: ["students", id],
-    queryFn: () => directus.request(readItem("students", id ?? "")),
-    enabled: Boolean(id),
-  });
+  const tabs = useMemo(
+    () => [
+      { to: `/students/${id ?? ""}/overview`, label: "Overview" },
+      { to: `/students/${id ?? ""}/sessions`, label: "Sessions" },
+      { to: `/students/${id ?? ""}/material`, label: "Material" },
+      { to: `/students/${id ?? ""}/homework`, label: "Homework" },
+      { to: `/students/${id ?? ""}/feedback`, label: "Feedback" },
+      { to: `/students/${id ?? ""}/plans`, label: "Plans" },
+    ],
+    [id]
+  );
 
   if (!id) {
-    return <p className={styles.status}>No student selected.</p>;
+    return <p className={pageStyles.status}>No student selected.</p>;
   }
+
+  const isArchived = student?.status === "archived";
+
+  const toggleArchive = async () => {
+    try {
+      await updateStudent.mutateAsync({ id, patch: { status: isArchived ? "active" : "archived" } });
+      toast.success(isArchived ? `${student?.name ?? "Student"} is active again` : `${student?.name ?? "Student"} archived`);
+    } catch (error) {
+      toast.error(apiError(error));
+      throw error;
+    }
+  };
 
   return (
     <div>
-      <Link to="/" className={styles.back}>
+      <Link to="/students" className={pageStyles.back}>
         ← All students
       </Link>
 
-      {isLoading ? <p className={styles.status}>Loading student…</p> : null}
+      {isLoading ? (
+        <p className={pageStyles.loading}>
+          <Spinner /> Loading student…
+        </p>
+      ) : null}
+      {isError ? <p className={pageStyles.status}>Could not load this student.</p> : null}
 
       {student ? (
         <header className={styles.header}>
-          <h1 className={styles.name}>{student.name}</h1>
-          <p className={styles.meta}>
-            {student.level ?? "No level set"} · {student.status}
+          <div className={styles.titleRow}>
+            <div className={styles.title}>
+              <h1 className={pageStyles.heading}>{student.name}</h1>
+              <StatusChip status={student.status} />
+            </div>
+            <div className={styles.actions}>
+              <Button
+                onClick={() => {
+                  setEditOpen(true);
+                }}
+              >
+                Edit
+              </Button>
+              <Button
+                variant={isArchived ? "secondary" : "ghost"}
+                onClick={() => {
+                  setConfirmArchive(true);
+                }}
+              >
+                {isArchived ? "Unarchive" : "Archive"}
+              </Button>
+            </div>
+          </div>
+          <p className={pageStyles.meta}>
+            <span>{student.level ?? "No level set"}</span>
+            {(student.subjects ?? []).map((subject) => (
+              <span key={subject} className={styles.subject}>
+                {subject}
+              </span>
+            ))}
           </p>
         </header>
       ) : null}
 
-      <nav className={styles.tabs}>
-        {TABS.map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            className={tab.key === activeTab ? styles.tabActive : styles.tab}
-            onClick={() => {
-              setActiveTab(tab.key);
-            }}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </nav>
+      <Tabs label="Student sections" items={tabs} panelId={PANEL_ID} />
+      <TabPanel id={PANEL_ID}>
+        <Outlet context={{ studentId: id }} />
+      </TabPanel>
 
-      <div className={styles.panel}>
-        {activeTab === "sessions" ? <SessionsTab studentId={id} /> : null}
-        {activeTab === "documents" ? <DocumentsTab studentId={id} /> : null}
-        {activeTab === "homework" ? <HomeworkTab studentId={id} /> : null}
-        {activeTab === "feedback" ? <FeedbackTab studentId={id} /> : null}
-        {activeTab === "plans" ? <PlansTab studentId={id} /> : null}
-      </div>
+      <StudentDialog
+        open={editOpen}
+        onClose={() => {
+          setEditOpen(false);
+        }}
+        student={student}
+      />
+
+      <ConfirmDialog
+        open={confirmArchive}
+        onClose={() => {
+          setConfirmArchive(false);
+        }}
+        title={isArchived ? "Bring this student back?" : "Archive this student?"}
+        message={
+          isArchived
+            ? "They will show up in your active list again. Nothing else changes."
+            : "They drop out of your active list. Their sessions, material and work are all kept, and you can bring them back at any time."
+        }
+        confirmLabel={isArchived ? "Unarchive" : "Archive"}
+        danger={!isArchived}
+        onConfirm={toggleArchive}
+      />
     </div>
   );
 }

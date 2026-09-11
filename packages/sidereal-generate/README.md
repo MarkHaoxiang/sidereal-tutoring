@@ -6,6 +6,7 @@ Generates homework, feedback and study plans from a student and their documents.
 
 | Variable | Default | Effect |
 |---|---|---|
+| `SIDEREAL_GENERATE_BACKEND` | `claude` | `claude` calls Anthropic; `fake` calls nothing and returns `[fake]` artefacts. |
 | `SIDEREAL_GENERATE_MODEL` | `claude-sonnet-5` | Model id for every generator. |
 | `SIDEREAL_GENERATE_MAX_TOKENS` | `8000` | Output cap per request. |
 | `ANTHROPIC_API_KEY` | unset | Read by the Anthropic SDK on first call. |

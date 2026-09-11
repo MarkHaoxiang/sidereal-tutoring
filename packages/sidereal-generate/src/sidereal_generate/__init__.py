@@ -11,7 +11,13 @@ from sidereal_generate.claude import (
     homework_generator,
     plan_generator,
 )
-from sidereal_generate.fake import FailingGenerator, FakeGenerator
+from sidereal_generate.fake import (
+    FailingGenerator,
+    FakeFeedbackGenerator,
+    FakeGenerator,
+    FakeHomeworkGenerator,
+    FakePlanGenerator,
+)
 from sidereal_generate.jobs import (
     Generators,
     JobInput,
@@ -26,15 +32,24 @@ from sidereal_generate.models import (
     HomeworkOutput,
     PlanOutput,
 )
-from sidereal_generate.settings import DEFAULT_MODEL, GenerateSettings, generate_settings
+from sidereal_generate.settings import (
+    DEFAULT_MODEL,
+    GenerateBackend,
+    GenerateSettings,
+    generate_settings,
+)
 
 __all__ = [
     "DEFAULT_MODEL",
     "AnthropicGenerator",
     "FailingGenerator",
+    "FakeFeedbackGenerator",
     "FakeGenerator",
+    "FakeHomeworkGenerator",
+    "FakePlanGenerator",
     "FeedbackGenerator",
     "FeedbackOutput",
+    "GenerateBackend",
     "GenerateSettings",
     "GeneratedQuestion",
     "GenerationError",

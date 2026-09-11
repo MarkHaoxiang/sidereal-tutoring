@@ -7,6 +7,7 @@ from sidereal_core.directus import (
 )
 from sidereal_core.models import (
     Collection,
+    DirectusFile,
     DirectusUser,
     Document,
     DocumentDraft,
@@ -21,6 +22,8 @@ from sidereal_core.models import (
     GenerationKind,
     Homework,
     HomeworkDraft,
+    HomeworkQuestion,
+    HomeworkQuestionDraft,
     HomeworkStatus,
     JobStatus,
     Plan,
@@ -45,6 +48,7 @@ __all__ = [
     "DirectusClientError",
     "DirectusError",
     "DirectusErrorDetail",
+    "DirectusFile",
     "DirectusSettings",
     "DirectusUnavailableError",
     "DirectusUser",
@@ -61,6 +65,8 @@ __all__ = [
     "GenerationKind",
     "Homework",
     "HomeworkDraft",
+    "HomeworkQuestion",
+    "HomeworkQuestionDraft",
     "HomeworkStatus",
     "JobStatus",
     "Plan",

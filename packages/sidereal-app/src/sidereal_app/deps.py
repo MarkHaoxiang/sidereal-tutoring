@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Annotated, cast
 
 import httpx
@@ -11,6 +12,7 @@ from sidereal_core.directus import DirectusClient, DirectusError, DirectusUnavai
 from sidereal_core.models import DirectusUser
 from sidereal_core.settings import directus_settings
 from sidereal_generate.jobs import Generators, default_generators
+from sidereal_ingest.base import Ingester
 
 from sidereal_app.api.errors import (
     BAD_CREDENTIALS,
@@ -25,6 +27,11 @@ bearer = HTTPBearer(auto_error=False)
 def get_http_client(request: Request) -> httpx.AsyncClient:
     """The app's one connection pool, opened by the lifespan and closed after it."""
     return cast("httpx.AsyncClient", request.app.state.http)
+
+
+def get_ingesters(request: Request) -> Sequence[Ingester]:
+    """Built once by the lifespan: the web fetcher's rate limit is per process, not per request."""
+    return cast("Sequence[Ingester]", request.app.state.ingesters)
 
 
 def get_directus_client(
@@ -61,5 +68,6 @@ def get_generators() -> Generators:
 
 
 CurrentUser = Annotated[DirectusUser, Depends(get_current_user)]
+IngesterSet = Annotated[Sequence[Ingester], Depends(get_ingesters)]
 Directus = Annotated[DirectusClient, Depends(get_directus_client)]
 GeneratorSet = Annotated[Generators, Depends(get_generators)]

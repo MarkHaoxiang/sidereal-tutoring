@@ -16,3 +16,6 @@ Bottom layer. Imports no other workspace package.
 - Every failure is a `DirectusClientError`: `DirectusUnavailableError` when Directus cannot be reached,
   `DirectusError` (status + Directus's `errors[]`) when it answers with one.
 - Settings are a frozen dataclass over `os.environ`, read on call. No I/O at import.
+- Files are Directus's own collection, not `/items`: the row comes from `/files/{id}` and the bytes
+  from `/assets/{id}`. `download_file` names the bytes with the row's `filename_download`, never
+  with a name parsed out of a response header.
