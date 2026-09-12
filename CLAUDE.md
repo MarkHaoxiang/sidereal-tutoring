@@ -22,7 +22,8 @@ machine explicit).
 **Current phase: scaffold complete.** Every layer exists and is tested, but **no real
 ingestion or generation has run against real data yet** — the domain shapes are provisional
 and should be expected to move. The compose stack is local dev only. The transcripts service
-polls and logs; it does not transcribe.
+polls and logs; it does not transcribe. The typeset service compiles Typst to PDF/SVG offline,
+with its compiler and fonts embedded in the binary.
 
 Standing rules: **agents never commit the user to a cost they did not choose** — no purchases,
 signups, trials or raised limits; flag them as human actions. `ANTHROPIC_API_KEY` reaches a
@@ -38,8 +39,8 @@ process through the environment only, and tests and CI run with no key set.
   other, and nothing imports either). `packages/sidereal-app/frontend/` is the React client.
   The layering is enforced by per-package `ruff.toml` banned-api entries, not by convention.
 - `crates/` — shared Rust **libraries**, never deployed.
-- `services/` — deployable Rust **processes**, one port each. The path answers "is this
-  deployed?".
+- `services/` — deployable Rust **processes**, one port each, transcripts and typeset among
+  them. The path answers "is this deployed?".
 - `scripts/` — the Directus schema round-trip and the role/token bootstrap. Shellcheck-clean.
 - `docs/` — `development.md` (for humans), `architecture.md` (the data flow and who talks to
   whom).

@@ -6,6 +6,7 @@ export type SessionStatus = "scheduled" | "completed" | "cancelled";
 export type DocumentKind = "transcript" | "web_page" | "question_bank" | "upload";
 export type DocumentStatus = "pending" | "processing" | "ready" | "failed";
 export type HomeworkStatus = "draft" | "assigned" | "submitted" | "marked";
+export type HomeworkFormat = "markdown" | "typst";
 export type FeedbackStatus = "draft" | "sent";
 export type PlanStatus = "draft" | "active" | "completed";
 export type GenerationJobKind = "homework" | "feedback" | "plan";
@@ -64,6 +65,20 @@ export interface Document extends AuditFields {
   status: DocumentStatus;
   error: string | null;
   metadata: Record<string, unknown> | null;
+  // Alias m2m field through the `document_topics` junction.
+  topics: string[] | DocumentTopic[];
+}
+
+export interface Topic extends AuditFields {
+  id: string;
+  name: string;
+  parent: string | Topic | null;
+  description: string | null;
+  sort: number | null;
+  // Alias m2m fields through the three junctions below.
+  documents: string[] | DocumentTopic[];
+  questions: string[] | QuestionTopic[];
+  homework: string[] | HomeworkTopic[];
 }
 
 export interface Question extends AuditFields {
@@ -76,6 +91,8 @@ export interface Question extends AuditFields {
   document: string | Document | null;
   // Alias m2m field through the `homework_questions` junction.
   homework: string[] | HomeworkQuestion[];
+  // Alias m2m field through the `question_topics` junction.
+  topics: string[] | QuestionTopic[];
 }
 
 // Written by `sidereal_generate.jobs`: ids as strings, `questions` on homework only.
@@ -92,13 +109,19 @@ export interface Homework extends AuditFields {
   session: string | Session | null;
   title: string | null;
   content: string | null;
+  format: HomeworkFormat;
+  pdf: string | DirectusFile | null;
+  compile_error: string | null;
   due_on: string | null;
   status: HomeworkStatus;
   submission: string | null;
+  submission_file: string | DirectusFile | null;
   submitted_at: string | null;
   generated_from: GenerationProvenance | null;
   // Alias m2m field through the `homework_questions` junction.
   questions: string[] | HomeworkQuestion[];
+  // Alias m2m field through the `homework_topics` junction.
+  topics: string[] | HomeworkTopic[];
 }
 
 export interface Feedback extends AuditFields {
@@ -140,6 +163,27 @@ export interface HomeworkQuestion extends AuditFields {
   sort: number | null;
 }
 
+export interface DocumentTopic extends AuditFields {
+  id: string;
+  document: string | Document;
+  topic: string | Topic;
+  sort: number | null;
+}
+
+export interface QuestionTopic extends AuditFields {
+  id: string;
+  question: string | Question;
+  topic: string | Topic;
+  sort: number | null;
+}
+
+export interface HomeworkTopic extends AuditFields {
+  id: string;
+  homework: string | Homework;
+  topic: string | Topic;
+  sort: number | null;
+}
+
 export interface Schema {
   students: Student[];
   sessions: Session[];
@@ -149,5 +193,9 @@ export interface Schema {
   feedback: Feedback[];
   plans: Plan[];
   generation_jobs: GenerationJob[];
+  topics: Topic[];
   homework_questions: HomeworkQuestion[];
+  document_topics: DocumentTopic[];
+  question_topics: QuestionTopic[];
+  homework_topics: HomeworkTopic[];
 }

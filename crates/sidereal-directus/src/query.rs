@@ -76,11 +76,6 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn an_empty_query_has_no_parameters() {
-        assert!(Query::new().params().is_empty());
-    }
-
-    #[test]
     fn parameters_are_directus_spellings() {
         let params = Query::new()
             .filter(json!({"kind": {"_eq": "transcript"}}))

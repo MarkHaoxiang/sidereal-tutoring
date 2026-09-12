@@ -1,3 +1,4 @@
+import { ArrowLeft } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 
 import { Card, Markdown, Spinner } from "@/components/ui";
@@ -14,7 +15,7 @@ export function StudentFeedbackPage() {
     <div className={styles.stack}>
       <div>
         <Link to="/me/feedback" className={styles.back}>
-          ← Feedback
+          <ArrowLeft size={14} aria-hidden="true" /> Feedback
         </Link>
         <h1 className={styles.heading}>Feedback</h1>
         {feedback ? <p className={styles.subheading}>Written {formatDate(feedback.date_created)}</p> : null}

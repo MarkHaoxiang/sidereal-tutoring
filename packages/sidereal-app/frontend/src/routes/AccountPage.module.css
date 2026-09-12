@@ -1,0 +1,4 @@
+/* The last thing on the account page, on its own rather than inside a card. */
+.signOut {
+  display: flex;
+}

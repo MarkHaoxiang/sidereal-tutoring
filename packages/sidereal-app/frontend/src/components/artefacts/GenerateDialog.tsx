@@ -5,7 +5,7 @@ import { apiError } from "@/lib/api";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { useCreateJob, useDocuments, useSessions } from "@/lib/queries";
 import type { DocumentListItem } from "@/lib/queries";
-import type { GenerationJobKind } from "@/lib/schema";
+import type { GenerationJobKind, HomeworkFormat } from "@/lib/schema";
 
 import { ARTEFACT_KINDS } from "./kinds";
 import styles from "./artefacts.module.css";
@@ -18,6 +18,11 @@ export interface GenerateDialogProps {
   /** Handed the queued job's id; the caller shows the progress. */
   onStarted: (jobId: string) => void;
 }
+
+const FORMATS: { id: HomeworkFormat; label: string }[] = [
+  { id: "markdown", label: "Written (markdown)" },
+  { id: "typst", label: "Typeset (PDF)" },
+];
 
 function sessionIdOf(document: DocumentListItem): string | null {
   return typeof document.session === "string" ? document.session : (document.session?.id ?? null);
@@ -36,6 +41,7 @@ export function GenerateDialog({ open, onClose, studentId, kind, onStarted }: Ge
 
   const [selected, setSelected] = useState<string[]>([]);
   const [instructions, setInstructions] = useState("");
+  const [format, setFormat] = useState<HomeworkFormat>("markdown");
   const [periodStart, setPeriodStart] = useState("");
   const [periodEnd, setPeriodEnd] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -65,6 +71,7 @@ export function GenerateDialog({ open, onClose, studentId, kind, onStarted }: Ge
   const close = () => {
     setSelected([]);
     setInstructions("");
+    setFormat("markdown");
     setPeriodStart("");
     setPeriodEnd("");
     setError(null);
@@ -90,6 +97,7 @@ export function GenerateDialog({ open, onClose, studentId, kind, onStarted }: Ge
         student_id: studentId,
         document_ids: selected,
         instructions: instructions.trim() || null,
+        format: copy.hasFormat ? format : "markdown",
         ...(copy.hasPeriod ? { period_start: periodStart || null, period_end: periodEnd || null } : {}),
       });
       onStarted(job.id);
@@ -157,6 +165,26 @@ export function GenerateDialog({ open, onClose, studentId, kind, onStarted }: Ge
           </div>
         ) : null}
       </Field>
+
+      {copy.hasFormat ? (
+        <Field label="Format" help="Typeset homework compiles to a printable PDF with proper maths.">
+          <div className={styles.formats}>
+            {FORMATS.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                className={styles.format}
+                aria-pressed={format === option.id}
+                onClick={() => {
+                  setFormat(option.id);
+                }}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </Field>
+      ) : null}
 
       <Field label="Instructions" help="Optional — anything you would tell a colleague doing this for you.">
         <Textarea

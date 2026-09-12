@@ -9,17 +9,23 @@ BASE_URL = "http://directus.test"
 FILE_ID = "22222222-2222-4222-8222-222222222222"
 
 
-async def test_download_file_returns_the_stored_name_and_the_bytes() -> None:
+async def test_a_file_is_read_off_the_files_route_and_the_bytes_off_assets() -> None:
     fake = FakeDirectus()
-    file_id = fake.register_file("Lesson 3 notes.txt", b"Factorising quadratics.")
+    file_id = fake.register_file(
+        "Lesson 3 notes.txt", b"Factorising quadratics.", media_type="text/plain"
+    )
 
     async with fake.client() as client:
+        row = await client.get_file(file_id)
         name, content = await client.download_file(file_id)
 
+    assert row.filename_download == "Lesson 3 notes.txt"
+    assert row.type == "text/plain"
+    assert row.filesize == len(b"Factorising quadratics.")
     assert name == "Lesson 3 notes.txt"
     assert content == b"Factorising quadratics."
     paths = [request.url.path for request in fake.requests]
-    assert paths == [f"/files/{file_id}", f"/assets/{file_id}"]
+    assert paths == [f"/files/{file_id}", f"/files/{file_id}", f"/assets/{file_id}"]
     assert fake.requests[-1].url.params["download"] == "true"
 
 
@@ -54,14 +60,18 @@ async def test_download_file_reports_a_directus_rejection() -> None:
     assert raised.value.status == 404
 
 
-async def test_get_file_reads_the_files_route_not_items() -> None:
+async def test_upload_file_posts_the_bytes_and_reads_them_back() -> None:
     fake = FakeDirectus()
-    file_id = fake.register_file("notes.docx", b"x", media_type="application/msword")
+    pdf = b"%PDF-1.7\nbinary\x00\r\nbytes\n%%EOF\n"
 
     async with fake.client() as client:
-        row = await client.get_file(file_id)
+        uploaded = await client.upload_file(
+            "quadratics-week-3.pdf", pdf, "application/pdf", title="Quadratics: week 3"
+        )
+        name, content = await client.download_file(uploaded.id)
 
-    assert row.filename_download == "notes.docx"
-    assert row.type == "application/msword"
-    assert row.filesize == 1
-    assert fake.requests[0].url.path == f"/files/{file_id}"
+    assert uploaded.filename_download == "quadratics-week-3.pdf"
+    assert uploaded.title == "Quadratics: week 3"
+    assert uploaded.type == "application/pdf"
+    assert (name, content) == ("quadratics-week-3.pdf", pdf)
+    assert fake.requests[0].url.path == "/files"

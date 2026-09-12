@@ -1,6 +1,6 @@
 import { HomeworkRow } from "@/components/student/HomeworkRow";
 import { byDueDate } from "@/components/student/homework";
-import { EmptyState, Spinner } from "@/components/ui";
+import { EmptyState, SkeletonRows } from "@/components/ui";
 import { useMyHomeworkList } from "@/lib/queries";
 import type { MyHomeworkListItem } from "@/lib/queries";
 
@@ -35,11 +35,7 @@ export function StudentHomeworkListPage() {
     <div className={styles.stack}>
       <h1 className={styles.heading}>Homework</h1>
 
-      {isLoading ? (
-        <p className={styles.loading}>
-          <Spinner /> Loading your homework…
-        </p>
-      ) : null}
+      {isLoading ? <SkeletonRows count={3} label="Loading your homework" /> : null}
       {isError ? <p className={styles.status}>Your homework could not be loaded. Try again in a moment.</p> : null}
 
       {section("To do", todo)}

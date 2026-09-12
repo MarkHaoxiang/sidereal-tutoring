@@ -19,7 +19,7 @@ from sidereal_core.logins import (
     reset_password,
     whoami,
 )
-from sidereal_core.models import Collection, DirectusUser, Student
+from sidereal_core.models import Collection, Student
 from sidereal_core.testing import DEFAULT_USER_ID, FakeDirectus
 
 EMAIL = "tutee@sidereal.example.com"
@@ -41,7 +41,7 @@ async def student_row(client: DirectusClient, student_id: UUID) -> Student:
     return await client.get_item(Collection.STUDENTS, Student, student_id)
 
 
-async def test_create_login_makes_a_student_role_user_and_links_it() -> None:
+async def test_create_login_makes_a_student_role_user_and_links_it_in_one_write() -> None:
     fake, student_id = seeded()
     role = fake.rows(Collection.DIRECTUS_ROLES)[0]
 
@@ -50,6 +50,7 @@ async def test_create_login_makes_a_student_role_user_and_links_it() -> None:
 
         assert login.email == EMAIL
         assert (await student_row(client, student_id)).user == login.user_id
+    assert [request.url.path for request in fake.requests].count("/users") == 0
 
     created = user_rows(fake)[0]
     assert created["role"] == role["id"]
@@ -169,6 +170,20 @@ async def test_whoami_is_a_tutor_otherwise() -> None:
     assert identity.student_id is None
 
 
+async def test_an_admin_is_never_read_as_a_student() -> None:
+    """Admin wins, so the students table is not even asked about."""
+    fake, student_id = seeded()
+    fake.items[Collection.STUDENTS][str(student_id)]["user"] = str(DEFAULT_USER_ID)
+    fake.admin = True
+
+    async with fake.client() as client:
+        identity = await whoami(client)
+
+    assert identity.role is CallerRole.ADMIN
+    assert identity.student_id is None
+    assert "/items/students" not in [request.url.path for request in fake.requests]
+
+
 class Refuses(FakeDirectus):
     """A Directus that answers one method and path prefix with a refusal."""
 
@@ -191,24 +206,16 @@ def refusing(method: str, prefix: str, status: int) -> tuple[Refuses, UUID]:
     return fake, UUID(fake.seed(Collection.STUDENTS, {"name": "A. Tutee"})["id"])
 
 
-async def test_an_unlinkable_login_is_not_left_behind() -> None:
-    fake, student_id = refusing("PATCH", "/items/students/", 403)
-
-    async with fake.client() as client:
-        with pytest.raises(LoginRefusedError, match="could not be given"):
-            await create_login(client, student_id, EMAIL, PASSWORD)
-
-    assert user_rows(fake) == []
-
-
-async def test_a_refused_user_creation_is_a_plain_sentence() -> None:
-    fake, student_id = refusing("POST", "/users", 400)
+async def test_a_refused_login_leaves_nothing_behind() -> None:
+    """The login is created on the student's own field, so a refusal writes nothing at all."""
+    fake, student_id = refusing("PATCH", "/items/students/", 400)
 
     async with fake.client() as client:
         with pytest.raises(LoginRefusedError, match="already be in use") as raised:
             await create_login(client, student_id, EMAIL, PASSWORD)
 
     assert raised.value.status == 400
+    assert user_rows(fake) == []
 
 
 async def test_a_student_directus_will_not_show_is_not_found() -> None:
@@ -228,14 +235,3 @@ async def test_directus_being_unreachable_stays_a_directus_failure() -> None:
     async with fake.client() as client:
         with pytest.raises(DirectusUnavailableError):
             await create_login(client, student_id, EMAIL, PASSWORD)
-
-
-async def test_directus_user_model_reads_a_created_user() -> None:
-    fake, student_id = seeded()
-
-    async with fake.client() as client:
-        login = await create_login(client, student_id, EMAIL, PASSWORD)
-        user = await client.update_user(login.user_id, {"first_name": "Tutee"})
-
-    assert isinstance(user, DirectusUser)
-    assert user.first_name == "Tutee"

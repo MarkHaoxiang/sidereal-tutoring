@@ -4,7 +4,7 @@ import { toast } from "sonner";
 
 import { dayKey, formatDayHeading, formatTime } from "@/components/sessions/schedule";
 import { artefactPath, collectArtefacts } from "@/components/students/artefacts";
-import { Button, Card, EmptyState, Spinner, StatusChip } from "@/components/ui";
+import { Button, Card, EmptyState, PageHeader, SkeletonRows, StatusChip } from "@/components/ui";
 import { apiError } from "@/lib/api";
 import {
   useDocuments,
@@ -71,13 +71,15 @@ export function HomePage() {
 
   return (
     <div className={pageStyles.stack}>
-      <h1 className={pageStyles.heading}>Home</h1>
+      <PageHeader
+        eyebrow="Your week"
+        title="Home"
+        subtitle="What is coming up, what is waiting on you, and what is still being read."
+      />
 
       <Card title="Upcoming sessions">
         {sessions.isLoading ? (
-          <p className={pageStyles.loading}>
-            <Spinner /> Loading…
-          </p>
+          <SkeletonRows count={3} variant="line" label="Loading your upcoming sessions" />
         ) : days.length > 0 ? (
           <div className={styles.days}>
             {days.map((day) => (
@@ -102,7 +104,7 @@ export function HomePage() {
           <EmptyState
             message={
               hasStudents
-                ? "Nothing scheduled in the next seven days."
+                ? "Nothing in the diary for the next seven days."
                 : "No students yet. Add your first student to start planning lessons."
             }
             action={
@@ -120,7 +122,9 @@ export function HomePage() {
       </Card>
 
       <Card title="Waiting for your review">
-        {waiting.length > 0 ? (
+        {homework.isLoading || feedback.isLoading || plans.isLoading ? (
+          <SkeletonRows count={2} variant="line" label="Loading what is waiting for your review" />
+        ) : waiting.length > 0 ? (
           <ul className={styles.list}>
             {waiting.map((artefact) => (
               <li key={`${artefact.kind}-${artefact.id}`} className={styles.row}>
@@ -142,12 +146,14 @@ export function HomePage() {
             ))}
           </ul>
         ) : (
-          <EmptyState message="Nothing is waiting for your review." />
+          <EmptyState message="Nothing is waiting for you — the desk is clear." />
         )}
       </Card>
 
       <Card title="Material">
-        {material.data && material.data.length > 0 ? (
+        {material.isLoading ? (
+          <SkeletonRows count={2} variant="line" label="Loading material" />
+        ) : material.data && material.data.length > 0 ? (
           <ul className={styles.list}>
             {material.data.map((document) => {
               const title = document.title ?? "Untitled material";
@@ -183,7 +189,7 @@ export function HomePage() {
             })}
           </ul>
         ) : (
-          <EmptyState message="All material has been read and is ready to use." />
+          <EmptyState message="Every piece of material has been read and is ready to use." />
         )}
       </Card>
     </div>

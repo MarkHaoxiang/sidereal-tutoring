@@ -1,32 +1,32 @@
-import { Toaster } from "sonner";
 import { Outlet } from "react-router-dom";
 
-import { useTheme } from "@/lib/theme";
+import { cx } from "@/lib/cx";
+import { useMediaQuery } from "@/lib/media";
 
+import { Sidebar } from "./Sidebar";
+import { Toasts } from "./Toasts";
 import { TopNav } from "./TopNav";
 import styles from "./Layout.module.css";
 
+// One nav at a time: the sidebar above 64rem, the top bar with its menu below it.
+const WIDE = "(min-width: 64rem)";
+
 export function Layout() {
-  const [theme] = useTheme();
+  const wide = useMediaQuery(WIDE);
 
   return (
-    <div className={styles.shell}>
-      <TopNav />
+    <div className={cx(styles.shell, wide && styles.wide)}>
+      {wide ? (
+        <aside className={styles.aside}>
+          <Sidebar />
+        </aside>
+      ) : (
+        <TopNav />
+      )}
       <main className={styles.content}>
         <Outlet />
       </main>
-      <Toaster
-        theme={theme}
-        position="bottom-right"
-        toastOptions={{
-          style: {
-            background: "var(--color-bg-raised)",
-            color: "var(--color-fg)",
-            border: "1px solid var(--color-border)",
-            borderRadius: "var(--radius-card)",
-          },
-        }}
-      />
+      <Toasts />
     </div>
   );
 }

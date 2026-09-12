@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
-import { Button, ConfirmDialog, Spinner, StatusChip } from "@/components/ui";
+import { TopicsField } from "@/components/topics/TopicsField";
+import { taggedTopics } from "@/components/topics/tree";
+import { Button, ConfirmDialog, PageHeader, Spinner, StatusChip } from "@/components/ui";
 import { apiError } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
-import { useDeleteDocument, useDocument, useRetryDocument } from "@/lib/queries";
+import { useDeleteDocument, useDocument, useRetryDocument, useTagDocument } from "@/lib/queries";
 
 import pageStyles from "./page.module.css";
 import styles from "./MaterialDetailPage.module.css";
@@ -16,6 +18,7 @@ export function MaterialDetailPage() {
   const { data: document, isLoading, isError } = useDocument(docId);
   const retry = useRetryDocument();
   const remove = useDeleteDocument();
+  const tag = useTagDocument();
   const [confirming, setConfirming] = useState(false);
 
   const backTo = `/students/${id ?? ""}/material`;
@@ -49,10 +52,6 @@ export function MaterialDetailPage() {
 
   return (
     <div>
-      <Link to={backTo} className={pageStyles.back}>
-        ← Material
-      </Link>
-
       {isLoading ? (
         <p className={pageStyles.loading}>
           <Spinner /> Loading material…
@@ -62,41 +61,47 @@ export function MaterialDetailPage() {
 
       {document ? (
         <>
-          <div className={pageStyles.header}>
-            <div>
-              <h1 className={pageStyles.heading}>{document.title ?? "Untitled material"}</h1>
-              <p className={pageStyles.meta}>
+          <PageHeader
+            back={{ to: backTo, label: "Material" }}
+            eyebrow="Material"
+            title={document.title ?? "Untitled material"}
+            actions={
+              document.status === "failed" ? (
+                <Button
+                  variant="primary"
+                  loading={retry.isPending}
+                  onClick={() => {
+                    void tryAgain();
+                  }}
+                >
+                  Retry
+                </Button>
+              ) : null
+            }
+            meta={
+              <>
                 <StatusChip status={document.kind} />
                 <StatusChip status={document.status} />
                 <span>Added {formatDateTime(document.date_created)}</span>
                 {document.source_url ? (
-                  <a
-                    className={styles.source}
-                    href={document.source_url}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
+                  <a className={styles.source} href={document.source_url} target="_blank" rel="noreferrer">
                     Open the original page
                   </a>
                 ) : null}
-              </p>
-            </div>
-            {document.status === "failed" ? (
-              <Button
-                variant="primary"
-                loading={retry.isPending}
-                onClick={() => {
-                  void tryAgain();
-                }}
-              >
-                Retry
-              </Button>
-            ) : null}
-          </div>
+              </>
+            }
+          />
 
           {document.status === "failed" ? (
             <p className={styles.error}>{document.error ?? "This material could not be read."}</p>
           ) : null}
+
+          <TopicsField
+            topics={taggedTopics(document.topics)}
+            onSave={async (topicIds) => {
+              await tag.mutateAsync({ id: document.id, topics: topicIds });
+            }}
+          />
 
           <p className={pageStyles.textBlock}>
             {document.text ??

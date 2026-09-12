@@ -1,4 +1,4 @@
-import { readItem, readItems, updateItem } from "@directus/sdk";
+import { deleteFile, readItem, readItems, updateItem, uploadFiles } from "@directus/sdk";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { directus } from "@/lib/directus";
@@ -33,7 +33,15 @@ async function fetchMyStudent() {
 function fetchMyHomeworkList() {
   return directus.request(
     readItems("homework", {
-      fields: ["id", "title", "due_on", "status", "submitted_at", "date_created"],
+      fields: [
+        "id",
+        "title",
+        "due_on",
+        "status",
+        "submitted_at",
+        "date_created",
+        { topics: ["id", "sort", { topic: ["id", "name"] }] },
+      ],
       sort: ["-date_created"],
       limit: -1,
     })
@@ -47,12 +55,16 @@ function fetchMyHomework(id: string) {
         "id",
         "title",
         "content",
+        "format",
         "due_on",
         "status",
         "submission",
         "submitted_at",
         "date_created",
+        "pdf",
+        "submission_file",
         { questions: ["id", "sort", { question: ["id", "text"] }] },
+        { topics: ["id", "sort", { topic: ["id", "name"] }] },
       ],
     })
   );
@@ -148,6 +160,56 @@ export function useSaveAnswers() {
   return useMutation({
     mutationFn: ({ id, submission }: { id: string; submission: string }) =>
       directus.request(updateItem("homework", id, { submission }, { fields: ["id", "status"] })),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: meKeys.all });
+    },
+  });
+}
+
+/**
+ * The photo or PDF of the student's working: uploaded, then linked to the homework. Both
+ * steps are the student's own token — `directus_files` create presets them as the uploader,
+ * and that is what later lets them read it back.
+ */
+export function useAttachSubmissionFile() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, file }: { id: string; file: File }) => {
+      const form = new FormData();
+      form.append("file", file);
+      const uploaded = await directus.request(uploadFiles(form));
+      return directus.request(
+        updateItem("homework", id, { submission_file: uploaded.id }, { fields: ["id"] })
+      );
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: meKeys.all });
+    },
+  });
+}
+
+/**
+ * Unlinks the attachment, then tries to delete the file itself. The unlink is what the
+ * student is really asking for and it is the step that must succeed; the delete is a
+ * tidy-up that a policy without a delete grant refuses, and a refusal is not an error to
+ * put in front of them.
+ */
+export function useRemoveSubmissionFile() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, fileId }: { id: string; fileId: string | null }) => {
+      const row = await directus.request(
+        updateItem("homework", id, { submission_file: null }, { fields: ["id"] })
+      );
+      if (fileId) {
+        try {
+          await directus.request(deleteFile(fileId));
+        } catch {
+          // The file stays behind; nothing points at it any more.
+        }
+      }
+      return row;
+    },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: meKeys.all });
     },

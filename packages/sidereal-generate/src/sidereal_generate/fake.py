@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pydantic import BaseModel
+from sidereal_core.models import HomeworkFormat
 
 from sidereal_generate.models import (
     FeedbackOutput,
@@ -14,6 +15,8 @@ from sidereal_generate.models import (
 
 FAKE_MODEL = "fake"
 FAKE_PREFIX = "[fake]"
+# Typst reads these as markup; a backslash in front makes each one a character again.
+TYPST_SPECIAL = frozenset("\\`#$*_[]<>@=~+-/'\"")
 
 
 class FakeGenerator[OutputT: BaseModel]:
@@ -50,9 +53,10 @@ class FakeHomeworkGenerator:
     model = FAKE_MODEL
 
     async def generate(self, request: GenerationRequest) -> HomeworkOutput:
+        typst = request.format is HomeworkFormat.TYPST
         return HomeworkOutput(
             title=f"{FAKE_PREFIX} Homework for {request.student.name}",
-            content=_content("Homework", request),
+            content=_typst_body(request) if typst else _content("Homework", request),
             questions=(
                 GeneratedQuestion(
                     text=f"{FAKE_PREFIX} No question was generated: the fake backend is in use.",
@@ -79,6 +83,27 @@ class FakePlanGenerator:
             title=f"{FAKE_PREFIX} Study plan for {request.student.name}",
             content=_content("Study plan", request),
         )
+
+
+def _typst_body(request: GenerationRequest) -> str:
+    """A Typst body for the house template: only `#question` and `#answerlines`, and it compiles."""
+    material = "\n".join(f"- {_typst(document.title)}" for document in request.documents)
+    return (
+        f"{_typst(FAKE_PREFIX)} No model was called: the fake backend is in use. "
+        "Nothing on this page is real work.\n\n"
+        f"Student: {_typst(request.student.name)}\n\n"
+        f"Instructions: {_typst(request.instructions or 'none given')}\n\n"
+        "Material:\n\n"
+        f"{material or '- none'}\n\n"
+        "#question[The fake backend writes one question and it is this one. "
+        "Show that $1 + 1 = 2$.]\n"
+        "#answerlines(3)\n"
+    )
+
+
+def _typst(value: str) -> str:
+    """A tutor's words as characters, not as Typst markup."""
+    return "".join(f"\\{char}" if char in TYPST_SPECIAL else char for char in value)
 
 
 def _content(heading: str, request: GenerationRequest) -> str:

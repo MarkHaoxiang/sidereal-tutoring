@@ -38,10 +38,19 @@ from sidereal_generate.settings import (
     GenerateSettings,
     generate_settings,
 )
+from sidereal_generate.typst import (
+    Compiled,
+    NotTypstError,
+    compile_body,
+    generate_typst,
+    recompile_homework,
+    upload_pdf,
+)
 
 __all__ = [
     "DEFAULT_MODEL",
     "AnthropicGenerator",
+    "Compiled",
     "FailingGenerator",
     "FakeFeedbackGenerator",
     "FakeGenerator",
@@ -59,13 +68,18 @@ __all__ = [
     "HomeworkGenerator",
     "HomeworkOutput",
     "JobInput",
+    "NotTypstError",
     "PlanGenerator",
     "PlanOutput",
+    "compile_body",
     "default_generators",
     "feedback_generator",
     "generate_settings",
+    "generate_typst",
     "homework_generator",
     "plan_generator",
+    "recompile_homework",
     "run_job",
     "start_job",
+    "upload_pdf",
 ]

@@ -1,6 +1,6 @@
 import { formatDayHeading, formatDuration, formatTime } from "@/components/sessions/schedule";
 import studentStyles from "@/components/student/student.module.css";
-import { EmptyState, Spinner, StatusChip } from "@/components/ui";
+import { EmptyState, SkeletonRows, StatusChip } from "@/components/ui";
 import { useMySessions } from "@/lib/queries";
 import type { MySession } from "@/lib/queries";
 
@@ -36,11 +36,7 @@ export function StudentSessionsPage() {
     <div className={styles.stack}>
       <h1 className={styles.heading}>Lessons</h1>
 
-      {isLoading ? (
-        <p className={styles.loading}>
-          <Spinner /> Loading your lessons…
-        </p>
-      ) : null}
+      {isLoading ? <SkeletonRows count={3} label="Loading your lessons" /> : null}
       {isError ? <p className={styles.status}>Your lessons could not be loaded. Try again in a moment.</p> : null}
 
       <section>

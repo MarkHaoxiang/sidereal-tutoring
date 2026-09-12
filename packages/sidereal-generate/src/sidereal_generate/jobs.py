@@ -27,6 +27,7 @@ from sidereal_core.models import (
     GenerationKind,
     Homework,
     HomeworkDraft,
+    HomeworkFormat,
     HomeworkQuestion,
     HomeworkQuestionDraft,
     JobStatus,
@@ -36,6 +37,7 @@ from sidereal_core.models import (
     QuestionDraft,
     Student,
 )
+from sidereal_core.typeset import TypesetClient, TypesetError, TypesetUnavailableError
 
 from sidereal_generate.base import (
     FeedbackGenerator,
@@ -56,6 +58,7 @@ from sidereal_generate.models import (
     PlanOutput,
 )
 from sidereal_generate.settings import GenerateBackend, generate_settings
+from sidereal_generate.typst import TYPST_WARNING, Compiled, generate_typst, upload_pdf
 
 logger = logging.getLogger(__name__)
 MATERIAL_GONE = (401, 403, 404)
@@ -71,6 +74,8 @@ class JobInput(BaseModel):
     instructions: str | None = None
     period_start: date | None = None
     period_end: date | None = None
+    # Homework only. The app refuses `typst` for any other kind before the job is started.
+    format: HomeworkFormat = HomeworkFormat.MARKDOWN
 
 
 @dataclass(frozen=True, slots=True)
@@ -120,14 +125,18 @@ async def start_job(
     )
 
 
-async def run_job(client: DirectusClient, generators: Generators, job_id: UUID) -> GenerationJob:
+async def run_job(
+    client: DirectusClient, generators: Generators, job_id: UUID, *, typeset: TypesetClient
+) -> GenerationJob:
     """Take a queued job to `succeeded` or `failed`. Never raises for a generation failure."""
     job = await client.get_item(Collection.GENERATION_JOBS, GenerationJob, job_id)
     await _patch(client, job_id, {"status": JobStatus.RUNNING.value})
     try:
         job_input = JobInput.model_validate(job.input)
         request = await _load(client, job_input)
-        collection, output_id = await _generate(client, generators, job, job_input, request)
+        collection, output_id = await _generate(
+            client, generators, job, job_input, request, typeset
+        )
     except Exception as exc:  # A job records its failure; it does not raise it.
         logger.exception("generation job %s failed", job_id)
         return await _patch(
@@ -148,6 +157,10 @@ async def run_job(client: DirectusClient, generators: Generators, job_id: UUID) 
 def _message(exc: BaseException) -> str:
     """What the tutor reads in `error`. The technical detail is logged, never stored."""
     match exc:
+        case TypesetUnavailableError():
+            return "The typeset service could not be reached. Try again shortly."
+        case TypesetError():
+            return "The homework could not be typeset."
         case DirectusUnavailableError():
             return "The material library could not be reached. Try again shortly."
         case DirectusError() if exc.status in MATERIAL_GONE:
@@ -184,6 +197,7 @@ async def _load(client: DirectusClient, job_input: JobInput) -> GenerationReques
         instructions=job_input.instructions,
         period_start=job_input.period_start,
         period_end=job_input.period_end,
+        format=job_input.format,
     )
 
 
@@ -193,6 +207,7 @@ async def _generate(
     job: GenerationJob,
     job_input: JobInput,
     request: GenerationRequest,
+    typeset: TypesetClient,
 ) -> tuple[Collection, UUID]:
     provenance = {
         "job": str(job.id),
@@ -201,9 +216,13 @@ async def _generate(
     }
     match job.kind:
         case GenerationKind.HOMEWORK:
-            output = await generators.homework.generate(request)
+            compiled: Compiled | None = None
+            if job_input.format is HomeworkFormat.TYPST:
+                output, compiled = await generate_typst(generators.homework, typeset, request)
+            else:
+                output = await generators.homework.generate(request)
             return Collection.HOMEWORK, await _write_homework(
-                client, job_input, request, output, provenance
+                client, job_input, request, output, compiled, provenance
             )
         case GenerationKind.FEEDBACK:
             feedback = await generators.feedback.generate(request)
@@ -220,6 +239,7 @@ async def _write_homework(
     job_input: JobInput,
     request: GenerationRequest,
     output: HomeworkOutput,
+    compiled: Compiled | None,
     provenance: dict[str, Any],
 ) -> UUID:
     subject = request.student.subjects[0] if request.student.subjects else None
@@ -239,14 +259,28 @@ async def _write_homework(
         ).id
         for question in output.questions
     ]
+    generated_from: dict[str, Any] = {
+        **provenance,
+        "questions": [str(qid) for qid in question_ids],
+    }
+    pdf: UUID | None = None
+    if compiled is not None and compiled.pdf is not None:
+        pdf = await upload_pdf(client, output.title, compiled.pdf)
+    elif compiled is not None:
+        # A source that will not compile is still the tutor's work: it is written, with the
+        # compiler's report beside it, and the job succeeds carrying the warning.
+        generated_from["warning"] = TYPST_WARNING
     homework = await client.create_item(
         Collection.HOMEWORK,
         Homework,
         HomeworkDraft(
             student=job_input.student,
             title=output.title,
-            content=output.content,
-            generated_from={**provenance, "questions": [str(qid) for qid in question_ids]},
+            content=output.content if compiled is None else compiled.source,
+            format=HomeworkFormat.MARKDOWN if compiled is None else HomeworkFormat.TYPST,
+            pdf=pdf,
+            compile_error=None if compiled is None else compiled.error,
+            generated_from=generated_from,
         ),
     )
     await _link_questions(client, homework.id, question_ids)

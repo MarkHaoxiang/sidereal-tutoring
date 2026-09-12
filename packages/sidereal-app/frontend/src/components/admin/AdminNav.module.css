@@ -1,0 +1,214 @@
+.nav {
+  background: var(--color-bg-sunken);
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  height: 100%;
+  padding: 1.5rem 1rem;
+  border-right: 1px solid var(--color-border);
+}
+
+.top {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  padding: 0.75rem 1.5rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.sidebar .head {
+  flex-wrap: wrap;
+  padding: 0 0.5rem;
+}
+
+.brand {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-right: auto;
+  text-decoration: none;
+}
+
+.brand:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 4px;
+  border-radius: var(--radius-sm);
+}
+
+.badge {
+  flex: none;
+  padding: 0.125rem 0.5rem;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  color: var(--color-fg-muted);
+  font-size: var(--font-size-eyebrow);
+  letter-spacing: var(--tracking-eyebrow);
+  text-transform: uppercase;
+}
+
+.menuButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-bg-raised);
+  color: var(--color-fg-muted);
+  cursor: pointer;
+}
+
+.menuButton:hover {
+  border-color: var(--color-border-strong);
+  color: var(--color-fg);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar .body {
+  flex: 1;
+  gap: 2rem;
+}
+
+.top .body {
+  gap: 0.75rem;
+  padding-top: 0.75rem;
+  margin-top: 0.75rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.bodyClosed {
+  display: none;
+}
+
+.links {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.link {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-control);
+  color: var(--color-fg-muted);
+  text-decoration: none;
+  transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
+}
+
+.link:hover {
+  background: var(--color-muted-tint);
+  color: var(--color-fg);
+}
+
+.linkActive,
+.linkActive:hover {
+  background: var(--color-accent-tint);
+  color: var(--color-accent);
+  font-weight: 500;
+}
+
+.divider {
+  height: 1px;
+  margin: 0.5rem 0.75rem;
+  background: var(--color-border);
+}
+
+.footer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: auto;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-border);
+}
+
+/* The way to the account page, which is why it is a link rather than a caption. */
+.user {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  margin: 0;
+  padding: 0.375rem 0.75rem;
+  border-radius: var(--radius-control);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.user:hover {
+  background: var(--color-muted-tint);
+}
+
+.user:hover .userName {
+  color: var(--color-accent);
+}
+
+.userEyebrow {
+  color: var(--color-fg-muted);
+  font-size: var(--font-size-eyebrow);
+  letter-spacing: var(--tracking-eyebrow);
+  text-transform: uppercase;
+}
+
+.userName {
+  font-weight: 500;
+}
+
+.footerActions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.signOut {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-fg-muted);
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
+}
+
+.signOut:hover:not(:disabled) {
+  background: var(--color-muted-tint);
+  color: var(--color-fg);
+}
+
+.signOut:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 40rem) {
+  .top {
+    padding: 0.75rem 1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .link,
+  .signOut {
+    transition: none;
+  }
+}

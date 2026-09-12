@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from collections.abc import Mapping, Sequence
 from types import TracebackType
@@ -11,7 +12,14 @@ from uuid import UUID
 import httpx
 from pydantic import BaseModel, ConfigDict, Field
 
-from sidereal_core.models import DirectusFile, DirectusRole, DirectusUser, Draft
+from sidereal_core.models import (
+    DirectusFile,
+    DirectusLicense,
+    DirectusRole,
+    DirectusServerInfo,
+    DirectusUser,
+    Draft,
+)
 
 M = TypeVar("M", bound=BaseModel)
 
@@ -124,8 +132,27 @@ class DirectusClient:
         await self._request("DELETE", f"/items/{collection}/{item_id}")
 
     async def me(self) -> DirectusUser:
-        data = await self._request("GET", "/users/me")
-        return DirectusUser.model_validate(data)
+        # `admin_access` is on no row Directus will show: `/policies/me/globals` is the answer.
+        data, admin_access = await asyncio.gather(
+            self._request("GET", "/users/me"), self._admin_access()
+        )
+        if not isinstance(data, dict):
+            raise DirectusError(200, message="/users/me: expected a user")
+        return DirectusUser.model_validate({**data, "admin_access": admin_access})
+
+    async def _admin_access(self) -> bool:
+        """A Directus that will not answer this is one where the caller is not an admin."""
+        try:
+            answer = await self._request("GET", "/policies/me/globals")
+        except DirectusClientError:
+            return False
+        return isinstance(answer, dict) and answer.get("admin_access") is True
+
+    async def server_info(self) -> DirectusServerInfo:
+        return DirectusServerInfo.model_validate(await self._request("GET", "/server/info"))
+
+    async def license_info(self) -> DirectusLicense:
+        return DirectusLicense.model_validate(await self._request("GET", "/license"))
 
     async def list_roles(self) -> list[DirectusRole]:
         """`directus_roles` is a system collection: it answers on `/roles`, not `/items`."""
@@ -134,6 +161,19 @@ class DirectusClient:
     async def find_role(self, name: str) -> DirectusRole | None:
         roles = await self._list("/roles", DirectusRole, filter={"name": {"_eq": name}}, limit=1)
         return roles[0] if roles else None
+
+    async def list_users(
+        self,
+        *,
+        filter: Mapping[str, Any] | None = None,
+        limit: int | None = None,
+        sort: Sequence[str] | None = None,
+    ) -> list[DirectusUser]:
+        return await self._list("/users", DirectusUser, filter=filter, limit=limit, sort=sort)
+
+    async def get_user(self, user_id: str | UUID) -> DirectusUser:
+        data = await self._request("GET", f"/users/{user_id}")
+        return DirectusUser.model_validate(data)
 
     async def create_user(self, data: Mapping[str, Any]) -> DirectusUser:
         """`directus_users` is a system collection: it answers on `/users`, not `/items`."""
@@ -147,16 +187,78 @@ class DirectusClient:
     async def delete_user(self, user_id: str | UUID) -> None:
         await self._request("DELETE", f"/users/{user_id}")
 
+    async def create_related(
+        self, collection: str, item_id: str | UUID, field: str, data: Mapping[str, Any]
+    ) -> UUID:
+        """Create the related row through the owner's own field, and answer with its id.
+
+        A `POST /users` a caller cannot read back answers 204 with no body, so the row is
+        created and linked in one write on the owner instead.
+        """
+        body = await self._request(
+            "PATCH",
+            f"/items/{collection}/{item_id}",
+            params={"fields": f"{field}.id"},
+            json={field: dict(data)},
+        )
+        related = body.get(field) if isinstance(body, dict) else None
+        identifier = related.get("id") if isinstance(related, dict) else related
+        if not isinstance(identifier, str | UUID):
+            raise DirectusError(200, message=f"/items/{collection}: no {field} in the answer")
+        return UUID(str(identifier))
+
     async def get_file(self, file_id: str | UUID) -> DirectusFile:
         """`directus_files` is a system collection: it answers on `/files`, not `/items`."""
         data = await self._request("GET", f"/files/{file_id}")
         return DirectusFile.model_validate(data)
+
+    async def upload_file(
+        self, filename: str, content: bytes, content_type: str, *, title: str | None = None
+    ) -> DirectusFile:
+        """Multipart, because `/files` takes the bytes themselves and not a JSON body."""
+        data = {"title": title} if title is not None else {}
+        uploaded = await self._request(
+            "POST", "/files", data=data, files={"file": (filename, content, content_type)}
+        )
+        return DirectusFile.model_validate(uploaded)
 
     async def download_file(self, file_id: str | UUID) -> tuple[str, bytes]:
         """The asset's bytes, and the name Directus says it was uploaded under."""
         name = (await self.get_file(file_id)).filename_download
         response = await self._send("GET", f"/assets/{file_id}", params={"download": "true"})
         return name, response.content
+
+    async def count_items(self, collection: str, *, filter: Mapping[str, Any] | None = None) -> int:
+        rows = await self._aggregate(f"/items/{collection}", filter=filter)
+        return _count(rows[0]) if rows else 0
+
+    async def count_users(self, *, filter: Mapping[str, Any] | None = None) -> int:
+        rows = await self._aggregate("/users", filter=filter)
+        return _count(rows[0]) if rows else 0
+
+    async def count_items_by(
+        self, collection: str, group_by: str, *, filter: Mapping[str, Any] | None = None
+    ) -> dict[str, int]:
+        """One count per distinct value of `group_by`. Rows with no value are left out."""
+        rows = await self._aggregate(f"/items/{collection}", filter=filter, group_by=group_by)
+        return {str(key): _count(row) for row in rows if (key := row.get(group_by)) is not None}
+
+    async def _aggregate(
+        self,
+        path: str,
+        *,
+        filter: Mapping[str, Any] | None = None,
+        group_by: str | None = None,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, str | int] = {"aggregate[count]": "id"}
+        if filter is not None:
+            params["filter"] = json.dumps(filter)
+        if group_by is not None:
+            params["groupBy"] = group_by
+        data = await self._request("GET", path, params=params)
+        if not isinstance(data, list):
+            raise DirectusError(200, message=f"{path}: expected aggregate rows")
+        return [row for row in data if isinstance(row, dict)]
 
     async def _list(
         self,
@@ -186,8 +288,10 @@ class DirectusClient:
         *,
         params: Mapping[str, str | int] | None = None,
         json: Mapping[str, Any] | None = None,
+        data: Mapping[str, Any] | None = None,
+        files: Mapping[str, tuple[str, bytes, str]] | None = None,
     ) -> Any:
-        response = await self._send(method, path, params=params, json=json)
+        response = await self._send(method, path, params=params, json=json, data=data, files=files)
         if response.status_code == httpx.codes.NO_CONTENT or not response.content:
             return None
 
@@ -203,17 +307,37 @@ class DirectusClient:
         *,
         params: Mapping[str, str | int] | None = None,
         json: Mapping[str, Any] | None = None,
+        data: Mapping[str, Any] | None = None,
+        files: Mapping[str, tuple[str, bytes, str]] | None = None,
     ) -> httpx.Response:
         headers = {"Authorization": f"Bearer {self.token}"} if self.token else {}
         try:
             response = await self._client.request(
-                method, f"{self.base_url}{path}", params=params, json=json, headers=headers
+                method,
+                f"{self.base_url}{path}",
+                params=params,
+                json=json,
+                data=dict(data) if data else None,
+                files=dict(files) if files else None,
+                headers=headers,
             )
         except httpx.HTTPError as exc:
             raise DirectusUnavailableError(f"{self.base_url}{path}: {exc}") from exc
         if response.status_code >= httpx.codes.BAD_REQUEST:
             raise DirectusError(response.status_code, _details(response))
         return response
+
+
+def _count(row: Mapping[str, Any]) -> int:
+    """Directus sends an aggregate count as a string, and as null for an empty collection."""
+    count = row.get("count")
+    value = count.get("id") if isinstance(count, dict) else None
+    if not isinstance(value, str | int):
+        return 0
+    try:
+        return int(value)
+    except ValueError:
+        return 0
 
 
 def _body(data: Draft | Mapping[str, Any]) -> dict[str, Any]:

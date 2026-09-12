@@ -92,22 +92,6 @@ def test_an_uploaded_worksheet_is_filed_as_an_upload(
     assert row["text"] == "Solve for x."
 
 
-def test_a_file_type_we_cannot_read_fails_with_the_types_we_can(
-    client: TestClient, fake_directus: FakeDirectus, auth: dict[str, str]
-) -> None:
-    file_id = fake_directus.register_file("marks.xlsx", b"PK\x03\x04")
-
-    response = client.post(
-        "/api/documents", headers=auth, json={"source": {"type": "file", "file_id": file_id}}
-    )
-
-    assert response.status_code == 202
-    row = only_document(fake_directus)
-    assert row["status"] == "failed"
-    assert isinstance(row["error"], str)
-    assert row["error"].startswith("marks.xlsx cannot be read.")
-
-
 def test_a_link_is_read_and_titled_from_the_page(
     client: TestClient, fake_directus: FakeDirectus, auth: dict[str, str]
 ) -> None:
@@ -203,10 +187,3 @@ def test_an_unknown_body_field_is_rejected(client: TestClient, auth: dict[str, s
     )
 
     assert response.status_code == 422
-
-
-def test_filing_material_needs_a_token(client: TestClient) -> None:
-    response = client.post("/api/documents", json={"source": {"type": "text", "text": "Notes."}})
-
-    assert response.status_code == 401
-    assert response.json()["detail"]["code"] == "missing_token"

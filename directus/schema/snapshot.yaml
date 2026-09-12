@@ -26,6 +26,32 @@ collections:
       translations: null
       unarchive_value: null
       versioning: false
+  - collection: document_topics
+    meta:
+      accountability: all
+      archive_app_filter: true
+      archive_field: null
+      archive_value: null
+      autosave_revision_interval: null
+      collapse: open
+      collection: document_topics
+      color: null
+      display_template: null
+      group: library
+      hidden: true
+      icon: link
+      item_duplication_fields: null
+      note: 'Junction: documents <-> topics.'
+      preview_url: null
+      singleton: false
+      sort: null
+      sort_field: sort
+      status: active
+      translations: null
+      unarchive_value: null
+      versioning: false
+    schema:
+      name: document_topics
   - collection: documents
     meta:
       accountability: all
@@ -156,6 +182,32 @@ collections:
       versioning: false
     schema:
       name: homework_questions
+  - collection: homework_topics
+    meta:
+      accountability: all
+      archive_app_filter: true
+      archive_field: null
+      archive_value: null
+      autosave_revision_interval: null
+      collapse: open
+      collection: homework_topics
+      color: null
+      display_template: null
+      group: artefacts
+      hidden: true
+      icon: link
+      item_duplication_fields: null
+      note: 'Junction: homework <-> topics.'
+      preview_url: null
+      singleton: false
+      sort: null
+      sort_field: sort
+      status: active
+      translations: null
+      unarchive_value: null
+      versioning: false
+    schema:
+      name: homework_topics
   - collection: library
     meta:
       accountability: all
@@ -206,6 +258,32 @@ collections:
       versioning: false
     schema:
       name: plans
+  - collection: question_topics
+    meta:
+      accountability: all
+      archive_app_filter: true
+      archive_field: null
+      archive_value: null
+      autosave_revision_interval: null
+      collapse: open
+      collection: question_topics
+      color: null
+      display_template: null
+      group: library
+      hidden: true
+      icon: link
+      item_duplication_fields: null
+      note: 'Junction: questions <-> topics.'
+      preview_url: null
+      singleton: false
+      sort: null
+      sort_field: sort
+      status: active
+      translations: null
+      unarchive_value: null
+      versioning: false
+    schema:
+      name: question_topics
   - collection: questions
     meta:
       accountability: all
@@ -284,6 +362,34 @@ collections:
       versioning: false
     schema:
       name: students
+  - collection: topics
+    meta:
+      accountability: all
+      archive_app_filter: true
+      archive_field: null
+      archive_value: null
+      autosave_revision_interval: null
+      collapse: open
+      collection: topics
+      color: null
+      display_template: '{{name}}'
+      group: library
+      hidden: false
+      icon: account_tree
+      item_duplication_fields: null
+      note: >-
+        A free tree of topics the tutor builds; material and questions are
+        tagged with them.
+      preview_url: null
+      singleton: false
+      sort: null
+      sort_field: sort
+      status: active
+      translations: null
+      unarchive_value: null
+      versioning: false
+    schema:
+      name: topics
   - collection: tutoring
     meta:
       accountability: all
@@ -309,6 +415,416 @@ collections:
       unarchive_value: null
       versioning: false
 fields:
+  - collection: directus_files
+    field: homework_submission_file
+    type: alias
+    meta:
+      collection: directus_files
+      conditions: null
+      display: null
+      display_options: null
+      field: homework_submission_file
+      group: null
+      hidden: true
+      interface: list-o2m
+      note: null
+      options:
+        template: '{{title}}'
+      readonly: false
+      required: false
+      searchable: true
+      sort: 2
+      special:
+        - o2m
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+  - collection: directus_files
+    field: homework_pdf
+    type: alias
+    meta:
+      collection: directus_files
+      conditions: null
+      display: null
+      display_options: null
+      field: homework_pdf
+      group: null
+      hidden: true
+      interface: list-o2m
+      note: null
+      options:
+        template: '{{title}}'
+      readonly: false
+      required: false
+      searchable: true
+      sort: 1
+      special:
+        - o2m
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+  - collection: directus_users
+    field: student
+    type: alias
+    meta:
+      collection: directus_users
+      conditions: null
+      display: null
+      display_options: null
+      field: student
+      group: null
+      hidden: true
+      interface: list-o2m
+      note: null
+      options:
+        template: '{{name}}'
+      readonly: false
+      required: false
+      searchable: true
+      sort: 1
+      special:
+        - o2m
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+  - collection: document_topics
+    field: id
+    type: uuid
+    meta:
+      collection: document_topics
+      conditions: null
+      display: null
+      display_options: null
+      field: id
+      group: null
+      hidden: true
+      interface: input
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 1
+      special:
+        - uuid
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: id
+      table: document_topics
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: true
+      is_indexed: false
+      is_primary_key: true
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: document_topics
+    field: document
+    type: uuid
+    meta:
+      collection: document_topics
+      conditions: null
+      display: related-values
+      display_options:
+        template: '{{title}}'
+      field: document
+      group: null
+      hidden: false
+      interface: select-dropdown-m2o
+      note: null
+      options:
+        template: '{{title}}'
+      readonly: false
+      required: true
+      searchable: true
+      sort: 2
+      special:
+        - m2o
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: document
+      table: document_topics
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: documents
+      foreign_key_column: id
+  - collection: document_topics
+    field: topic
+    type: uuid
+    meta:
+      collection: document_topics
+      conditions: null
+      display: related-values
+      display_options:
+        template: '{{name}}'
+      field: topic
+      group: null
+      hidden: false
+      interface: select-dropdown-m2o
+      note: null
+      options:
+        template: '{{name}}'
+      readonly: false
+      required: true
+      searchable: true
+      sort: 3
+      special:
+        - m2o
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: topic
+      table: document_topics
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: topics
+      foreign_key_column: id
+  - collection: document_topics
+    field: sort
+    type: integer
+    meta:
+      collection: document_topics
+      conditions: null
+      display: null
+      display_options: null
+      field: sort
+      group: null
+      hidden: true
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 4
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: sort
+      table: document_topics
+      data_type: integer
+      default_value: null
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: document_topics
+    field: user_created
+    type: uuid
+    meta:
+      collection: document_topics
+      conditions: null
+      display: user
+      display_options: null
+      field: user_created
+      group: null
+      hidden: true
+      interface: select-dropdown-m2o
+      note: null
+      options:
+        template: '{{avatar.$thumbnail}} {{first_name}} {{last_name}}'
+      readonly: true
+      required: false
+      searchable: true
+      sort: 5
+      special:
+        - user-created
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: user_created
+      table: document_topics
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: directus_users
+      foreign_key_column: id
+  - collection: document_topics
+    field: date_created
+    type: timestamp
+    meta:
+      collection: document_topics
+      conditions: null
+      display: datetime
+      display_options:
+        relative: true
+      field: date_created
+      group: null
+      hidden: true
+      interface: datetime
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 6
+      special:
+        - date-created
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: date_created
+      table: document_topics
+      data_type: timestamp with time zone
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: document_topics
+    field: user_updated
+    type: uuid
+    meta:
+      collection: document_topics
+      conditions: null
+      display: user
+      display_options: null
+      field: user_updated
+      group: null
+      hidden: true
+      interface: select-dropdown-m2o
+      note: null
+      options:
+        template: '{{avatar.$thumbnail}} {{first_name}} {{last_name}}'
+      readonly: true
+      required: false
+      searchable: true
+      sort: 7
+      special:
+        - user-updated
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: user_updated
+      table: document_topics
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: directus_users
+      foreign_key_column: id
+  - collection: document_topics
+    field: date_updated
+    type: timestamp
+    meta:
+      collection: document_topics
+      conditions: null
+      display: datetime
+      display_options:
+        relative: true
+      field: date_updated
+      group: null
+      hidden: true
+      interface: datetime
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 8
+      special:
+        - date-updated
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: date_updated
+      table: document_topics
+      data_type: timestamp with time zone
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
   - collection: documents
     field: id
     type: uuid
@@ -947,6 +1463,31 @@ fields:
       has_auto_increment: false
       foreign_key_table: null
       foreign_key_column: null
+  - collection: documents
+    field: topics
+    type: alias
+    meta:
+      collection: documents
+      conditions: null
+      display: null
+      display_options: null
+      field: topics
+      group: null
+      hidden: false
+      interface: list-m2m
+      note: null
+      options:
+        template: '{{topic.name}}'
+      readonly: false
+      required: false
+      searchable: true
+      sort: 100
+      special:
+        - m2m
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
   - collection: feedback
     field: id
     type: uuid
@@ -2146,7 +2687,7 @@ fields:
       readonly: false
       required: false
       searchable: true
-      sort: 6
+      sort: 7
       special: null
       translations: null
       validation: null
@@ -2196,7 +2737,7 @@ fields:
       readonly: false
       required: false
       searchable: true
-      sort: 7
+      sort: 8
       special: null
       translations: null
       validation: null
@@ -2237,7 +2778,7 @@ fields:
       readonly: false
       required: false
       searchable: true
-      sort: 8
+      sort: 11
       special:
         - cast-json
       translations: null
@@ -2279,7 +2820,7 @@ fields:
       readonly: true
       required: false
       searchable: true
-      sort: 11
+      sort: 15
       special:
         - user-created
       translations: null
@@ -2321,7 +2862,7 @@ fields:
       readonly: true
       required: false
       searchable: true
-      sort: 12
+      sort: 16
       special:
         - date-created
       translations: null
@@ -2363,7 +2904,7 @@ fields:
       readonly: true
       required: false
       searchable: true
-      sort: 13
+      sort: 17
       special:
         - user-updated
       translations: null
@@ -2405,7 +2946,7 @@ fields:
       readonly: true
       required: false
       searchable: true
-      sort: 14
+      sort: 18
       special:
         - date-updated
       translations: null
@@ -2471,7 +3012,7 @@ fields:
       readonly: false
       required: false
       searchable: true
-      sort: 9
+      sort: 12
       special: null
       translations: null
       validation: null
@@ -2511,7 +3052,7 @@ fields:
       readonly: false
       required: false
       searchable: true
-      sort: 10
+      sort: 14
       special: null
       translations: null
       validation: null
@@ -2534,6 +3075,199 @@ fields:
       has_auto_increment: false
       foreign_key_table: null
       foreign_key_column: null
+  - collection: homework
+    field: topics
+    type: alias
+    meta:
+      collection: homework
+      conditions: null
+      display: null
+      display_options: null
+      field: topics
+      group: null
+      hidden: false
+      interface: list-m2m
+      note: null
+      options:
+        template: '{{topic.name}}'
+      readonly: false
+      required: false
+      searchable: true
+      sort: 100
+      special:
+        - m2m
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+  - collection: homework
+    field: format
+    type: string
+    meta:
+      collection: homework
+      conditions: null
+      display: labels
+      display_options:
+        showAsDot: true
+      field: format
+      group: null
+      hidden: false
+      interface: select-dropdown
+      note: How `content` is written. Typst is compiled to the PDF below.
+      options:
+        choices:
+          - text: Markdown
+            value: markdown
+          - text: Typst
+            value: typst
+      readonly: false
+      required: true
+      searchable: true
+      sort: 6
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: format
+      table: homework
+      data_type: character varying
+      default_value: markdown
+      max_length: 32
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: homework
+    field: pdf
+    type: uuid
+    meta:
+      collection: homework
+      conditions: null
+      display: file
+      display_options: null
+      field: pdf
+      group: null
+      hidden: false
+      interface: file
+      note: The compiled PDF; only set when the format is Typst.
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 9
+      special:
+        - file
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: pdf
+      table: homework
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: directus_files
+      foreign_key_column: id
+  - collection: homework
+    field: compile_error
+    type: text
+    meta:
+      collection: homework
+      conditions: null
+      display: null
+      display_options: null
+      field: compile_error
+      group: null
+      hidden: false
+      interface: input-multiline
+      note: The last compiler diagnostics; empty when the PDF is current.
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 10
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: compile_error
+      table: homework
+      data_type: text
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: homework
+    field: submission_file
+    type: uuid
+    meta:
+      collection: homework
+      conditions: null
+      display: file
+      display_options: null
+      field: submission_file
+      group: null
+      hidden: false
+      interface: file
+      note: A file the student handed in.
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 13
+      special:
+        - file
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: submission_file
+      table: homework
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: directus_files
+      foreign_key_column: id
   - collection: homework_questions
     field: id
     type: uuid
@@ -2855,6 +3589,341 @@ fields:
     schema:
       name: date_updated
       table: homework_questions
+      data_type: timestamp with time zone
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: homework_topics
+    field: id
+    type: uuid
+    meta:
+      collection: homework_topics
+      conditions: null
+      display: null
+      display_options: null
+      field: id
+      group: null
+      hidden: true
+      interface: input
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 1
+      special:
+        - uuid
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: id
+      table: homework_topics
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: true
+      is_indexed: false
+      is_primary_key: true
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: homework_topics
+    field: homework
+    type: uuid
+    meta:
+      collection: homework_topics
+      conditions: null
+      display: related-values
+      display_options:
+        template: '{{title}}'
+      field: homework
+      group: null
+      hidden: false
+      interface: select-dropdown-m2o
+      note: null
+      options:
+        template: '{{title}}'
+      readonly: false
+      required: true
+      searchable: true
+      sort: 2
+      special:
+        - m2o
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: homework
+      table: homework_topics
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: homework
+      foreign_key_column: id
+  - collection: homework_topics
+    field: topic
+    type: uuid
+    meta:
+      collection: homework_topics
+      conditions: null
+      display: related-values
+      display_options:
+        template: '{{name}}'
+      field: topic
+      group: null
+      hidden: false
+      interface: select-dropdown-m2o
+      note: null
+      options:
+        template: '{{name}}'
+      readonly: false
+      required: true
+      searchable: true
+      sort: 3
+      special:
+        - m2o
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: topic
+      table: homework_topics
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: topics
+      foreign_key_column: id
+  - collection: homework_topics
+    field: sort
+    type: integer
+    meta:
+      collection: homework_topics
+      conditions: null
+      display: null
+      display_options: null
+      field: sort
+      group: null
+      hidden: true
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 4
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: sort
+      table: homework_topics
+      data_type: integer
+      default_value: null
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: homework_topics
+    field: user_created
+    type: uuid
+    meta:
+      collection: homework_topics
+      conditions: null
+      display: user
+      display_options: null
+      field: user_created
+      group: null
+      hidden: true
+      interface: select-dropdown-m2o
+      note: null
+      options:
+        template: '{{avatar.$thumbnail}} {{first_name}} {{last_name}}'
+      readonly: true
+      required: false
+      searchable: true
+      sort: 5
+      special:
+        - user-created
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: user_created
+      table: homework_topics
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: directus_users
+      foreign_key_column: id
+  - collection: homework_topics
+    field: date_created
+    type: timestamp
+    meta:
+      collection: homework_topics
+      conditions: null
+      display: datetime
+      display_options:
+        relative: true
+      field: date_created
+      group: null
+      hidden: true
+      interface: datetime
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 6
+      special:
+        - date-created
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: date_created
+      table: homework_topics
+      data_type: timestamp with time zone
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: homework_topics
+    field: user_updated
+    type: uuid
+    meta:
+      collection: homework_topics
+      conditions: null
+      display: user
+      display_options: null
+      field: user_updated
+      group: null
+      hidden: true
+      interface: select-dropdown-m2o
+      note: null
+      options:
+        template: '{{avatar.$thumbnail}} {{first_name}} {{last_name}}'
+      readonly: true
+      required: false
+      searchable: true
+      sort: 7
+      special:
+        - user-updated
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: user_updated
+      table: homework_topics
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: directus_users
+      foreign_key_column: id
+  - collection: homework_topics
+    field: date_updated
+    type: timestamp
+    meta:
+      collection: homework_topics
+      conditions: null
+      display: datetime
+      display_options:
+        relative: true
+      field: date_updated
+      group: null
+      hidden: true
+      interface: datetime
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 8
+      special:
+        - date-updated
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: date_updated
+      table: homework_topics
       data_type: timestamp with time zone
       default_value: null
       max_length: null
@@ -3371,6 +4440,341 @@ fields:
       has_auto_increment: false
       foreign_key_table: null
       foreign_key_column: null
+  - collection: question_topics
+    field: id
+    type: uuid
+    meta:
+      collection: question_topics
+      conditions: null
+      display: null
+      display_options: null
+      field: id
+      group: null
+      hidden: true
+      interface: input
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 1
+      special:
+        - uuid
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: id
+      table: question_topics
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: true
+      is_indexed: false
+      is_primary_key: true
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: question_topics
+    field: question
+    type: uuid
+    meta:
+      collection: question_topics
+      conditions: null
+      display: related-values
+      display_options:
+        template: '{{text}}'
+      field: question
+      group: null
+      hidden: false
+      interface: select-dropdown-m2o
+      note: null
+      options:
+        template: '{{text}}'
+      readonly: false
+      required: true
+      searchable: true
+      sort: 2
+      special:
+        - m2o
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: question
+      table: question_topics
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: questions
+      foreign_key_column: id
+  - collection: question_topics
+    field: topic
+    type: uuid
+    meta:
+      collection: question_topics
+      conditions: null
+      display: related-values
+      display_options:
+        template: '{{name}}'
+      field: topic
+      group: null
+      hidden: false
+      interface: select-dropdown-m2o
+      note: null
+      options:
+        template: '{{name}}'
+      readonly: false
+      required: true
+      searchable: true
+      sort: 3
+      special:
+        - m2o
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: topic
+      table: question_topics
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: topics
+      foreign_key_column: id
+  - collection: question_topics
+    field: sort
+    type: integer
+    meta:
+      collection: question_topics
+      conditions: null
+      display: null
+      display_options: null
+      field: sort
+      group: null
+      hidden: true
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 4
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: sort
+      table: question_topics
+      data_type: integer
+      default_value: null
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: question_topics
+    field: user_created
+    type: uuid
+    meta:
+      collection: question_topics
+      conditions: null
+      display: user
+      display_options: null
+      field: user_created
+      group: null
+      hidden: true
+      interface: select-dropdown-m2o
+      note: null
+      options:
+        template: '{{avatar.$thumbnail}} {{first_name}} {{last_name}}'
+      readonly: true
+      required: false
+      searchable: true
+      sort: 5
+      special:
+        - user-created
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: user_created
+      table: question_topics
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: directus_users
+      foreign_key_column: id
+  - collection: question_topics
+    field: date_created
+    type: timestamp
+    meta:
+      collection: question_topics
+      conditions: null
+      display: datetime
+      display_options:
+        relative: true
+      field: date_created
+      group: null
+      hidden: true
+      interface: datetime
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 6
+      special:
+        - date-created
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: date_created
+      table: question_topics
+      data_type: timestamp with time zone
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: question_topics
+    field: user_updated
+    type: uuid
+    meta:
+      collection: question_topics
+      conditions: null
+      display: user
+      display_options: null
+      field: user_updated
+      group: null
+      hidden: true
+      interface: select-dropdown-m2o
+      note: null
+      options:
+        template: '{{avatar.$thumbnail}} {{first_name}} {{last_name}}'
+      readonly: true
+      required: false
+      searchable: true
+      sort: 7
+      special:
+        - user-updated
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: user_updated
+      table: question_topics
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: directus_users
+      foreign_key_column: id
+  - collection: question_topics
+    field: date_updated
+    type: timestamp
+    meta:
+      collection: question_topics
+      conditions: null
+      display: datetime
+      display_options:
+        relative: true
+      field: date_updated
+      group: null
+      hidden: true
+      interface: datetime
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 8
+      special:
+        - date-updated
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: date_updated
+      table: question_topics
+      data_type: timestamp with time zone
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
   - collection: questions
     field: id
     type: uuid
@@ -3849,6 +5253,31 @@ fields:
       required: false
       searchable: true
       sort: 99
+      special:
+        - m2m
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+  - collection: questions
+    field: topics
+    type: alias
+    meta:
+      collection: questions
+      conditions: null
+      display: null
+      display_options: null
+      field: topics
+      group: null
+      hidden: false
+      interface: list-m2m
+      note: null
+      options:
+        template: '{{topic.name}}'
+      readonly: false
+      required: false
+      searchable: true
+      sort: 100
       special:
         - m2m
       translations: null
@@ -4820,8 +6249,455 @@ fields:
       is_generated: false
       generation_expression: null
       has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: topics
+    field: id
+    type: uuid
+    meta:
+      collection: topics
+      conditions: null
+      display: null
+      display_options: null
+      field: id
+      group: null
+      hidden: true
+      interface: input
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 1
+      special:
+        - uuid
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: id
+      table: topics
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: true
+      is_indexed: false
+      is_primary_key: true
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: topics
+    field: name
+    type: string
+    meta:
+      collection: topics
+      conditions: null
+      display: null
+      display_options: null
+      field: name
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 2
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: name
+      table: topics
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: topics
+    field: parent
+    type: uuid
+    meta:
+      collection: topics
+      conditions: null
+      display: related-values
+      display_options:
+        template: '{{name}}'
+      field: parent
+      group: null
+      hidden: false
+      interface: select-dropdown-m2o
+      note: The topic this one sits under; empty for a root topic.
+      options:
+        template: '{{name}}'
+      readonly: false
+      required: false
+      searchable: true
+      sort: 3
+      special:
+        - m2o
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: parent
+      table: topics
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: topics
+      foreign_key_column: id
+  - collection: topics
+    field: description
+    type: text
+    meta:
+      collection: topics
+      conditions: null
+      display: null
+      display_options: null
+      field: description
+      group: null
+      hidden: false
+      interface: input-multiline
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 4
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: description
+      table: topics
+      data_type: text
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: topics
+    field: sort
+    type: integer
+    meta:
+      collection: topics
+      conditions: null
+      display: null
+      display_options: null
+      field: sort
+      group: null
+      hidden: true
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 5
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: sort
+      table: topics
+      data_type: integer
+      default_value: null
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: topics
+    field: user_created
+    type: uuid
+    meta:
+      collection: topics
+      conditions: null
+      display: user
+      display_options: null
+      field: user_created
+      group: null
+      hidden: true
+      interface: select-dropdown-m2o
+      note: null
+      options:
+        template: '{{avatar.$thumbnail}} {{first_name}} {{last_name}}'
+      readonly: true
+      required: false
+      searchable: true
+      sort: 6
+      special:
+        - user-created
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: user_created
+      table: topics
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
       foreign_key_table: directus_users
       foreign_key_column: id
+  - collection: topics
+    field: date_created
+    type: timestamp
+    meta:
+      collection: topics
+      conditions: null
+      display: datetime
+      display_options:
+        relative: true
+      field: date_created
+      group: null
+      hidden: true
+      interface: datetime
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 7
+      special:
+        - date-created
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: date_created
+      table: topics
+      data_type: timestamp with time zone
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: topics
+    field: user_updated
+    type: uuid
+    meta:
+      collection: topics
+      conditions: null
+      display: user
+      display_options: null
+      field: user_updated
+      group: null
+      hidden: true
+      interface: select-dropdown-m2o
+      note: null
+      options:
+        template: '{{avatar.$thumbnail}} {{first_name}} {{last_name}}'
+      readonly: true
+      required: false
+      searchable: true
+      sort: 8
+      special:
+        - user-updated
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: user_updated
+      table: topics
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: directus_users
+      foreign_key_column: id
+  - collection: topics
+    field: date_updated
+    type: timestamp
+    meta:
+      collection: topics
+      conditions: null
+      display: datetime
+      display_options:
+        relative: true
+      field: date_updated
+      group: null
+      hidden: true
+      interface: datetime
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 9
+      special:
+        - date-updated
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: date_updated
+      table: topics
+      data_type: timestamp with time zone
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: topics
+    field: documents
+    type: alias
+    meta:
+      collection: topics
+      conditions: null
+      display: null
+      display_options: null
+      field: documents
+      group: null
+      hidden: false
+      interface: list-m2m
+      note: null
+      options:
+        template: '{{document.title}}'
+      readonly: false
+      required: false
+      searchable: true
+      sort: 101
+      special:
+        - m2m
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+  - collection: topics
+    field: questions
+    type: alias
+    meta:
+      collection: topics
+      conditions: null
+      display: null
+      display_options: null
+      field: questions
+      group: null
+      hidden: false
+      interface: list-m2m
+      note: null
+      options:
+        template: '{{question.text}}'
+      readonly: false
+      required: false
+      searchable: true
+      sort: 102
+      special:
+        - m2m
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+  - collection: topics
+    field: homework
+    type: alias
+    meta:
+      collection: topics
+      conditions: null
+      display: null
+      display_options: null
+      field: homework
+      group: null
+      hidden: false
+      interface: list-m2m
+      note: null
+      options:
+        template: '{{homework.title}}'
+      readonly: false
+      required: false
+      searchable: true
+      sort: 103
+      special:
+        - m2m
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
 systemFields:
   - collection: directus_activity
     field: timestamp
@@ -4836,6 +6712,90 @@ systemFields:
     schema:
       is_indexed: true
 relations:
+  - collection: document_topics
+    field: document
+    related_collection: documents
+    meta:
+      junction_field: topic
+      many_collection: document_topics
+      many_field: document
+      one_allowed_collections: null
+      one_collection: documents
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: topics
+      sort_field: sort
+    schema:
+      table: document_topics
+      column: document
+      foreign_key_table: documents
+      foreign_key_column: id
+      constraint_name: document_topics_document_foreign
+      on_update: NO ACTION
+      on_delete: CASCADE
+  - collection: document_topics
+    field: topic
+    related_collection: topics
+    meta:
+      junction_field: document
+      many_collection: document_topics
+      many_field: topic
+      one_allowed_collections: null
+      one_collection: topics
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: documents
+      sort_field: null
+    schema:
+      table: document_topics
+      column: topic
+      foreign_key_table: topics
+      foreign_key_column: id
+      constraint_name: document_topics_topic_foreign
+      on_update: NO ACTION
+      on_delete: CASCADE
+  - collection: document_topics
+    field: user_created
+    related_collection: directus_users
+    meta:
+      junction_field: null
+      many_collection: document_topics
+      many_field: user_created
+      one_allowed_collections: null
+      one_collection: directus_users
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: null
+      sort_field: null
+    schema:
+      table: document_topics
+      column: user_created
+      foreign_key_table: directus_users
+      foreign_key_column: id
+      constraint_name: document_topics_user_created_foreign
+      on_update: NO ACTION
+      on_delete: SET NULL
+  - collection: document_topics
+    field: user_updated
+    related_collection: directus_users
+    meta:
+      junction_field: null
+      many_collection: document_topics
+      many_field: user_updated
+      one_allowed_collections: null
+      one_collection: directus_users
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: null
+      sort_field: null
+    schema:
+      table: document_topics
+      column: user_updated
+      foreign_key_table: directus_users
+      foreign_key_column: id
+      constraint_name: document_topics_user_updated_foreign
+      on_update: NO ACTION
+      on_delete: SET NULL
   - collection: documents
     field: file
     related_collection: directus_files
@@ -5172,6 +7132,48 @@ relations:
       constraint_name: homework_user_updated_foreign
       on_update: NO ACTION
       on_delete: SET NULL
+  - collection: homework
+    field: pdf
+    related_collection: directus_files
+    meta:
+      junction_field: null
+      many_collection: homework
+      many_field: pdf
+      one_allowed_collections: null
+      one_collection: directus_files
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: homework_pdf
+      sort_field: null
+    schema:
+      table: homework
+      column: pdf
+      foreign_key_table: directus_files
+      foreign_key_column: id
+      constraint_name: homework_pdf_foreign
+      on_update: NO ACTION
+      on_delete: SET NULL
+  - collection: homework
+    field: submission_file
+    related_collection: directus_files
+    meta:
+      junction_field: null
+      many_collection: homework
+      many_field: submission_file
+      one_allowed_collections: null
+      one_collection: directus_files
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: homework_submission_file
+      sort_field: null
+    schema:
+      table: homework
+      column: submission_file
+      foreign_key_table: directus_files
+      foreign_key_column: id
+      constraint_name: homework_submission_file_foreign
+      on_update: NO ACTION
+      on_delete: SET NULL
   - collection: homework_questions
     field: user_created
     related_collection: directus_users
@@ -5256,6 +7258,90 @@ relations:
       constraint_name: homework_questions_question_foreign
       on_update: NO ACTION
       on_delete: CASCADE
+  - collection: homework_topics
+    field: homework
+    related_collection: homework
+    meta:
+      junction_field: topic
+      many_collection: homework_topics
+      many_field: homework
+      one_allowed_collections: null
+      one_collection: homework
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: topics
+      sort_field: sort
+    schema:
+      table: homework_topics
+      column: homework
+      foreign_key_table: homework
+      foreign_key_column: id
+      constraint_name: homework_topics_homework_foreign
+      on_update: NO ACTION
+      on_delete: CASCADE
+  - collection: homework_topics
+    field: topic
+    related_collection: topics
+    meta:
+      junction_field: homework
+      many_collection: homework_topics
+      many_field: topic
+      one_allowed_collections: null
+      one_collection: topics
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: homework
+      sort_field: null
+    schema:
+      table: homework_topics
+      column: topic
+      foreign_key_table: topics
+      foreign_key_column: id
+      constraint_name: homework_topics_topic_foreign
+      on_update: NO ACTION
+      on_delete: CASCADE
+  - collection: homework_topics
+    field: user_created
+    related_collection: directus_users
+    meta:
+      junction_field: null
+      many_collection: homework_topics
+      many_field: user_created
+      one_allowed_collections: null
+      one_collection: directus_users
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: null
+      sort_field: null
+    schema:
+      table: homework_topics
+      column: user_created
+      foreign_key_table: directus_users
+      foreign_key_column: id
+      constraint_name: homework_topics_user_created_foreign
+      on_update: NO ACTION
+      on_delete: SET NULL
+  - collection: homework_topics
+    field: user_updated
+    related_collection: directus_users
+    meta:
+      junction_field: null
+      many_collection: homework_topics
+      many_field: user_updated
+      one_allowed_collections: null
+      one_collection: directus_users
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: null
+      sort_field: null
+    schema:
+      table: homework_topics
+      column: user_updated
+      foreign_key_table: directus_users
+      foreign_key_column: id
+      constraint_name: homework_topics_user_updated_foreign
+      on_update: NO ACTION
+      on_delete: SET NULL
   - collection: plans
     field: student
     related_collection: students
@@ -5317,6 +7403,90 @@ relations:
       foreign_key_table: directus_users
       foreign_key_column: id
       constraint_name: plans_user_updated_foreign
+      on_update: NO ACTION
+      on_delete: SET NULL
+  - collection: question_topics
+    field: question
+    related_collection: questions
+    meta:
+      junction_field: topic
+      many_collection: question_topics
+      many_field: question
+      one_allowed_collections: null
+      one_collection: questions
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: topics
+      sort_field: sort
+    schema:
+      table: question_topics
+      column: question
+      foreign_key_table: questions
+      foreign_key_column: id
+      constraint_name: question_topics_question_foreign
+      on_update: NO ACTION
+      on_delete: CASCADE
+  - collection: question_topics
+    field: topic
+    related_collection: topics
+    meta:
+      junction_field: question
+      many_collection: question_topics
+      many_field: topic
+      one_allowed_collections: null
+      one_collection: topics
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: questions
+      sort_field: null
+    schema:
+      table: question_topics
+      column: topic
+      foreign_key_table: topics
+      foreign_key_column: id
+      constraint_name: question_topics_topic_foreign
+      on_update: NO ACTION
+      on_delete: CASCADE
+  - collection: question_topics
+    field: user_created
+    related_collection: directus_users
+    meta:
+      junction_field: null
+      many_collection: question_topics
+      many_field: user_created
+      one_allowed_collections: null
+      one_collection: directus_users
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: null
+      sort_field: null
+    schema:
+      table: question_topics
+      column: user_created
+      foreign_key_table: directus_users
+      foreign_key_column: id
+      constraint_name: question_topics_user_created_foreign
+      on_update: NO ACTION
+      on_delete: SET NULL
+  - collection: question_topics
+    field: user_updated
+    related_collection: directus_users
+    meta:
+      junction_field: null
+      many_collection: question_topics
+      many_field: user_updated
+      one_allowed_collections: null
+      one_collection: directus_users
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: null
+      sort_field: null
+    schema:
+      table: question_topics
+      column: user_updated
+      foreign_key_table: directus_users
+      foreign_key_column: id
+      constraint_name: question_topics_user_updated_foreign
       on_update: NO ACTION
       on_delete: SET NULL
   - collection: questions
@@ -5540,13 +7710,68 @@ relations:
       one_collection: directus_users
       one_collection_field: null
       one_deselect_action: nullify
+      one_field: student
+      sort_field: null
+  - collection: topics
+    field: parent
+    related_collection: topics
+    meta:
+      junction_field: null
+      many_collection: topics
+      many_field: parent
+      one_allowed_collections: null
+      one_collection: topics
+      one_collection_field: null
+      one_deselect_action: nullify
       one_field: null
       sort_field: null
     schema:
-      table: students
-      column: user
+      table: topics
+      column: parent
+      foreign_key_table: topics
+      foreign_key_column: id
+      constraint_name: topics_parent_foreign
+      on_update: NO ACTION
+      on_delete: SET NULL
+  - collection: topics
+    field: user_created
+    related_collection: directus_users
+    meta:
+      junction_field: null
+      many_collection: topics
+      many_field: user_created
+      one_allowed_collections: null
+      one_collection: directus_users
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: null
+      sort_field: null
+    schema:
+      table: topics
+      column: user_created
       foreign_key_table: directus_users
       foreign_key_column: id
-      constraint_name: students_user_foreign
+      constraint_name: topics_user_created_foreign
+      on_update: NO ACTION
+      on_delete: SET NULL
+  - collection: topics
+    field: user_updated
+    related_collection: directus_users
+    meta:
+      junction_field: null
+      many_collection: topics
+      many_field: user_updated
+      one_allowed_collections: null
+      one_collection: directus_users
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: null
+      sort_field: null
+    schema:
+      table: topics
+      column: user_updated
+      foreign_key_table: directus_users
+      foreign_key_column: id
+      constraint_name: topics_user_updated_foreign
       on_update: NO ACTION
       on_delete: SET NULL

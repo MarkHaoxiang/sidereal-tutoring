@@ -13,13 +13,23 @@ WEAK_PASSWORD = "weak_password"  # noqa: S105 - an error code, not a password.
 STUDENT_ROLE_MISSING = "student_role_missing"
 LOGIN_REFUSED = "login_refused"
 LOGIN_FAILED = "login_failed"
+TYPESET_UNAVAILABLE = "typeset_unavailable"
+TYPESET_FAILED = "typeset_failed"
+STUDENT_NOT_FOUND = "student_not_found"
+TUTOR_ONLY = "tutor_only"
+ADMIN_ONLY = "admin_only"
+TUTOR_ROLE_MISSING = "tutor_role_missing"
+TUTOR_NOT_FOUND = "tutor_not_found"
+TUTOR_HAS_STUDENTS = "tutor_has_students"
+TUTOR_REFUSED = "tutor_refused"
+FORMAT_UNSUPPORTED = "format_unsupported"
 
 
-def detail(code: str, message: str) -> dict[str, Any]:
+def detail(code: str, message: str, **extra: Any) -> dict[str, Any]:
     """What a client branches on. It reads the `code`, never the sentence."""
-    return {"code": code, "message": message}
+    return {"code": code, "message": message, **extra}
 
 
-def error_body(code: str, message: str) -> dict[str, Any]:
+def error_body(code: str, message: str, **extra: Any) -> dict[str, Any]:
     """The whole body, for a handler answering without `HTTPException` to wrap it."""
-    return {"detail": detail(code, message)}
+    return {"detail": detail(code, message, **extra)}

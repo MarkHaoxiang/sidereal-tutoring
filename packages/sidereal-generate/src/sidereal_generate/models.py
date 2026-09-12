@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date
 
 from pydantic import BaseModel, ConfigDict, Field
-from sidereal_core.models import Document, Student
+from sidereal_core.models import Document, HomeworkFormat, Student
 
 # Every output field is required, optional ones nullable: a strict tool schema has no
 # optional properties, and "the model did not say" must stay distinguishable from "".
@@ -20,6 +20,8 @@ class GenerationRequest(BaseModel):
     instructions: str | None = None
     period_start: date | None = None
     period_end: date | None = None
+    # Homework only: it decides whether `content` comes back as markdown or as a Typst body.
+    format: HomeworkFormat = HomeworkFormat.MARKDOWN
 
 
 class GeneratedQuestion(BaseModel):

@@ -1,3 +1,4 @@
+import { ArrowLeft } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -23,7 +24,7 @@ export function PlanDetailPage() {
     return (
       <div>
         <Link to={backTo} className={pageStyles.back}>
-          ← Study plans
+          <ArrowLeft size={14} aria-hidden="true" /> Study plans
         </Link>
         {isLoading ? (
           <p className={pageStyles.loading}>
@@ -41,6 +42,7 @@ export function PlanDetailPage() {
     <ArtefactDetail
       backTo={backTo}
       backLabel="Study plans"
+      eyebrow="Study plan"
       title={plan.title ?? "Untitled study plan"}
       onRename={async (title) => {
         await update.mutateAsync({ id: plan.id, patch: { title: title || null } });

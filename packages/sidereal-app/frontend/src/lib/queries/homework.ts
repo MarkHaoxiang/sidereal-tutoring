@@ -38,15 +38,26 @@ function fetchHomework(id: string) {
         "id",
         "title",
         "content",
+        "format",
+        "compile_error",
         "status",
         "due_on",
         "submission",
         "submitted_at",
         "generated_from",
         "date_created",
+        "pdf",
+        "submission_file",
         { student: ["id", "name"] },
         { session: ["id", "scheduled_at"] },
-        { questions: ["id", "sort", { question: ["id", "text", "answer"] }] },
+        {
+          questions: [
+            "id",
+            "sort",
+            { question: ["id", "text", "answer", { topics: ["id", "sort", { topic: ["id", "name"] }] }] },
+          ],
+        },
+        { topics: ["id", "sort", { topic: ["id", "name"] }] },
       ],
     })
   );
@@ -55,7 +66,7 @@ function fetchHomework(id: string) {
 function fetchQuestions(ids: string[]) {
   return directus.request(
     readItems("questions", {
-      fields: ["id", "text", "answer", "topic", "difficulty"],
+      fields: ["id", "text", "answer", "topic", "difficulty", { topics: ["id", "sort", { topic: ["id", "name"] }] }],
       filter: { id: { _in: ids } },
       limit: -1,
     })

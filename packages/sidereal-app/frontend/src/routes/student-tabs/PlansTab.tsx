@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 
 import { GenerateSection } from "@/components/artefacts/GenerateSection";
 import styles from "@/components/artefacts/artefacts.module.css";
-import { Spinner, StatusChip } from "@/components/ui";
+import { SkeletonRows, StatusChip } from "@/components/ui";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { usePlans } from "@/lib/queries";
 
@@ -14,11 +14,7 @@ export function PlansTab() {
 
   return (
     <div>
-      {isLoading ? (
-        <p className={styles.status}>
-          <Spinner /> Loading study plans…
-        </p>
-      ) : null}
+      {isLoading ? <SkeletonRows count={2} label="Loading study plans" /> : null}
       {isError ? <p className={styles.status}>Could not load study plans.</p> : null}
 
       {data ? (

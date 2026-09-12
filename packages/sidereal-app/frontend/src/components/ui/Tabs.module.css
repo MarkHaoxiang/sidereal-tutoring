@@ -1,7 +1,6 @@
 .tablist {
   display: flex;
-  gap: 0.25rem;
-  padding-bottom: 0.5rem;
+  gap: 1.25rem;
   border-bottom: 1px solid var(--color-border);
   overflow-x: auto;
   scrollbar-width: none;
@@ -12,30 +11,48 @@
 }
 
 .tab {
-  padding: 0.375rem 0.75rem;
-  border-radius: var(--radius-pill);
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.5rem;
+  margin-bottom: -1px;
+  padding: 0.5rem 0.125rem;
+  border-bottom: 2px solid transparent;
   color: var(--color-fg-muted);
   text-decoration: none;
   white-space: nowrap;
+  transition: color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out);
 }
 
 .tab:hover {
-  background: var(--color-muted-tint);
   color: var(--color-fg);
+  border-bottom-color: var(--color-border-strong);
 }
 
 .tab:focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--color-focus);
   outline-offset: 2px;
+  border-radius: var(--radius-sm);
 }
 
 .selected,
 .selected:hover {
-  background: var(--color-accent-tint);
-  color: var(--color-accent);
-  font-weight: 500;
+  color: var(--color-fg);
+  border-bottom-color: var(--color-accent);
+  font-weight: 600;
 }
 
 .panel {
-  padding-top: 1rem;
+  padding-top: 1.5rem;
+}
+
+@media (max-width: 40rem) {
+  .tablist {
+    gap: 1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab {
+    transition: none;
+  }
 }

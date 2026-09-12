@@ -92,6 +92,13 @@ export function unwrap<T>(result: { data?: T; error?: unknown; response: Respons
   return result.data;
 }
 
+/** A 204 carries no body, which `unwrap` would read as a failure; the status decides. */
+export function expectNoContent(result: { error?: unknown; response: Response }): void {
+  if (!result.response.ok) {
+    throw new ApiError(apiError(result.error), errorCode(result.error), result.response.status);
+  }
+}
+
 /** Who the signed-in user is to this app, and which of the two views they get. */
 export type Me = components["schemas"]["Identity"];
 export type CallerRole = components["schemas"]["CallerRole"];

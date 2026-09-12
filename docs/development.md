@@ -51,17 +51,20 @@ uv run uvicorn sidereal_app.main:app --reload --port 8000    # the API
 cd packages/sidereal-app/frontend && npm run dev             # the client, on :5173
 uv run sidereal-mcp                                          # the MCP server, on stdio
 cargo run -p sidereal-transcripts                            # the transcripts service
+cargo run -p sidereal-typeset                                # the typeset service
 ```
 
 Open **http://localhost:5173**. Vite proxies `/api` to port 8000, so the frontend is the only
 tab you need — but the API has to be up or every job request fails. The frontend talks to
-Directus directly for reads and writes, so Directus has to be up for anything to render.
+Directus directly for reads and writes, so Directus has to be up for anything to render. Vite
+proxies only `/api`; the browser never talks to the typeset service directly.
 
 `uv run sidereal-mcp` speaks stdio and is meant to be launched by a client, not by you; the
 client entry is in `packages/sidereal-mcp/README.md`. `cargo run -p sidereal-transcripts`
 needs `SIDEREAL_DIRECTUS_URL` and `SIDEREAL_DIRECTUS_TOKEN` in its environment, and reports
 the `documents` waiting to become transcripts — **it does not transcribe**, and never writes
-to Directus.
+to Directus. `cargo run -p sidereal-typeset` needs no Directus credentials and no other
+environment variable; the app reaches it at `SIDEREAL_TYPESET_URL` to compile Typst homework.
 
 ## Environment
 
@@ -132,6 +135,8 @@ per-tutor row scoping is unavailable; with the grant key loaded those become usa
 | `ANTHROPIC_API_KEY` | `POST /api/jobs/{kind}` still returns 202 and the background job lands in `failed`, its `error` column reading `TypeError: Could not resolve authentication method…`. Nothing else is affected: health, auth, ingestion and reading jobs all work. | Read by the Anthropic SDK, which is built on the first `generate()` and never at import — so the packages load and the tests pass with no key set. |
 | `SIDEREAL_TRANSCRIPTS_ADDR` | `127.0.0.1:50051` | Bind address of the transcripts service. Ports are allocated in `services/README.md`, one per service. |
 | `SIDEREAL_TRANSCRIPTS_POLL_SECS` | `30` | Seconds between polls. |
+| `SIDEREAL_TYPESET_ADDR` | `127.0.0.1:50052` | Bind address of the typeset service. |
+| `SIDEREAL_TYPESET_URL` | `http://127.0.0.1:50052` | Where `sidereal-app` and `sidereal-generate` reach the typeset service. Unreachable (unset or otherwise): typeset endpoints answer 503 naming the typeset service, and a typst-format homework job fails with a plain message on the job row. |
 | `RUST_LOG` | `info` | Log filter for the Rust services. Not in `.env.example`. |
 
 A Rust service treats `SIDEREAL_DIRECTUS_URL` and `SIDEREAL_DIRECTUS_TOKEN` as **required** and

@@ -48,7 +48,11 @@ app_collections=(
   feedback
   plans
   generation_jobs
+  topics
   homework_questions
+  document_topics
+  question_topics
+  homework_topics
 )
 
 for cmd in curl jq; do
@@ -89,8 +93,9 @@ access_token="$(
 
 # --- entitlements -------------------------------------------------------------------------
 # Custom permission rules (row filters, narrowed field lists, validation) are a licensed
-# feature. Without them the Student role cannot be isolated to its own rows at all, so the
-# filtered grants are skipped rather than widened.
+# feature. Without them neither a student nor a tutor can be isolated to their own rows: the
+# Student grants are skipped rather than widened, and the Tutor grants stay unfiltered so a
+# tutor can still work.
 custom_rules="$(
   api GET /license 2>/dev/null |
     jq -r '.data.entitlements.custom_permission_rules_enabled.default // false' || echo false
@@ -168,22 +173,36 @@ ensure_access "$student_role_id" "$student_policy_id"
 # Every row this script intends to exist, as "<policy-id> <collection> <action>", checked
 # again after the cache is dropped.
 granted=()
+# The permission rows this run has already taken, so a second row for the same collection and
+# action does not overwrite the first.
+claimed=()
 
 ensure_permission() {
   # ensure_permission <policy-id> <collection> <action> <fields-json> <rule-json> \
   #                   [validation-json] [presets-json]
   local policy="$1" collection="$2" action="$3" fields="$4" rule="$5"
   local validation="${6:-null}" presets="${7:-null}"
-  local desired existing current
+  local desired existing current rows
   desired="$(jq -nc --argjson f "$fields" --argjson r "$rule" \
     --argjson v "$validation" --argjson s "$presets" \
     '{fields: $f, permissions: $r, validation: $v, presets: $s}')"
   granted+=("$policy $collection $action")
 
-  existing="$(
-    api GET "/permissions?filter[policy][_eq]=$policy&filter[collection][_eq]=$collection&filter[action][_eq]=$action&fields=id,fields,permissions,validation,presets&limit=1" |
-      jq -c '.data[0] // empty'
+  # A policy may hold several rows for one collection and action — Directus evaluates each on
+  # its own, so a narrow field list on one is not widened by another. The row is therefore
+  # matched by its filter first, and only then by whatever row this run has not yet taken.
+  rows="$(
+    api GET "/permissions?filter[policy][_eq]=$policy&filter[collection][_eq]=$collection&filter[action][_eq]=$action&fields=id,fields,permissions,validation,presets&limit=-1&sort=id"
   )"
+  existing="$(
+    jq -c --argjson r "$rule" --args '
+      def n: if . == null then {} else . end;
+      def free: [.data[] | . as $row
+        | select(($ARGS.positional | index($row.id | tostring)) == null)];
+      ((free | map(select((.permissions | n) == ($r | n))))[0] // (free)[0] // empty)
+    ' <<<"$rows" -- "${claimed[@]+"${claimed[@]}"}"
+  )"
+  [ -z "$existing" ] || claimed+=("$(jq -r '.id' <<<"$existing")")
   if [ -z "$existing" ]; then
     api POST /permissions "$(jq -nc --arg p "$policy" --arg c "$collection" --arg a "$action" \
       --argjson d "$desired" '$d + {policy: $p, collection: $c, action: $a}')" >/dev/null
@@ -221,36 +240,128 @@ ensure_filtered_permission() {
 current_user='$CURRENT_USER'
 
 # --- Tutor permissions ----------------------------------------------------------------------
-for collection in "${app_collections[@]}"; do
-  for action in create read update delete; do
-    ensure_permission "$policy_id" "$collection" "$action" '["*"]' '{}'
+# A tutor reaches the students whose `tutor` is them, and everything that hangs off those
+# students. Directus resolves `$CURRENT_USER` at request time.
+own_students="$(jq -nc --arg u "$current_user" '{tutor: {_eq: $u}}')"
+via_tutor="$(jq -nc --arg u "$current_user" '{student: {tutor: {_eq: $u}}}')"
+# `documents.student` and `generation_jobs.student` are nullable, so a row with no student is
+# reachable only through whoever created it.
+via_tutor_or_own="$(jq -nc --arg u "$current_user" \
+  '{_or: [{student: {tutor: {_eq: $u}}}, {user_created: {_eq: $u}}]}')"
+# A question hangs off a document, off homework through the junction, or off nothing but its
+# author.
+via_question="$(jq -nc --arg u "$current_user" '{_or: [
+  {document: {student: {tutor: {_eq: $u}}}},
+  {homework: {homework: {student: {tutor: {_eq: $u}}}}},
+  {user_created: {_eq: $u}}
+]}')"
+via_tutor_homework="$(jq -nc --arg u "$current_user" '{homework: {student: {tutor: {_eq: $u}}}}')"
+
+ensure_scoped() {
+  # ensure_scoped <collection> <row-filter>. Read, update and delete carry the filter; create
+  # cannot. Directus ignores `permissions` on create outright and checks `validation` against
+  # the payload alone, where `student` is a bare id, so no create rule can reach through the
+  # relation to the student's tutor. The app enforces that; see directus/CLAUDE.md.
+  local collection="$1" rule="$2" action
+  for action in read update delete; do
+    ensure_permission "$policy_id" "$collection" "$action" '["*"]' "$rule"
   done
-done
+  ensure_permission "$policy_id" "$collection" create '["*"]' '{}'
+}
 
-# Uploads referenced by documents. Delete is needed too: without it, deleting the material
-# that owns a file leaves the file orphaned in storage.
-for action in create read update delete; do
-  ensure_permission "$policy_id" directus_files "$action" '["*"]' '{}'
-done
+tutor_unscoped=false
+if [ "$custom_rules" = true ]; then
+  # The reverse filter from a user back to their student needs the `directus_users.student`
+  # o2m alias. Without it Directus stores the rule and silently drops that arm, which leaves
+  # every tutor reading every student login there is, so refuse to grant rather than leak.
+  if ! api GET /fields/directus_users/student >/dev/null 2>&1; then
+    echo "directus_users.student is missing; run scripts/directus-schema-apply.sh first" >&2
+    exit 1
+  fi
 
-# Student logins, managed from the tutor's student page. The row filter keeps a tutor to
-# users in the Student role (plus themselves, for /users/me); `role` is missing from the
-# update field list so a tutor cannot lift a student login into another role, and the create
-# rule is a payload validation because Directus ignores `permissions` on create. A field
-# absent from the create list is rejected outright rather than dropped, so `provider` — which
-# Directus itself puts in a new user's payload — has to be listed.
-tutor_user_scope="$(jq -nc --arg r "$student_role_name" --arg u "$current_user" \
-  '{_or: [{role: {name: {_eq: $r}}}, {id: {_eq: $u}}]}')"
+  # Presets are applied before validation, so a create that omits `tutor` is stamped with the
+  # caller and then passes. The same validation on update is what stops a tutor handing a
+  # student to another tutor; a payload without `tutor` passes it untouched.
+  ensure_permission "$policy_id" students create '["*"]' '{}' "$own_students" \
+    "$(jq -nc --arg u "$current_user" '{tutor: $u}')"
+  ensure_permission "$policy_id" students read '["*"]' "$own_students"
+  ensure_permission "$policy_id" students update '["*"]' "$own_students" "$own_students"
+  ensure_permission "$policy_id" students delete '["*"]' "$own_students"
+
+  ensure_scoped sessions "$via_tutor"
+  ensure_scoped homework "$via_tutor"
+  ensure_scoped feedback "$via_tutor"
+  ensure_scoped plans "$via_tutor"
+  ensure_scoped documents "$via_tutor_or_own"
+  ensure_scoped generation_jobs "$via_tutor_or_own"
+  ensure_scoped questions "$via_question"
+  ensure_scoped homework_questions "$via_tutor_homework"
+  ensure_scoped homework_topics "$via_tutor_homework"
+  ensure_scoped document_topics "$(jq -nc --argjson d "$via_tutor_or_own" '{document: $d}')"
+  ensure_scoped question_topics "$(jq -nc --argjson q "$via_question" '{question: $q}')"
+
+  # The topic tree is the practice's shared vocabulary, not any one tutor's data.
+  for action in create read update delete; do
+    ensure_permission "$policy_id" topics "$action" '["*"]' '{}'
+  done
+
+  # Files: their own uploads, plus whatever hangs off their students' homework through the two
+  # o2m aliases on `directus_files`. The create preset is what makes the first arm true, and
+  # delete is needed or deleting the material that owns a file orphans it in storage.
+  tutor_files="$(jq -nc --arg u "$current_user" '{_or: [
+    {uploaded_by: {_eq: $u}},
+    {homework_pdf: {student: {tutor: {_eq: $u}}}},
+    {homework_submission_file: {student: {tutor: {_eq: $u}}}}
+  ]}')"
+  for action in read update delete; do
+    ensure_permission "$policy_id" directus_files "$action" '["*"]' "$tutor_files"
+  done
+  ensure_permission "$policy_id" directus_files create '["*"]' '{}' null \
+    "$(jq -nc --arg u "$current_user" '{uploaded_by: $u}')"
+else
+  for collection in "${app_collections[@]}"; do
+    for action in create read update delete; do
+      ensure_permission "$policy_id" "$collection" "$action" '["*"]' '{}'
+    done
+  done
+  for action in create read update delete; do
+    ensure_permission "$policy_id" directus_files "$action" '["*"]' '{}'
+  done
+  tutor_unscoped=true
+fi
+
+# Student logins, managed from the tutor's student page. The row filter keeps a tutor to the
+# Student-role users linked to their own students, plus themselves for /users/me; `role` is
+# missing from the update field list so a tutor cannot lift a student login into another role,
+# and the create rule is a payload validation because Directus ignores `permissions` on
+# create. A field absent from the create list is rejected outright rather than dropped, so
+# `provider` — which Directus itself puts in a new user's payload — has to be listed. A login
+# created on its own is not linked to a student yet and so is not readable by its creator:
+# POST /users answers with an empty body, and the way to a readable id is a nested create on
+# the student's own `user` field.
+tutor_student_users="$(jq -nc --arg r "$student_role_id" --arg u "$current_user" \
+  '{_and: [{role: {_eq: $r}}, {student: {tutor: {_eq: $u}}}]}')"
+tutor_user_scope="$(jq -nc --argjson s "$tutor_student_users" --arg u "$current_user" \
+  '{_or: [{id: {_eq: $u}}, $s]}')"
 ensure_filtered_permission "$policy_id" directus_users create \
   '["email","password","first_name","last_name","role","status","provider"]' '{}' \
   "$(jq -nc --arg r "$student_role_id" '{role: {_eq: $r}}')"
 ensure_filtered_permission "$policy_id" directus_users read \
-  '["id","email","first_name","last_name","role","status"]' "$tutor_user_scope"
+  '["id","email","first_name","last_name","role","status","avatar","appearance"]' \
+  "$tutor_user_scope"
 ensure_filtered_permission "$policy_id" directus_users update \
-  '["email","password","first_name","last_name","status"]' \
-  "$(jq -nc --arg r "$student_role_name" '{role: {name: {_eq: $r}}}')"
-ensure_filtered_permission "$policy_id" directus_users delete \
-  '["*"]' "$(jq -nc --arg r "$student_role_name" '{role: {name: {_eq: $r}}}')"
+  '["email","password","first_name","last_name","status"]' "$tutor_student_users"
+ensure_filtered_permission "$policy_id" directus_users delete '["*"]' "$tutor_student_users"
+
+# The account a signed-in user edits on their own profile page. It is a second row on the same
+# collection and action as the grant above: Directus evaluates permission rows one at a time,
+# so this narrow field list stands on its own and neither row widens the other. `role`,
+# `status` and `token` are in neither, so nobody edits their own standing.
+account_self="$(jq -nc --arg u "$current_user" '{id: {_eq: $u}}')"
+account_fields='["first_name","last_name","email","password","avatar","appearance"]'
+ensure_filtered_permission "$policy_id" directus_users update "$account_fields" "$account_self"
+ensure_filtered_permission "$student_policy_id" directus_users update \
+  "$account_fields" "$account_self"
 # `app_access: true` does not carry a readable `directus_roles` in Directus 12, and creating a
 # student login means resolving the Student role by name first.
 ensure_filtered_permission "$policy_id" directus_roles read '["id","name"]' '{}'
@@ -271,7 +382,7 @@ ensure_filtered_permission "$student_policy_id" sessions read \
   '["id","scheduled_at","duration_minutes","status","student"]' "$via_student"
 
 ensure_filtered_permission "$student_policy_id" homework read \
-  '["id","title","content","due_on","status","submission","submitted_at","date_created","date_updated","student","questions"]' \
+  '["id","title","content","format","pdf","compile_error","due_on","status","submission","submission_file","submitted_at","date_created","date_updated","student","questions","topics"]' \
   "$(jq -nc --argjson s "$via_student" \
     '{_and: [$s, {status: {_in: ["assigned", "submitted", "marked"]}}]}')"
 
@@ -280,7 +391,7 @@ ensure_filtered_permission "$student_policy_id" homework read \
 # against the payload alone, so saving a draft answer with no `status` passes and any
 # `status` other than `submitted` fails.
 ensure_filtered_permission "$student_policy_id" homework update \
-  '["submission","submitted_at","status"]' \
+  '["submission","submission_file","submitted_at","status"]' \
   "$(jq -nc --argjson s "$via_student" \
     '{_and: [$s, {status: {_in: ["assigned"]}}]}')" \
   '{"status": {"_eq": "submitted"}}'
@@ -291,8 +402,44 @@ ensure_filtered_permission "$student_policy_id" homework_questions read \
   '["id","homework","question","sort"]' \
   "$(jq -nc --argjson s "$via_student" '{homework: $s}')"
 ensure_filtered_permission "$student_policy_id" questions read \
-  '["id","text","subject","topic","difficulty"]' \
+  '["id","text","subject","topic","difficulty","topics"]' \
   "$(jq -nc --arg u "$current_user" '{homework: {homework: {student: {user: {_eq: $u}}}}}')"
+
+# Topics are a shared vocabulary, not anyone's private data, so the read is unfiltered. The
+# junctions are not: each is scoped back to the student's own homework, `document_topics`
+# being absent because a student reaches no `documents` row to begin with.
+ensure_filtered_permission "$student_policy_id" topics read \
+  '["id","name","parent","description","sort"]' '{}'
+ensure_filtered_permission "$student_policy_id" homework_topics read \
+  '["id","homework","topic","sort"]' \
+  "$(jq -nc --argjson s "$via_student" '{homework: $s}')"
+ensure_filtered_permission "$student_policy_id" question_topics read \
+  '["id","question","topic","sort"]' \
+  "$(jq -nc --arg u "$current_user" \
+    '{question: {homework: {homework: {student: {user: {_eq: $u}}}}}}')"
+
+# Files. `homework.pdf` and `homework.submission_file` carry a reverse o2m alias on
+# directus_files (`homework_pdf`, `homework_submission_file`, both in the schema snapshot);
+# without those alias fields a rule filtering back through the relation is stored happily and
+# then fails every read with a database error, so the aliases are what make this rule work.
+# A file the student uploaded but has not linked yet is covered by the third arm.
+ensure_filtered_permission "$student_policy_id" directus_files read \
+  '["id","title","type","filesize","filename_download","uploaded_on"]' \
+  "$(jq -nc --argjson s "$via_student" --arg u "$current_user" '{_or: [
+    {homework_pdf: $s},
+    {homework_submission_file: $s},
+    {uploaded_by: {_eq: $u}}
+  ]}')"
+
+# Handing in a file. Directus builds an upload's payload itself, so the field list cannot be
+# narrowed; the preset is what ties the row to its uploader, which the read rule then uses.
+ensure_filtered_permission "$student_policy_id" directus_files create \
+  '["*"]' '{}' null "$(jq -nc --arg u "$current_user" '{uploaded_by: $u}')"
+
+# Taking an attachment back off a hand-in. Without the delete the file outlives the link and
+# is orphaned in storage; the preset above is what makes `uploaded_by` true of their own.
+ensure_filtered_permission "$student_policy_id" directus_files delete \
+  '["*"]' "$(jq -nc --arg u "$current_user" '{uploaded_by: {_eq: $u}}')"
 
 ensure_filtered_permission "$student_policy_id" feedback read \
   '["id","content","status","date_created","student"]' \
@@ -305,8 +452,19 @@ ensure_filtered_permission "$student_policy_id" plans read \
 
 # `app_access: false` supplies no permissions of its own, so /users/me needs this row.
 ensure_filtered_permission "$student_policy_id" directus_users read \
-  '["id","email","first_name","last_name","role"]' \
-  "$(jq -nc --arg u "$current_user" '{id: {_eq: $u}}')"
+  '["id","email","first_name","last_name","role","avatar","appearance"]' "$account_self"
+
+if [ "$tutor_unscoped" = true ]; then
+  cat >&2 <<'WARNING'
+
+  WARNING: tutor isolation is UNAVAILABLE on this Directus. Scoping a tutor to their own
+  students needs row filters, which are a licensed feature, so every Tutor grant was made
+  unfiltered: each tutor reads and writes every other tutor's students, sessions, material
+  and generated work. The grants are made anyway because a tutor with none cannot use the
+  app at all. Do not put more than one tutor on an unlicensed instance.
+
+WARNING
+fi
 
 if [ "$skipped_filtered" = true ]; then
   cat >&2 <<'WARNING'

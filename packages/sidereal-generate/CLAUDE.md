@@ -24,3 +24,13 @@ Sits above sidereal-ingest. Imports core and ingest only.
 - A homework job writes the generated questions as `questions` rows, links each to the homework with a
   `homework_questions` row sorted from 1 in the order generated, and records their ids in
   `generated_from`.
+- `JobInput.format` is homework's alone; `typst` on any other kind is refused at the app and the MCP
+  surface, before a job row exists.
+- A Typst job asks for a *body* — the house helpers and Typst maths, no preamble — wraps it through
+  the service's `/template`, and compiles it. `content` is always the wrapped source, so
+  `recompile_homework` can compile the row again.
+- A body that will not compile is generated once more with the compiler's report appended to
+  `instructions`. If it still fails the row is written anyway: `compile_error` set, `pdf` null, a
+  `warning` in `generated_from`, and the job succeeds. A generated artefact is never discarded.
+- `recompile_homework` keeps the PDF that is already on the row when the new source fails, so a tutor
+  never loses a working handout to a bad edit.

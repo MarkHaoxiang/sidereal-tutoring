@@ -1,12 +1,21 @@
-import { useMemo, useState } from "react";
-import { Link, Outlet, useParams } from "react-router-dom";
+import { useId, useMemo, useState } from "react";
+import { Outlet, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
 import { StudentDialog } from "@/components/students/StudentDialog";
 import { StudentLogin } from "@/components/students/StudentLogin";
-import { Button, ConfirmDialog, Spinner, StatusChip, TabPanel, Tabs } from "@/components/ui";
+import { Button, ConfirmDialog, PageHeader, Select, Spinner, StatusChip, TabPanel, Tabs } from "@/components/ui";
 import { apiError } from "@/lib/api";
-import { useStudent, useStudentLogin, useUpdateStudent } from "@/lib/queries";
+import { callerRole, useAuth } from "@/lib/auth-context";
+import {
+  relationId,
+  tutorName,
+  useReassignStudent,
+  useStudent,
+  useStudentLogin,
+  useTutorUsers,
+  useUpdateStudent,
+} from "@/lib/queries";
 
 import pageStyles from "./page.module.css";
 import styles from "./StudentDetailPage.module.css";
@@ -22,6 +31,15 @@ export function StudentDetailPage() {
   const login = useStudentLogin(loginUserId);
   const [editOpen, setEditOpen] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
+
+  // Whose student this is, is the admin's to change: `students.tutor` is what every
+  // tutor-side row filter hangs off.
+  const { me } = useAuth();
+  const isAdmin = callerRole(me) === "admin";
+  const tutorUsers = useTutorUsers(isAdmin);
+  const reassign = useReassignStudent();
+  const currentTutor = relationId(student?.tutor) ?? "";
+  const reassignId = useId();
 
   const tabs = useMemo(
     () => [
@@ -41,6 +59,15 @@ export function StudentDetailPage() {
 
   const isArchived = student?.status === "archived";
 
+  const handOver = async (tutor: string | null) => {
+    try {
+      await reassign.mutateAsync({ id, tutor });
+      toast.success(tutor ? "Student handed over" : "Student has no tutor now");
+    } catch (error) {
+      toast.error(apiError(error));
+    }
+  };
+
   const toggleArchive = async () => {
     try {
       await updateStudent.mutateAsync({ id, patch: { status: isArchived ? "active" : "archived" } });
@@ -53,10 +80,6 @@ export function StudentDetailPage() {
 
   return (
     <div>
-      <Link to="/students" className={pageStyles.back}>
-        ← All students
-      </Link>
-
       {isLoading ? (
         <p className={pageStyles.loading}>
           <Spinner /> Loading student…
@@ -65,13 +88,12 @@ export function StudentDetailPage() {
       {isError ? <p className={pageStyles.status}>Could not load this student.</p> : null}
 
       {student ? (
-        <header className={styles.header}>
-          <div className={styles.titleRow}>
-            <div className={styles.title}>
-              <h1 className={pageStyles.heading}>{student.name}</h1>
-              <StatusChip status={student.status} />
-            </div>
-            <div className={styles.actions}>
+        <PageHeader
+          back={{ to: "/students", label: "All students" }}
+          eyebrow="Student"
+          title={student.name}
+          actions={
+            <>
               <Button
                 onClick={() => {
                   setEditOpen(true);
@@ -87,23 +109,51 @@ export function StudentDetailPage() {
               >
                 {isArchived ? "Unarchive" : "Archive"}
               </Button>
-            </div>
-          </div>
-          <p className={pageStyles.meta}>
-            <span>{student.level ?? "No level set"}</span>
-            {(student.subjects ?? []).map((subject) => (
-              <span key={subject} className={styles.subject}>
-                {subject}
-              </span>
-            ))}
-          </p>
-          <StudentLogin
-            studentId={student.id}
-            studentName={student.name}
-            userId={loginUserId}
-            email={login.data?.email ?? null}
-          />
-        </header>
+            </>
+          }
+          meta={
+            <>
+              <StatusChip status={student.status} />
+              <span>{student.level ?? "No level set"}</span>
+              {(student.subjects ?? []).map((subject) => (
+                <span key={subject} className={styles.subject}>
+                  {subject}
+                </span>
+              ))}
+              {isAdmin ? (
+                <span className={styles.reassign}>
+                  <label htmlFor={reassignId}>Tutor</label>
+                  <Select
+                    id={reassignId}
+                    className={styles.reassignSelect}
+                    value={currentTutor}
+                    disabled={reassign.isPending}
+                    onChange={(event) => {
+                      void handOver(event.target.value || null);
+                    }}
+                  >
+                    <option value="">Nobody</option>
+                    {(tutorUsers.data ?? []).map((tutor) => (
+                      <option key={tutor.id} value={tutor.id}>
+                        {tutorName(tutor)}
+                      </option>
+                    ))}
+                  </Select>
+                </span>
+              ) : null}
+            </>
+          }
+          className={styles.header}
+        />
+      ) : null}
+
+      {student ? (
+        <StudentLogin
+          studentId={student.id}
+          studentName={student.name}
+          userId={loginUserId}
+          email={login.data?.email ?? null}
+        />
       ) : null}
 
       <Tabs label="Student sections" items={tabs} panelId={PANEL_ID} />

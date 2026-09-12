@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 
 import { GenerateSection } from "@/components/artefacts/GenerateSection";
 import styles from "@/components/artefacts/artefacts.module.css";
-import { Spinner, StatusChip } from "@/components/ui";
+import { SkeletonRows, StatusChip } from "@/components/ui";
 import { formatDateTime } from "@/lib/format";
 import { useFeedbackList } from "@/lib/queries";
 
@@ -23,11 +23,7 @@ export function FeedbackTab() {
 
   return (
     <div>
-      {isLoading ? (
-        <p className={styles.status}>
-          <Spinner /> Loading feedback…
-        </p>
-      ) : null}
+      {isLoading ? <SkeletonRows count={3} label="Loading feedback" /> : null}
       {isError ? <p className={styles.status}>Could not load feedback.</p> : null}
 
       {data ? (

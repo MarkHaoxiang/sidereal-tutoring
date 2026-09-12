@@ -105,12 +105,9 @@ mod tests {
     fn a_set_addr_wins() {
         let addr = parse_addr(VAR, Some("0.0.0.0:8080".to_owned()), "127.0.0.1:50051").unwrap();
         assert_eq!(addr.to_string(), "0.0.0.0:8080");
-    }
 
-    #[test]
-    fn an_ipv6_addr_parses() {
-        let addr = parse_addr(VAR, Some("[::1]:50051".to_owned()), "127.0.0.1:50051").unwrap();
-        assert_eq!(addr.port(), 50051);
+        let v6 = parse_addr(VAR, Some("[::1]:50051".to_owned()), "127.0.0.1:50051").unwrap();
+        assert_eq!(v6.port(), 50051);
     }
 
     #[test]

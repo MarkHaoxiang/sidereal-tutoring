@@ -5,7 +5,7 @@ from uuid import UUID
 
 from sidereal_core.models import Document, DocumentKind, Student
 from sidereal_generate.models import GenerationRequest
-from sidereal_generate.prompts import FEEDBACK_PROMPT, HOMEWORK_PROMPT, PLAN_PROMPT, render
+from sidereal_generate.prompts import render
 from sidereal_generate.settings import DEFAULT_MODEL, generate_settings
 
 STUDENT_ID = UUID("11111111-1111-4111-8111-111111111111")
@@ -41,10 +41,6 @@ def test_render_includes_period_documents_and_instructions() -> None:
     assert "<instructions>Keep it short.</instructions>" in rendered
     assert f'<document id="{DOCUMENT_ID}" kind="transcript" title="Lesson 3">' in rendered
     assert "Body." in rendered
-
-
-def test_the_three_prompts_are_distinct_constants() -> None:
-    assert len({HOMEWORK_PROMPT, FEEDBACK_PROMPT, PLAN_PROMPT}) == 3
 
 
 def test_settings_default_and_override() -> None:

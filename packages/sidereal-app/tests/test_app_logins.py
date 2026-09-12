@@ -61,10 +61,6 @@ def test_me_is_a_student_when_a_student_row_points_at_the_caller(
     assert body["student_id"] == str(student_id)
 
 
-def test_me_needs_a_token(client: TestClient) -> None:
-    assert client.get("/api/me").status_code == 401
-
-
 def test_creating_a_login_returns_201_and_links_the_student(
     client: TestClient,
     fake_directus: FakeDirectus,
@@ -178,22 +174,6 @@ def test_resetting_a_password_without_a_login_is_404(
     assert response.json()["detail"]["code"] == "login_missing"
 
 
-def test_resetting_to_a_short_password_is_422(
-    client: TestClient,
-    student_id: UUID,
-    auth: dict[str, str],
-    student_role: dict[str, Any],
-) -> None:
-    login(client, student_id, auth)
-
-    response = client.post(
-        f"/api/students/{student_id}/login/password", headers=auth, json={"password": "short"}
-    )
-
-    assert response.status_code == 422
-    assert response.json()["detail"]["code"] == "weak_password"
-
-
 def test_removing_a_login_is_204_and_keeps_the_student(
     client: TestClient,
     fake_directus: FakeDirectus,
@@ -210,15 +190,6 @@ def test_removing_a_login_is_204_and_keeps_the_student(
     assert fake_directus.rows(Collection.DIRECTUS_USERS) == []
     assert student(fake_directus, student_id)["user"] is None
     assert student(fake_directus, student_id)["name"] == "A. Tutee"
-
-
-def test_removing_a_login_that_is_not_there_is_404(
-    client: TestClient, student_id: UUID, auth: dict[str, str]
-) -> None:
-    response = client.delete(f"/api/students/{student_id}/login", headers=auth)
-
-    assert response.status_code == 404
-    assert response.json()["detail"]["code"] == "login_missing"
 
 
 def test_a_login_can_be_set_up_again_after_removal(

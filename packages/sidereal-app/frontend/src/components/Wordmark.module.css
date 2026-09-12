@@ -1,0 +1,51 @@
+.wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--font-serif);
+  font-optical-sizing: auto;
+  letter-spacing: var(--tracking-display);
+  white-space: nowrap;
+}
+
+.mark {
+  color: var(--color-gold-bright);
+}
+
+.words {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.375rem;
+}
+
+.name {
+  font-weight: 600;
+}
+
+/* Inherited colour at a fixed opacity rather than --color-fg-muted: the wordmark also
+   sits on the night panel, where the muted token is the wrong one. */
+.suffix {
+  color: inherit;
+  opacity: 0.62;
+  font-weight: 400;
+}
+
+.sm {
+  font-size: var(--font-size-h3);
+}
+
+.md {
+  font-size: var(--font-size-h2);
+}
+
+.lg {
+  font-size: 1.75rem;
+}
+
+/* Below the tutor sidebar's narrowest useful width the second word is the first thing
+   to go: the mark and "Sidereal" are the identity. */
+@media (max-width: 26rem) {
+  .suffix {
+    display: none;
+  }
+}

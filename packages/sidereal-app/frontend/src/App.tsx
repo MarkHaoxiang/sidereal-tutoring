@@ -1,9 +1,11 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 
+import { AdminLayout } from "@/components/admin/AdminLayout";
 import { Layout } from "@/components/Layout";
 import { StudentLayout } from "@/components/student/StudentLayout";
 import { RequireAuth, RequireRole } from "@/lib/auth";
 
+import { AccountPage } from "./routes/AccountPage";
 import { FeedbackDetailPage } from "./routes/FeedbackDetailPage";
 import { HomePage } from "./routes/HomePage";
 import { HomeworkDetailPage } from "./routes/HomeworkDetailPage";
@@ -12,6 +14,11 @@ import { MaterialDetailPage } from "./routes/MaterialDetailPage";
 import { PlanDetailPage } from "./routes/PlanDetailPage";
 import { StudentDetailPage } from "./routes/StudentDetailPage";
 import { StudentsListPage } from "./routes/StudentsListPage";
+import { TopicsPage } from "./routes/TopicsPage";
+import { AdminDashboardPage } from "./routes/admin/AdminDashboardPage";
+import { AdminJobsPage } from "./routes/admin/AdminJobsPage";
+import { AdminTutorsPage } from "./routes/admin/AdminTutorsPage";
+import { StudentAccountPage } from "./routes/me/StudentAccountPage";
 import { StudentFeedbackListPage } from "./routes/me/StudentFeedbackListPage";
 import { StudentFeedbackPage } from "./routes/me/StudentFeedbackPage";
 import { StudentHomePage } from "./routes/me/StudentHomePage";
@@ -26,9 +33,9 @@ import { OverviewTab } from "./routes/student-tabs/OverviewTab";
 import { PlansTab } from "./routes/student-tabs/PlansTab";
 import { SessionsTab } from "./routes/student-tabs/SessionsTab";
 
-// Two views behind one login. `RequireRole` decides which of them a caller belongs to,
-// so the login page needs no branch of its own: it sends everyone to `/`, and a student
-// is forwarded to `/me` from there.
+// Three surfaces behind one login: the admin's, the tutor's, and the student's.
+// `RequireRole` decides which of them a caller belongs to and forwards anyone who asks
+// for one that is not theirs. An admin is admitted to the tutor app as well as `/admin`.
 export function App() {
   return (
     <Routes>
@@ -58,6 +65,23 @@ export function App() {
         <Route path="students/:id/homework/:artefactId" element={<HomeworkDetailPage />} />
         <Route path="students/:id/feedback/:artefactId" element={<FeedbackDetailPage />} />
         <Route path="students/:id/plans/:artefactId" element={<PlanDetailPage />} />
+        <Route path="topics" element={<TopicsPage />} />
+        <Route path="account" element={<AccountPage />} />
+      </Route>
+      <Route
+        path="/admin"
+        element={
+          <RequireAuth>
+            <RequireRole role="admin">
+              <AdminLayout />
+            </RequireRole>
+          </RequireAuth>
+        }
+      >
+        <Route index element={<AdminDashboardPage />} />
+        <Route path="tutors" element={<AdminTutorsPage />} />
+        <Route path="jobs" element={<AdminJobsPage />} />
+        <Route path="topics" element={<TopicsPage />} />
       </Route>
       <Route
         path="/me"
@@ -76,6 +100,7 @@ export function App() {
         <Route path="feedback/:id" element={<StudentFeedbackPage />} />
         <Route path="plan" element={<StudentPlanPage />} />
         <Route path="sessions" element={<StudentSessionsPage />} />
+        <Route path="account" element={<StudentAccountPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

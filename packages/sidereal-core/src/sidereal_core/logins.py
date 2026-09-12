@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from contextlib import suppress
 from enum import StrEnum
 from typing import NoReturn
 from uuid import UUID
@@ -11,15 +10,16 @@ from pydantic import BaseModel, ConfigDict
 
 from sidereal_core.directus import DirectusClient, DirectusClientError, DirectusError
 from sidereal_core.models import Collection, DirectusUser, Student
+from sidereal_core.students import StudentNotVisibleError, visible_student
 
 STUDENT_ROLE = "Student"
 MIN_PASSWORD_LENGTH = 8
 # What Directus answers when a rule refuses the write or its validation fails.
 REFUSED = (400, 403)
-GONE = (400, 403, 404)
 
 
 class CallerRole(StrEnum):
+    ADMIN = "admin"
     TUTOR = "tutor"
     STUDENT = "student"
 
@@ -84,15 +84,13 @@ async def student_for_user(client: DirectusClient, user_id: UUID) -> Student | N
 
 
 async def identify(client: DirectusClient, user: DirectusUser) -> Identity:
+    """Admin wins over every other reading, so an admin is never looked up as a student."""
+    if user.admin_access:
+        return _identity(user, CallerRole.ADMIN, None)
     student = await student_for_user(client, user.id)
-    return Identity(
-        id=user.id,
-        email=user.email,
-        first_name=user.first_name,
-        last_name=user.last_name,
-        role=CallerRole.TUTOR if student is None else CallerRole.STUDENT,
-        student_id=None if student is None else student.id,
-    )
+    if student is None:
+        return _identity(user, CallerRole.TUTOR, None)
+    return _identity(user, CallerRole.STUDENT, student.id)
 
 
 async def whoami(client: DirectusClient) -> Identity:
@@ -113,25 +111,24 @@ async def create_login(
             "Directus has no Student role yet, so a student cannot be given a login."
         )
     try:
-        user = await client.create_user(
+        # One write on the student: a tutor cannot read back a `directus_users` row they
+        # created on its own, and an unlinked login would sign in and see nothing anyway.
+        user_id = await client.create_related(
+            Collection.STUDENTS,
+            student_id,
+            "user",
             {
                 "email": email,
                 "password": password,
                 "role": str(role.id),
                 "first_name": student.name,
                 "status": "active",
-            }
+                "provider": "default",
+            },
         )
     except DirectusClientError as exc:
         _refuse(exc, "That login could not be created. The email may already be in use.")
-    try:
-        await client.update_item(Collection.STUDENTS, Student, student_id, {"user": str(user.id)})
-    except DirectusClientError as exc:
-        # An unlinked login would sign in and see nothing, so it does not outlive the failure.
-        with suppress(DirectusClientError):
-            await client.delete_user(user.id)
-        _refuse(exc, "That login could not be given to this student.")
-    return _login(user, email)
+    return StudentLogin(user_id=user_id, email=email)
 
 
 async def reset_password(client: DirectusClient, student_id: UUID, password: str) -> StudentLogin:
@@ -174,11 +171,9 @@ async def _login_of(client: DirectusClient, student_id: UUID) -> UUID:
 
 async def _student(client: DirectusClient, student_id: UUID) -> Student:
     try:
-        return await client.get_item(Collection.STUDENTS, Student, student_id)
-    except DirectusError as exc:
-        if exc.status in GONE:
-            raise LoginRefusedError(404, "That student could not be found.") from exc
-        raise
+        return await visible_student(client, student_id)
+    except StudentNotVisibleError as exc:
+        raise LoginRefusedError(404, str(exc)) from exc
 
 
 def _refuse(exc: DirectusClientError, message: str) -> NoReturn:
@@ -190,3 +185,14 @@ def _refuse(exc: DirectusClientError, message: str) -> NoReturn:
 
 def _login(user: DirectusUser, fallback: str) -> StudentLogin:
     return StudentLogin(user_id=user.id, email=user.email or fallback)
+
+
+def _identity(user: DirectusUser, role: CallerRole, student_id: UUID | None) -> Identity:
+    return Identity(
+        id=user.id,
+        email=user.email,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        role=role,
+        student_id=student_id,
+    )

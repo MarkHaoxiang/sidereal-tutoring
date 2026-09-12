@@ -7,10 +7,10 @@ from uuid import UUID
 import httpx
 import pytest
 from fastapi.testclient import TestClient
-from sidereal_app.deps import get_generators, get_http_client, get_ingesters
+from sidereal_app.deps import get_generators, get_http_client, get_ingesters, get_typeset
 from sidereal_app.main import create_app
 from sidereal_core.models import Collection
-from sidereal_core.testing import DEFAULT_TOKEN, FakeDirectus
+from sidereal_core.testing import DEFAULT_TOKEN, FakeDirectus, FakeTypeset
 from sidereal_generate.fake import FakeGenerator
 from sidereal_generate.jobs import Generators
 from sidereal_generate.models import (
@@ -88,6 +88,11 @@ def generators() -> Generators:
 
 
 @pytest.fixture
+def fake_typeset() -> FakeTypeset:
+    return FakeTypeset()
+
+
+@pytest.fixture
 def student_id(fake_directus: FakeDirectus) -> UUID:
     row = fake_directus.seed(Collection.STUDENTS, {"name": "A. Tutee", "subjects": ["maths"]})
     return UUID(row["id"])
@@ -95,13 +100,18 @@ def student_id(fake_directus: FakeDirectus) -> UUID:
 
 @pytest.fixture
 def client(
-    fake_directus: FakeDirectus, generators: Generators, ingesters: Sequence[Ingester]
+    fake_directus: FakeDirectus,
+    fake_typeset: FakeTypeset,
+    generators: Generators,
+    ingesters: Sequence[Ingester],
 ) -> Iterator[TestClient]:
     """The real auth dependency over a fake Directus: only the transport is substituted."""
     app = create_app()
     pool = httpx.AsyncClient(transport=fake_directus.transport())
+    typeset = fake_typeset.client()
     app.dependency_overrides[get_http_client] = lambda: pool
     app.dependency_overrides[get_generators] = lambda: generators
     app.dependency_overrides[get_ingesters] = lambda: ingesters
+    app.dependency_overrides[get_typeset] = lambda: typeset
     with TestClient(app) as test_client:
         yield test_client

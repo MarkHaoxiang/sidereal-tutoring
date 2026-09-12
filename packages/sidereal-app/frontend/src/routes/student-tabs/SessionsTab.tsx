@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 
 import { SessionCard } from "@/components/sessions/SessionCard";
 import { SessionDialog } from "@/components/sessions/SessionDialog";
-import { Button, EmptyState, Spinner } from "@/components/ui";
+import { Button, EmptyState, SkeletonRows } from "@/components/ui";
 import { useSessionLinks, useSessions } from "@/lib/queries";
 import type { SessionListItem } from "@/lib/queries";
 
@@ -49,11 +49,7 @@ export function SessionsTab() {
         </Button>
       </div>
 
-      {isLoading ? (
-        <p className={listStyles.meta}>
-          <Spinner /> Loading sessions…
-        </p>
-      ) : null}
+      {isLoading ? <SkeletonRows count={3} label="Loading sessions" /> : null}
       {isError ? <p className={listStyles.meta}>Could not load sessions.</p> : null}
 
       {data && data.length === 0 ? (

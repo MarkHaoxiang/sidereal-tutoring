@@ -2,9 +2,10 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { StudentDialog } from "@/components/students/StudentDialog";
-import { Button, EmptyState, Input, Select, Spinner, StatusChip } from "@/components/ui";
+import { Button, EmptyState, Input, PageHeader, Select, SkeletonRows, StatusChip } from "@/components/ui";
+import { callerRole, useAuth } from "@/lib/auth-context";
 import { formatDate } from "@/lib/format";
-import { useSessions, useStudents } from "@/lib/queries";
+import { relationId, tutorName, useSessions, useStudents, useTutors } from "@/lib/queries";
 import type { StudentStatus } from "@/lib/schema";
 
 import pageStyles from "./page.module.css";
@@ -23,6 +24,15 @@ export function StudentsListPage() {
   const [addOpen, setAddOpen] = useState(false);
 
   const students = useStudents(status === "all" ? {} : { status });
+
+  // An admin sees every student, so the list has to say whose each one is.
+  const { me } = useAuth();
+  const isAdmin = callerRole(me) === "admin";
+  const tutors = useTutors(isAdmin);
+  const tutorById = useMemo(
+    () => new Map((tutors.data ?? []).map((tutor) => [tutor.user_id, tutorName(tutor)])),
+    [tutors.data]
+  );
 
   // One query answers "next session" for every row.
   const now = useMemo(() => new Date().toISOString(), []);
@@ -43,17 +53,20 @@ export function StudentsListPage() {
 
   return (
     <div>
-      <div className={pageStyles.header}>
-        <h1 className={pageStyles.heading}>Students</h1>
-        <Button
-          variant="primary"
-          onClick={() => {
-            setAddOpen(true);
-          }}
-        >
-          Add student
-        </Button>
-      </div>
+      <PageHeader
+        title="Students"
+        subtitle="Everyone you are teaching, and when you see them next."
+        actions={
+          <Button
+            variant="primary"
+            onClick={() => {
+              setAddOpen(true);
+            }}
+          >
+            Add student
+          </Button>
+        }
+      />
 
       <div className={styles.toolbar}>
         <Input
@@ -81,11 +94,7 @@ export function StudentsListPage() {
         </Select>
       </div>
 
-      {students.isLoading ? (
-        <p className={pageStyles.loading}>
-          <Spinner /> Loading students…
-        </p>
-      ) : null}
+      {students.isLoading ? <SkeletonRows count={4} label="Loading your students" /> : null}
       {students.isError ? (
         <p className={pageStyles.status}>Could not load students. Try refreshing the page.</p>
       ) : null}
@@ -95,7 +104,7 @@ export function StudentsListPage() {
           message={
             term
               ? `No students match “${search.trim()}”.`
-              : "No students here yet. Add your first student to get started."
+              : "No students here yet. Add your first one and the rest follows."
           }
           action={
             term ? null : (
@@ -124,6 +133,11 @@ export function StudentsListPage() {
                     <StatusChip status={student.status} />
                   </span>
                   <span className={styles.detail}>{student.level ?? "No level set"}</span>
+                  {isAdmin ? (
+                    <span className={styles.detail}>
+                      {tutorById.get(relationId(student.tutor) ?? "") ?? "No tutor assigned"}
+                    </span>
+                  ) : null}
                   {student.subjects && student.subjects.length > 0 ? (
                     <span className={styles.subjects}>
                       {student.subjects.map((subject) => (

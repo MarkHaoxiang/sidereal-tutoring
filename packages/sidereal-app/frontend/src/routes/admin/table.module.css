@@ -1,0 +1,193 @@
+/* The admin tables. Both pages hold more columns than a phone can show, so the table
+   scrolls inside a focusable region rather than reflowing into something unreadable. */
+.scroller {
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-bg-raised);
+  box-shadow: var(--shadow-raised);
+}
+
+.scroller:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.table {
+  width: 100%;
+  min-width: 42rem;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.table th {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-fg-muted);
+  font-size: var(--font-size-eyebrow);
+  font-weight: 500;
+  letter-spacing: var(--tracking-eyebrow);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: top;
+}
+
+.table tr:last-child td {
+  border-bottom: none;
+}
+
+/* The cells keep their natural width — squeezing them to fit a phone turns an email
+   into a column of letters — and the region above scrolls instead. */
+.primary {
+  display: block;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.secondary {
+  display: block;
+  color: var(--color-fg-muted);
+  font-size: var(--font-size-small);
+  white-space: nowrap;
+}
+
+.secondaryCell {
+  color: var(--color-fg-muted);
+  font-size: var(--font-size-small);
+  white-space: nowrap;
+}
+
+.numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1875rem 0.5rem;
+  border: 1px solid color-mix(in srgb, currentcolor 20%, transparent);
+  border-radius: var(--radius-pill);
+  font-size: var(--font-size-small);
+  line-height: 1.3;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.chipOk {
+  background: var(--color-success-tint);
+  color: var(--color-success);
+}
+
+.chipDanger {
+  background: var(--color-danger-tint);
+  color: var(--color-danger);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  gap: 0.25rem;
+  white-space: nowrap;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Jobs */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.filter {
+  width: auto;
+  min-width: 10rem;
+}
+
+.count {
+  color: var(--color-fg-muted);
+  font-size: var(--font-size-small);
+}
+
+.twist {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.twist:hover {
+  color: var(--color-accent);
+}
+
+.detailRow td {
+  padding-top: 0;
+  background: var(--color-bg-sunken);
+}
+
+/* Pinned to the left edge of the scroller and no wider than the screen, so reading a
+   job's input never means scrolling the table sideways. */
+.detail {
+  position: sticky;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-width: calc(100vw - 3rem);
+  padding: 0.75rem 0 0.25rem;
+}
+
+.detailLabel {
+  margin: 0;
+  color: var(--color-fg-muted);
+  font-size: var(--font-size-eyebrow);
+  letter-spacing: var(--tracking-eyebrow);
+  text-transform: uppercase;
+}
+
+.pre {
+  margin: 0;
+  padding: 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-bg-raised);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.error {
+  margin: 0;
+  padding: 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--color-danger) 30%, transparent);
+  border-radius: var(--radius-card);
+  background: var(--color-danger-tint);
+  color: var(--color-danger);
+  overflow-wrap: anywhere;
+}

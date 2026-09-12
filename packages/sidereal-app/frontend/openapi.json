@@ -27,7 +27,7 @@
     "/api/me": {
       "get": {
         "summary": "Me",
-        "description": "Who is calling. A caller a `students` row points at is a student; anyone else is a tutor.",
+        "description": "Who is calling: an admin by their policies, a student by a `students` row, else a tutor.",
         "operationId": "me_api_me_get",
         "responses": {
           "200": {
@@ -46,6 +46,303 @@
             "HTTPBearer": []
           }
         ]
+      }
+    },
+    "/api/admin/health": {
+      "get": {
+        "summary": "Read Admin Health",
+        "description": "Every service the practice runs on. A service that is down is `ok: false`, not an error.",
+        "operationId": "read_admin_health_api_admin_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminHealth"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/admin/tutors": {
+      "get": {
+        "summary": "Read Tutors",
+        "operationId": "read_tutors_api_admin_tutors_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TutorAccount"
+                  },
+                  "type": "array",
+                  "title": "Response Read Tutors Api Admin Tutors Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "Add Tutor",
+        "operationId": "add_tutor_api_admin_tutors_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TutorRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TutorAccount"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/admin/tutors/{user_id}/password": {
+      "post": {
+        "summary": "Set Tutor Password",
+        "operationId": "set_tutor_password_api_admin_tutors__user_id__password_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/tutors/{user_id}": {
+      "patch": {
+        "summary": "Change Tutor Status",
+        "operationId": "change_tutor_status_api_admin_tutors__user_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TutorStatusRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TutorAccount"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete Tutor",
+        "description": "A tutor who still has students is a 409: reassigning them comes first.",
+        "operationId": "delete_tutor_api_admin_tutors__user_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/jobs": {
+      "get": {
+        "summary": "Read Admin Jobs",
+        "operationId": "read_admin_jobs_api_admin_jobs_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/JobStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AdminJob"
+                  },
+                  "title": "Response Read Admin Jobs Api Admin Jobs Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/students/{student_id}/login": {
@@ -332,6 +629,96 @@
         }
       }
     },
+    "/api/typeset/preview": {
+      "post": {
+        "summary": "Preview Typst",
+        "description": "A live preview while a tutor writes. Source that will not compile is a 422.",
+        "operationId": "preview_typst_api_typeset_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TypstRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TypstPreview"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/homework/{homework_id}/compile": {
+      "post": {
+        "summary": "Compile Homework",
+        "description": "Compile the row's `content` again. A failure sets `compile_error` and keeps the old PDF.",
+        "operationId": "compile_homework_api_homework__homework_id__compile_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "homework_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Homework Id"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Homework"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/jobs/{job_id}": {
       "get": {
         "summary": "Read Job",
@@ -380,13 +767,158 @@
   },
   "components": {
     "schemas": {
+      "AdminHealth": {
+        "properties": {
+          "directus": {
+            "$ref": "#/components/schemas/DirectusHealth"
+          },
+          "api": {
+            "$ref": "#/components/schemas/ApiHealth"
+          },
+          "typeset": {
+            "$ref": "#/components/schemas/TypesetHealth"
+          },
+          "generation": {
+            "$ref": "#/components/schemas/GenerationHealth"
+          },
+          "counts": {
+            "$ref": "#/components/schemas/HealthCounts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "directus",
+          "api",
+          "typeset",
+          "generation",
+          "counts"
+        ],
+        "title": "AdminHealth"
+      },
+      "AdminJob": {
+        "properties": {
+          "job": {
+            "$ref": "#/components/schemas/GenerationJob"
+          },
+          "student_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Student Name"
+          },
+          "tutor_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tutor Email"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job"
+        ],
+        "title": "AdminJob",
+        "description": "A generation job as the whole-practice listing shows it."
+      },
+      "ApiHealth": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok",
+            "default": true
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version"
+        ],
+        "title": "ApiHealth"
+      },
       "CallerRole": {
         "type": "string",
         "enum": [
+          "admin",
           "tutor",
           "student"
         ],
         "title": "CallerRole"
+      },
+      "DirectusHealth": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "license": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DirectusLicense"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok"
+        ],
+        "title": "DirectusHealth"
+      },
+      "DirectusLicense": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "title": "DirectusLicense",
+        "description": "`/license`, which only an admin may read."
       },
       "Document": {
         "properties": {
@@ -647,6 +1179,24 @@
         ],
         "title": "FileSourceRequest"
       },
+      "GenerationHealth": {
+        "properties": {
+          "backend": {
+            "type": "string",
+            "title": "Backend"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          }
+        },
+        "type": "object",
+        "required": [
+          "backend",
+          "model"
+        ],
+        "title": "GenerationHealth"
+      },
       "GenerationJob": {
         "properties": {
           "kind": {
@@ -815,6 +1365,230 @@
         ],
         "title": "Health"
       },
+      "HealthCounts": {
+        "properties": {
+          "tutors": {
+            "type": "integer",
+            "title": "Tutors",
+            "default": 0
+          },
+          "students": {
+            "type": "integer",
+            "title": "Students",
+            "default": 0
+          },
+          "documents": {
+            "type": "integer",
+            "title": "Documents",
+            "default": 0
+          },
+          "jobs_running": {
+            "type": "integer",
+            "title": "Jobs Running",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "HealthCounts"
+      },
+      "Homework": {
+        "properties": {
+          "student": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Student"
+          },
+          "session": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content"
+          },
+          "format": {
+            "$ref": "#/components/schemas/HomeworkFormat",
+            "default": "markdown"
+          },
+          "pdf": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pdf"
+          },
+          "submission_file": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission File"
+          },
+          "compile_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Compile Error"
+          },
+          "due_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due On"
+          },
+          "status": {
+            "$ref": "#/components/schemas/HomeworkStatus",
+            "default": "draft"
+          },
+          "submission": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission"
+          },
+          "submitted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted At"
+          },
+          "generated_from": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generated From"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "date_created": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Created"
+          },
+          "date_updated": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Updated"
+          },
+          "user_created": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Created"
+          },
+          "user_updated": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Updated"
+          }
+        },
+        "type": "object",
+        "required": [
+          "student",
+          "title",
+          "content",
+          "id"
+        ],
+        "title": "Homework"
+      },
+      "HomeworkFormat": {
+        "type": "string",
+        "enum": [
+          "markdown",
+          "typst"
+        ],
+        "title": "HomeworkFormat"
+      },
+      "HomeworkStatus": {
+        "type": "string",
+        "enum": [
+          "draft",
+          "assigned",
+          "submitted",
+          "marked"
+        ],
+        "title": "HomeworkStatus"
+      },
       "Identity": {
         "properties": {
           "id": {
@@ -929,6 +1703,10 @@
               }
             ],
             "title": "Period End"
+          },
+          "format": {
+            "$ref": "#/components/schemas/HomeworkFormat",
+            "default": "markdown"
           }
         },
         "additionalProperties": false,
@@ -1019,6 +1797,192 @@
           "text"
         ],
         "title": "TextSourceRequest"
+      },
+      "TutorAccount": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "User Id"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "first_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Name"
+          },
+          "last_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Name"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "students": {
+            "type": "integer",
+            "title": "Students",
+            "default": 0
+          },
+          "last_access": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Access"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id"
+        ],
+        "title": "TutorAccount"
+      },
+      "TutorRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          },
+          "first_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Name"
+          },
+          "last_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Name"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "TutorRequest"
+      },
+      "TutorStatus": {
+        "type": "string",
+        "enum": [
+          "active",
+          "suspended"
+        ],
+        "title": "TutorStatus"
+      },
+      "TutorStatusRequest": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/TutorStatus"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "TutorStatusRequest"
+      },
+      "TypesetHealth": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok",
+          "url"
+        ],
+        "title": "TypesetHealth"
+      },
+      "TypstPreview": {
+        "properties": {
+          "pages": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Pages"
+          }
+        },
+        "type": "object",
+        "required": [
+          "pages"
+        ],
+        "title": "TypstPreview",
+        "description": "One SVG per page, ready to drop into the tutor's editor."
+      },
+      "TypstRequest": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "title": "Source"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "source"
+        ],
+        "title": "TypstRequest"
       },
       "UrlSourceRequest": {
         "properties": {

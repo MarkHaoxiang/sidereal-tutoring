@@ -7,6 +7,7 @@ from typing import Any
 from anthropic import AsyncAnthropic
 from anthropic.types import ToolParam
 from pydantic import BaseModel, ValidationError
+from sidereal_core.models import HomeworkFormat
 
 from sidereal_generate.base import (
     FeedbackGenerator,
@@ -25,6 +26,7 @@ from sidereal_generate.prompts import (
     FEEDBACK_TOOL,
     HOMEWORK_PROMPT,
     HOMEWORK_TOOL,
+    HOMEWORK_TYPST_PROMPT,
     PLAN_PROMPT,
     PLAN_TOOL,
     render,
@@ -57,11 +59,14 @@ class AnthropicGenerator[OutputT: BaseModel]:
     def model(self) -> str:
         return self._model
 
+    def system(self, request: GenerationRequest) -> str:
+        return self._system_prompt
+
     async def generate(self, request: GenerationRequest) -> OutputT:
         response = await self._anthropic().messages.create(
             model=self._model,
             max_tokens=self._max_tokens,
-            system=self._system_prompt,
+            system=self.system(request),
             messages=[{"role": "user", "content": render(request)}],
             tools=[self._tool()],
             tool_choice={"type": "tool", "name": self._tool_name},
@@ -94,10 +99,17 @@ class AnthropicGenerator[OutputT: BaseModel]:
             raise GenerationError(f"{self._tool_name} returned an unusable payload: {exc}") from exc
 
 
+class AnthropicHomeworkGenerator(AnthropicGenerator[HomeworkOutput]):
+    """Homework, in the format the request asks for: markdown, or a Typst body."""
+
+    def system(self, request: GenerationRequest) -> str:
+        return HOMEWORK_TYPST_PROMPT if request.format is HomeworkFormat.TYPST else HOMEWORK_PROMPT
+
+
 def homework_generator(
     *, client: AsyncAnthropic | None = None, model: str | None = None
 ) -> HomeworkGenerator:
-    return AnthropicGenerator(
+    return AnthropicHomeworkGenerator(
         HomeworkOutput, HOMEWORK_PROMPT, HOMEWORK_TOOL, client=client, model=model
     )
 

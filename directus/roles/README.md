@@ -5,5 +5,6 @@ policies or permissions — so the `Tutor` and `Student` roles, their policies a
 `agent@sidereal.example.com` service account are created by `scripts/directus-bootstrap.sh`
 instead.
 
-The `Student` grants need the licensed `custom_permission_rules_enabled` entitlement; without
-it the bootstrap creates the role and policy, warns, and grants a student nothing.
+Both roles' scoping needs the licensed `custom_permission_rules_enabled` entitlement. Without
+it the bootstrap creates the roles and policies and warns: a student is granted nothing, and a
+tutor is granted everything, unscoped.

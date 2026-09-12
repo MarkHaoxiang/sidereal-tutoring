@@ -3,19 +3,28 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { Navigate, useLocation } from "react-router-dom";
+import { toast } from "sonner";
 
 import { Spinner } from "@/components/ui";
 import { getMe } from "@/lib/api";
 import type { CallerRole, Me } from "@/lib/api";
 import { authStorage } from "@/lib/auth-storage";
 import { directus } from "@/lib/directus";
+import { fileIdOf } from "@/lib/files";
+import { saveAppearance } from "@/lib/queries/account";
+import { adoptAppearance, setAppearanceWriter } from "@/lib/theme";
+import type { Appearance } from "@/lib/theme";
 
-import { AuthContext, callerRole, homePath } from "./auth-context";
+import { AuthContext, callerRole, homePath, roleAdmits } from "./auth-context";
 import type { AuthUser } from "./auth-context";
 import { useAuth } from "./auth-context";
 import styles from "./auth.module.css";
 
-const USER_FIELDS = ["id", "first_name", "last_name", "email"] as const;
+const USER_FIELDS = ["id", "first_name", "last_name", "email", "avatar", "appearance"] as const;
+
+function asAppearance(value: unknown): Appearance | null {
+  return value === "light" || value === "dark" || value === "auto" ? value : null;
+}
 
 async function fetchUser(): Promise<AuthUser> {
   const me = await directus.request(readMe({ fields: [...USER_FIELDS] }));
@@ -24,6 +33,8 @@ async function fetchUser(): Promise<AuthUser> {
     first_name: me.first_name ?? null,
     last_name: me.last_name ?? null,
     email: me.email ?? null,
+    avatar: fileIdOf(me.avatar),
+    appearance: asAppearance(me.appearance),
   };
 }
 
@@ -68,6 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const restored = await fetchUser();
         const identity = await fetchIdentity();
         if (!cancelled) {
+          adoptAppearance(restored.appearance ?? "auto");
           setUser(restored);
           setMe(identity);
         }
@@ -91,10 +103,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (email: string, password: string) => {
     await directus.login({ email, password });
     // `me` before `user`: a route guard runs as soon as `user` is set, and it must not
-    // see a signed-in caller whose role is still unknown.
-    setMe(await fetchIdentity());
+    // see a signed-in caller whose role is still unknown. The identity is returned as
+    // well, so the login page can send them to their own surface without waiting for
+    // this state to reach it.
+    const identity = await fetchIdentity();
+    setMe(identity);
+    const signedIn = await fetchUser();
+    // The account's own appearance is the theme from here on; the stored one was only
+    // ever a stand-in for whoever was about to sign in.
+    adoptAppearance(signedIn.appearance ?? "auto");
+    setUser(signedIn);
+    return identity;
+  }, []);
+
+  const refreshUser = useCallback(async () => {
     setUser(await fetchUser());
   }, []);
+
+  // The theme toggle is in every shell and the account page sets the same value, so the
+  // write-back belongs here rather than in either of them. A save that fails leaves the
+  // choice applied on this device, which is what the user just asked for.
+  useEffect(() => {
+    if (!user) {
+      setAppearanceWriter(null);
+      return;
+    }
+    setAppearanceWriter((next) => {
+      saveAppearance(next).catch(() => {
+        toast.error("Your theme could not be saved to your account.");
+      });
+    });
+    return () => {
+      setAppearanceWriter(null);
+    };
+  }, [user]);
 
   const logout = useCallback(async () => {
     try {
@@ -108,8 +150,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [queryClient]);
 
   const value = useMemo(
-    () => ({ user, me, isAuthenticated: user !== null, isChecking, login, logout }),
-    [user, me, isChecking, login, logout]
+    () => ({ user, me, isAuthenticated: user !== null, isChecking, login, logout, refreshUser }),
+    [user, me, isChecking, login, logout, refreshUser]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -135,15 +177,15 @@ export function RequireAuth({ children }: { children: ReactNode }) {
 }
 
 /**
- * Keeps the two views apart: a student who asks for a tutor route lands on `/me`, and a
- * tutor who asks for `/me` lands on `/`. Wrap it inside `RequireAuth`, which is what
- * guarantees there is a caller to have a role at all.
+ * Keeps the three surfaces apart: anyone who asks for one that is not theirs is sent to
+ * their own. `roleAdmits` is the rule — an admin is at home in the tutor app as well as
+ * in `/admin`, and nobody else reaches either of the other two. Wrap it inside
+ * `RequireAuth`, which is what guarantees there is a caller to have a role at all.
  */
 export function RequireRole({ role, children }: { role: CallerRole; children: ReactNode }) {
   const { me } = useAuth();
-  const actual = callerRole(me);
 
-  if (actual !== role) {
+  if (!roleAdmits(role, callerRole(me))) {
     return <Navigate to={homePath(me)} replace />;
   }
 

@@ -4,7 +4,8 @@ Bottom layer. Imports no other workspace package.
 
 ## Invariants
 
-- No LLM calls, no scraping, no filesystem state. Directus is the only external service reached.
+- No LLM calls, no scraping, no filesystem state. Directus and the typeset service are the only
+  external services reached.
 - Models are the shared vocabulary: Directus collections, pydantic models and the frontend's TS types
   carry the same field names and the same lowercase status tokens.
 - One model per collection plus a `<Name>Draft` for creation. A `Draft` has no `id` and no audit
@@ -17,11 +18,34 @@ Bottom layer. Imports no other workspace package.
   `DirectusError` (status + Directus's `errors[]`) when it answers with one.
 - Settings are a frozen dataclass over `os.environ`, read on call. No I/O at import.
 - A student's login is a `directus_users` row in the `Student` role and `students.user` is the
-  link. `logins.py` is the only place one is created, reset or deleted; a create that cannot be
-  linked deletes the user again.
-- The caller is a student exactly when a `students` row points at them. Everyone else, admins
-  included, is a tutor.
+  link. `logins.py` is the only place one is created, reset or deleted.
+- A login is created by `create_related` on the student's own `user` field, never by `POST /users`:
+  a tutor cannot read back a user they created alone, so one write both creates and links it.
+- Nothing is written against a student without `visible_student` first reading them with the
+  caller's own token. Directus checks a create against the payload alone and cannot reach through
+  a relation, so this is the only thing keeping one tutor out of another's students.
+- The caller is an admin when a policy behind them or their role grants `admin_access`, a student
+  when a `students` row points at them, and a tutor otherwise. Admin wins over both.
+- `admin_access` is on no row Directus 12 will show — not on a user, not on a role: `me()` reads it
+  from `GET /policies/me/globals`, and it is False on every user read any other way.
+- `check_email` and `check_password`, and the errors they raise, are shared by student logins and
+  tutor accounts.
+- A tutor is a `directus_users` row in the `Tutor` role, found by name. A tutor who still has
+  students cannot be removed; reassigning them comes first.
+- `admin_health` never raises: a service it cannot reach is `ok: false`, and every probe is capped
+  at `PROBE_TIMEOUT`.
+- A listing never asks per row: ids are gathered and looked up with one `_in` query, and counts come
+  from Directus's own aggregate.
 - Files are Directus's own collection, not `/items`: the row comes from `/files/{id}` and the bytes
   from `/assets/{id}`. `download_file` names the bytes with the row's `filename_download`, never
   with a name parsed out of a response header.
 - Users and roles are Directus's own collections too: `/users` and `/roles`, never `/items`.
+- Uploading is multipart on `/files`; `upload_file` is the only place the workspace posts bytes.
+- Every typeset failure is a `TypesetClientError`: `TypesetUnavailableError` when the service cannot
+  be reached, `TypesetError` (status + the compiler's `diagnostics`) when it refuses the source. A
+  source that will not compile is never a 500 and never an empty PDF.
+- The house template lives in the typeset service, never here: `wrap_homework` asks for it.
+- `FakeDirectus.admin` decides what `/users/me` says about the caller's policies; it serves
+  `/server/info`, `/license` and `aggregate[count]` the way Directus does.
+- `FakeTypeset` compiles nothing. Source carrying `FAIL_MARKER` is its 422; everything else is
+  `FAKE_PDF` or `FAKE_SVG` pages.

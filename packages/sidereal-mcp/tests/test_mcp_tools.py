@@ -3,15 +3,19 @@ from __future__ import annotations
 from datetime import date
 from uuid import UUID
 
+import httpx
+import pytest
 from mcp_doubles import FIXTURES, build_services, seed_student
 from sidereal_core.models import (
     Collection,
     DocumentKind,
     DocumentStatus,
+    HomeworkFormat,
     JobStatus,
     StudentStatus,
 )
-from sidereal_core.testing import FakeDirectus
+from sidereal_core.students import StudentNotVisibleError
+from sidereal_core.testing import FakeDirectus, FakeTypeset
 from sidereal_mcp import tools
 
 
@@ -23,13 +27,6 @@ async def test_list_students_filters_by_status() -> None:
     paused = await tools.list_students(build_services(fake), StudentStatus.PAUSED)
 
     assert [student.name for student in paused] == ["Paused"]
-
-
-async def test_get_student() -> None:
-    fake = FakeDirectus()
-    student_id = seed_student(fake)
-
-    assert (await tools.get_student(build_services(fake), student_id)).name == "A. Tutee"
 
 
 async def test_list_documents_filters_by_student_and_kind() -> None:
@@ -89,6 +86,29 @@ async def test_generate_homework_runs_the_job_to_completion() -> None:
     assert fake.rows(Collection.HOMEWORK)[0]["title"] == "Quadratics: week 3"
 
 
+async def test_generating_typst_homework_leaves_a_compiled_pdf_on_the_row() -> None:
+    fake = FakeDirectus()
+    student_id = seed_student(fake)
+
+    job = await tools.generate_homework(
+        build_services(fake), student_id, format=HomeworkFormat.TYPST
+    )
+
+    assert job.status is JobStatus.SUCCEEDED
+    row = fake.rows(Collection.HOMEWORK)[0]
+    assert row["format"] == "typst"
+    assert fake.files[row["pdf"]][1].startswith(b"%PDF")
+
+
+async def test_previewing_typst_returns_one_svg_per_page() -> None:
+    typeset = FakeTypeset(pages=2)
+
+    pages = await tools.preview_typst(build_services(FakeDirectus(), typeset), "= Week 3\n")
+
+    assert len(pages) == 2
+    assert pages[0].startswith("<svg")
+
+
 async def test_generate_feedback_and_plan() -> None:
     fake = FakeDirectus()
     student_id = seed_student(fake)
@@ -127,3 +147,35 @@ async def test_an_unroutable_source_comes_back_as_a_failed_row() -> None:
     assert document.status is DocumentStatus.FAILED
     assert document.error is not None
     assert document.error.startswith("notes.md cannot be read.")
+
+
+class Scoped(FakeDirectus):
+    """A Directus that hides every `students` row but one, the way a tutor's rules do."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.mine = str(self.seed(Collection.STUDENTS, {"name": "Mine"})["id"])
+        self.theirs = str(self.seed(Collection.STUDENTS, {"name": "Another tutor's"})["id"])
+
+    def handle(self, request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path.startswith("/items/students/") and not path.endswith(self.mine):
+            return httpx.Response(
+                403, json={"errors": [{"message": "no", "extensions": {"code": "FORBIDDEN"}}]}
+            )
+        return super().handle(request)
+
+
+async def test_nothing_is_filed_against_a_student_the_token_cannot_see() -> None:
+    fake = Scoped()
+    services = build_services(fake)
+
+    with pytest.raises(StudentNotVisibleError):
+        await tools.ingest_source(
+            services, "https://example.test/indices", student_id=UUID(fake.theirs)
+        )
+    with pytest.raises(StudentNotVisibleError):
+        await tools.generate_homework(services, UUID(fake.theirs))
+
+    assert fake.rows(Collection.DOCUMENTS) == []
+    assert fake.rows(Collection.GENERATION_JOBS) == []

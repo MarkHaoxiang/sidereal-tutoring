@@ -17,7 +17,7 @@ export const studentKeys = {
 function fetchStudents(params: StudentListParams) {
   return directus.request(
     readItems("students", {
-      fields: ["id", "name", "level", "subjects", "notes", "status", "date_created"],
+      fields: ["id", "name", "level", "subjects", "notes", "status", "tutor", "date_created"],
       filter: params.status ? { status: { _eq: params.status } } : {},
       sort: ["name"],
       limit: -1,
@@ -35,6 +35,8 @@ function fetchStudent(id: string) {
         "subjects",
         "notes",
         "status",
+        // Whose student this is. Only an admin can change it, from the student page header.
+        "tutor",
         "date_created",
         "date_updated",
         // The id of the student's login, if they have one; `useStudentLogin` reads its email.

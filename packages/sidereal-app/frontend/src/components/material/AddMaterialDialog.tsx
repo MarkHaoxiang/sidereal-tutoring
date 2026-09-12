@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { TopicPicker } from "@/components/topics/TopicPicker";
 import { Button, Dialog, Field, Input, Select, Textarea } from "@/components/ui";
 import { apiError } from "@/lib/api";
 import type { DocumentSource } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
-import { useCreateDocument, useSessions, useUploadMaterialFile } from "@/lib/queries";
+import { useCreateDocument, useSessions, useTagDocument, useUploadMaterialFile } from "@/lib/queries";
 
 import styles from "./material.module.css";
 
@@ -29,6 +30,7 @@ export function AddMaterialDialog({ open, onClose, studentId }: AddMaterialDialo
   const sessions = useSessions({ studentId });
   const upload = useUploadMaterialFile();
   const create = useCreateDocument();
+  const tag = useTagDocument();
 
   const [way, setWay] = useState<Way>("file");
   const [file, setFile] = useState<File | null>(null);
@@ -36,11 +38,12 @@ export function AddMaterialDialog({ open, onClose, studentId }: AddMaterialDialo
   const [text, setText] = useState("");
   const [title, setTitle] = useState("");
   const [sessionId, setSessionId] = useState("");
+  const [topics, setTopics] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   // A file input cannot be cleared by state; remounting it is what empties it.
   const [inputGeneration, setInputGeneration] = useState(0);
 
-  const busy = upload.isPending || create.isPending;
+  const busy = upload.isPending || create.isPending || tag.isPending;
 
   const close = () => {
     setWay("file");
@@ -49,6 +52,7 @@ export function AddMaterialDialog({ open, onClose, studentId }: AddMaterialDialo
     setText("");
     setTitle("");
     setSessionId("");
+    setTopics([]);
     setError(null);
     setInputGeneration((generation) => generation + 1);
     onClose();
@@ -88,12 +92,15 @@ export function AddMaterialDialog({ open, onClose, studentId }: AddMaterialDialo
       if (!source) {
         return;
       }
-      await create.mutateAsync({
+      const document = await create.mutateAsync({
         student_id: studentId,
         ...(sessionId ? { session_id: sessionId } : {}),
         ...(title.trim() ? { title: title.trim() } : {}),
         source,
       });
+      if (topics.length > 0) {
+        await tag.mutateAsync({ id: document.id, topics });
+      }
       toast.success("Material added — reading it now");
       close();
     } catch (failure) {
@@ -196,6 +203,10 @@ export function AddMaterialDialog({ open, onClose, studentId }: AddMaterialDialo
           </Field>
         </>
       ) : null}
+
+      <Field label="Topics" help="Optional — what this material covers, so you can find it by topic later.">
+        <TopicPicker value={topics} onChange={setTopics} disabled={busy} />
+      </Field>
 
       <Field label="From session" help="Optional — link this material to a lesson.">
         <Select

@@ -18,8 +18,12 @@ class Collection(StrEnum):
     HOMEWORK = "homework"
     FEEDBACK = "feedback"
     PLANS = "plans"
+    TOPICS = "topics"
     GENERATION_JOBS = "generation_jobs"
     HOMEWORK_QUESTIONS = "homework_questions"
+    DOCUMENT_TOPICS = "document_topics"
+    QUESTION_TOPICS = "question_topics"
+    HOMEWORK_TOPICS = "homework_topics"
     DIRECTUS_USERS = "directus_users"
     DIRECTUS_ROLES = "directus_roles"
 
@@ -55,6 +59,11 @@ class HomeworkStatus(StrEnum):
     ASSIGNED = "assigned"
     SUBMITTED = "submitted"
     MARKED = "marked"
+
+
+class HomeworkFormat(StrEnum):
+    MARKDOWN = "markdown"
+    TYPST = "typst"
 
 
 class FeedbackStatus(StrEnum):
@@ -107,6 +116,10 @@ class DirectusUser(Record):
     last_name: str | None = None
     role: UUID | None = None
     status: str | None = None
+    last_access: datetime | None = None
+    # Not a column: Directus keeps it on the policies behind a user and their role, and only
+    # `DirectusClient.me()` resolves it. Everywhere else it stays False.
+    admin_access: bool = False
 
 
 class DirectusRole(Record):
@@ -114,6 +127,23 @@ class DirectusRole(Record):
 
     name: str
     description: str | None = None
+
+
+class DirectusServerInfo(BaseModel):
+    """What `/server/info` says about the Directus behind the app."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    version: str | None = None
+
+
+class DirectusLicense(BaseModel):
+    """`/license`, which only an admin may read."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    name: str | None = None
+    status: str | None = None
 
 
 class DirectusFile(Record):
@@ -194,6 +224,10 @@ class HomeworkDraft(Draft):
     session: UUID | None = None
     title: str
     content: str
+    format: HomeworkFormat = HomeworkFormat.MARKDOWN
+    pdf: UUID | None = None
+    submission_file: UUID | None = None
+    compile_error: str | None = None
     due_on: date | None = None
     status: HomeworkStatus = HomeworkStatus.DRAFT
     submission: str | None = None
@@ -212,6 +246,47 @@ class HomeworkQuestionDraft(Draft):
 
 
 class HomeworkQuestion(Record, HomeworkQuestionDraft):
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+
+class TopicDraft(Draft):
+    name: str
+    parent: UUID | None = None
+    description: str | None = None
+    sort: int | None = None
+
+
+class Topic(Record, TopicDraft):
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+
+class DocumentTopicDraft(Draft):
+    document: UUID
+    topic: UUID
+    sort: int | None = None
+
+
+class DocumentTopic(Record, DocumentTopicDraft):
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+
+class QuestionTopicDraft(Draft):
+    question: UUID
+    topic: UUID
+    sort: int | None = None
+
+
+class QuestionTopic(Record, QuestionTopicDraft):
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+
+class HomeworkTopicDraft(Draft):
+    homework: UUID
+    topic: UUID
+    sort: int | None = None
+
+
+class HomeworkTopic(Record, HomeworkTopicDraft):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
 

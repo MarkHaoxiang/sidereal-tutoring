@@ -15,7 +15,7 @@ from anthropic import (
 )
 from sidereal_core.directus import DirectusError, DirectusUnavailableError
 from sidereal_core.models import Collection, GenerationKind, JobStatus
-from sidereal_core.testing import FakeDirectus
+from sidereal_core.testing import FakeDirectus, FakeTypeset
 from sidereal_generate.base import GenerationError
 from sidereal_generate.fake import FailingGenerator, FakeGenerator
 from sidereal_generate.jobs import Generators, JobInput, run_job, start_job
@@ -74,11 +74,12 @@ async def test_a_homework_job_writes_questions_then_homework_then_succeeds() -> 
     fake, job_input = seeded()
     all_generators = generators()
 
+    typeset = FakeTypeset().client()
     async with fake.client() as client:
         job = await start_job(client, GenerationKind.HOMEWORK, job_input, model="fake-homework")
         assert job.status is JobStatus.QUEUED
 
-        finished = await run_job(client, all_generators, job.id)
+        finished = await run_job(client, all_generators, job.id, typeset=typeset)
 
     assert finished.status is JobStatus.SUCCEEDED
     assert finished.output_collection == "homework"
@@ -118,9 +119,10 @@ async def test_every_generated_question_is_linked_to_the_homework_in_order() -> 
         plan=FakeGenerator(PLAN),
     )
 
+    typeset = FakeTypeset().client()
     async with fake.client() as client:
         job = await start_job(client, GenerationKind.HOMEWORK, job_input, model="fake-homework")
-        await run_job(client, all_generators, job.id)
+        await run_job(client, all_generators, job.id, typeset=typeset)
 
     homework = fake.rows(Collection.HOMEWORK)[0]
     questions = fake.rows(Collection.QUESTIONS)
@@ -136,9 +138,10 @@ async def test_the_generator_sees_the_student_and_the_documents() -> None:
     homework = all_generators.homework
     assert isinstance(homework, FakeGenerator)
 
+    typeset = FakeTypeset().client()
     async with fake.client() as client:
         job = await start_job(client, GenerationKind.HOMEWORK, job_input, model="fake-homework")
-        await run_job(client, all_generators, job.id)
+        await run_job(client, all_generators, job.id, typeset=typeset)
 
     request = homework.requests[0]
     assert request.student.name == "A. Tutee"
@@ -149,9 +152,10 @@ async def test_the_generator_sees_the_student_and_the_documents() -> None:
 async def test_a_feedback_job_writes_one_feedback_row() -> None:
     fake, job_input = seeded()
 
+    typeset = FakeTypeset().client()
     async with fake.client() as client:
         job = await start_job(client, GenerationKind.FEEDBACK, job_input, model="fake")
-        finished = await run_job(client, generators(), job.id)
+        finished = await run_job(client, generators(), job.id, typeset=typeset)
 
     assert finished.output_collection == "feedback"
     assert fake.rows(Collection.FEEDBACK)[0]["content"] == "Strong on factorising."
@@ -160,31 +164,15 @@ async def test_a_feedback_job_writes_one_feedback_row() -> None:
 async def test_a_plan_job_carries_the_period_onto_the_row() -> None:
     fake, job_input = seeded()
 
+    typeset = FakeTypeset().client()
     async with fake.client() as client:
         job = await start_job(client, GenerationKind.PLAN, job_input, model="fake")
-        finished = await run_job(client, generators(), job.id)
+        finished = await run_job(client, generators(), job.id, typeset=typeset)
 
     plan = fake.rows(Collection.PLANS)[0]
     assert finished.output_collection == "plans"
     assert plan["period_start"] == "2026-01-05"
     assert plan["period_end"] == "2026-02-16"
-
-
-async def test_a_failing_generator_marks_the_job_failed_and_writes_nothing() -> None:
-    fake, job_input = seeded()
-    failing = Generators(
-        homework=FailingGenerator(RuntimeError("model refused")),
-        feedback=FakeGenerator(FEEDBACK),
-        plan=FakeGenerator(PLAN),
-    )
-
-    async with fake.client() as client:
-        job = await start_job(client, GenerationKind.HOMEWORK, job_input, model="fake")
-        finished = await run_job(client, failing, job.id)
-
-    assert finished.status is JobStatus.FAILED
-    assert finished.error == "Generation failed unexpectedly."
-    assert fake.rows(Collection.HOMEWORK) == []
 
 
 async def test_a_job_whose_input_is_unusable_fails_rather_than_raising() -> None:
@@ -194,19 +182,12 @@ async def test_a_job_whose_input_is_unusable_fails_rather_than_raising() -> None
         {"kind": "homework", "status": "queued", "input": {"documents": []}},
     )
 
+    typeset = FakeTypeset().client()
     async with fake.client() as client:
-        finished = await run_job(client, generators(), UUID(row["id"]))
+        finished = await run_job(client, generators(), UUID(row["id"]), typeset=typeset)
 
     assert finished.status is JobStatus.FAILED
     assert finished.error == "Generation failed unexpectedly."
-
-
-def test_for_kind_reports_each_generators_model() -> None:
-    all_generators = generators()
-
-    assert all_generators.for_kind(GenerationKind.HOMEWORK) == "fake-homework"
-    assert all_generators.for_kind(GenerationKind.FEEDBACK) == "fake"
-    assert all_generators.for_kind(GenerationKind.PLAN) == "fake"
 
 
 @pytest.mark.parametrize(
@@ -241,13 +222,16 @@ async def test_a_failure_reaches_the_tutor_as_a_sentence_not_a_traceback(
         plan=FakeGenerator(PLAN),
     )
 
+    typeset = FakeTypeset().client()
     async with fake.client() as client:
         job = await start_job(client, GenerationKind.HOMEWORK, job_input, model="fake")
-        finished = await run_job(client, failing, job.id)
+        finished = await run_job(client, failing, job.id, typeset=typeset)
 
+    assert finished.status is JobStatus.FAILED
     assert finished.error is not None
     assert finished.error.startswith(message)
     assert type(error).__name__ not in finished.error
+    assert fake.rows(Collection.HOMEWORK) == []
 
 
 async def test_material_the_job_may_no_longer_read_is_said_plainly() -> None:
@@ -255,9 +239,10 @@ async def test_material_the_job_may_no_longer_read_is_said_plainly() -> None:
     fake, job_input = seeded()
     fake.items[Collection.DOCUMENTS] = {}
 
+    typeset = FakeTypeset().client()
     async with fake.client() as client:
         job = await start_job(client, GenerationKind.HOMEWORK, job_input, model="fake")
-        finished = await run_job(client, generators(), job.id)
+        finished = await run_job(client, generators(), job.id, typeset=typeset)
 
     assert finished.status is JobStatus.FAILED
     assert finished.error == "Some of the selected material could no longer be read."

@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 
 import { feedbackTitle } from "@/components/student/feedback";
 import studentStyles from "@/components/student/student.module.css";
-import { EmptyState, Spinner } from "@/components/ui";
+import { EmptyState, SkeletonRows } from "@/components/ui";
 import { formatDate } from "@/lib/format";
 import { useMyFeedbackList } from "@/lib/queries";
 
@@ -17,11 +17,7 @@ export function StudentFeedbackListPage() {
     <div className={styles.stack}>
       <h1 className={styles.heading}>Feedback</h1>
 
-      {isLoading ? (
-        <p className={styles.loading}>
-          <Spinner /> Loading your feedback…
-        </p>
-      ) : null}
+      {isLoading ? <SkeletonRows count={3} label="Loading your feedback" /> : null}
       {isError ? <p className={styles.status}>Your feedback could not be loaded. Try again in a moment.</p> : null}
 
       {rows.length > 0 ? (

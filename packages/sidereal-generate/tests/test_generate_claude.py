@@ -8,11 +8,11 @@ from uuid import UUID
 import httpx2
 import pytest
 from anthropic import AsyncAnthropic
-from sidereal_core.models import Document, DocumentKind, Student
+from sidereal_core.models import Document, DocumentKind, HomeworkFormat, Student
 from sidereal_generate.base import GenerationError
 from sidereal_generate.claude import AnthropicGenerator, homework_generator
 from sidereal_generate.models import GenerationRequest, HomeworkOutput
-from sidereal_generate.prompts import HOMEWORK_PROMPT, HOMEWORK_TOOL
+from sidereal_generate.prompts import HOMEWORK_PROMPT, HOMEWORK_TOOL, HOMEWORK_TYPST_PROMPT
 
 STUDENT_ID = UUID("11111111-1111-4111-8111-111111111111")
 DOCUMENT_ID = UUID("22222222-2222-4222-8222-222222222222")
@@ -113,6 +113,28 @@ async def test_a_tool_call_that_does_not_validate_is_a_generation_error() -> Non
 
     with pytest.raises(GenerationError, match="unusable payload"):
         await generator_for(lambda _: httpx2.Response(200, json=body)).generate(request())
+
+
+async def test_a_typst_request_asks_for_a_typst_body() -> None:
+    seen: list[httpx2.Request] = []
+
+    def handler(http_request: httpx2.Request) -> httpx2.Response:
+        seen.append(http_request)
+        body = message(
+            [{"type": "tool_use", "id": "toolu_1", "name": HOMEWORK_TOOL, "input": HOMEWORK}]
+        )
+        return httpx2.Response(200, json=body)
+
+    client = AsyncAnthropic(
+        api_key="test-key", http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(handler))
+    )
+    generator = homework_generator(client=client)
+
+    await generator.generate(request().model_copy(update={"format": HomeworkFormat.TYPST}))
+    await generator.generate(request())
+
+    assert json.loads(seen[0].content)["system"] == HOMEWORK_TYPST_PROMPT
+    assert json.loads(seen[1].content)["system"] == HOMEWORK_PROMPT
 
 
 def test_the_model_comes_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:

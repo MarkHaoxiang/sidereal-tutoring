@@ -60,6 +60,7 @@ function fetchDocument(id: string) {
         "file",
         { student: ["id", "name"] },
         { session: ["id", "scheduled_at"] },
+        { topics: ["id", "sort", { topic: ["id", "name"] }] },
       ],
     })
   );

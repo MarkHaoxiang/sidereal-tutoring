@@ -5,6 +5,8 @@ from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+from sidereal_core.models import HomeworkFormat
+from sidereal_core.tutors import TutorStatus
 from sidereal_ingest.documents import FileSource, TextSource, UrlSource
 from sidereal_ingest.web import SCHEMES
 
@@ -21,6 +23,19 @@ class JobRequest(BaseModel):
     instructions: str | None = None
     period_start: date | None = None
     period_end: date | None = None
+    format: HomeworkFormat = HomeworkFormat.MARKDOWN
+
+
+class TypstRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source: str
+
+
+class TypstPreview(BaseModel):
+    """One SVG per page, ready to drop into the tutor's editor."""
+
+    pages: list[str]
 
 
 class LoginRequest(BaseModel):
@@ -34,6 +49,21 @@ class PasswordRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     password: str
+
+
+class TutorRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: str
+    password: str
+    first_name: str | None = None
+    last_name: str | None = None
+
+
+class TutorStatusRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: TutorStatus
 
 
 class FileSourceRequest(BaseModel):

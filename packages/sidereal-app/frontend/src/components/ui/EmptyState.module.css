@@ -1,15 +1,36 @@
 .empty {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.75rem;
-  padding: 1.5rem;
-  border: 1px dashed var(--color-border);
+  gap: 1rem;
+  padding: 2.5rem 1.5rem;
+  border: 1px dashed var(--color-border-strong);
   border-radius: var(--radius-card);
   text-align: center;
+  overflow: hidden;
+}
+
+/* The mark sits behind the words rather than beside them, so an empty panel reads as
+   one quiet block instead of an illustration with a caption. */
+.mark {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--color-gold-bright);
+  opacity: 0.14;
+  pointer-events: none;
 }
 
 .message {
+  position: relative;
+  max-width: 32rem;
   margin: 0;
   color: var(--color-fg-muted);
+  text-wrap: pretty;
+}
+
+.empty > :not(.mark) {
+  position: relative;
 }

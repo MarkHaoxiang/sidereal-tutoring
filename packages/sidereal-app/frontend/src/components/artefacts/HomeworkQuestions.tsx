@@ -1,3 +1,5 @@
+import { TopicChips } from "@/components/topics/TopicChips";
+import { taggedTopics } from "@/components/topics/tree";
 import { useGeneratedQuestions } from "@/lib/queries";
 import type { HomeworkDetail } from "@/lib/queries";
 
@@ -7,6 +9,7 @@ interface QuestionRow {
   id: string;
   text: string;
   answer: string | null;
+  topics: { id: string; name: string }[];
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -34,6 +37,7 @@ function linkedQuestions(value: unknown): QuestionRow[] {
         id: typeof id === "string" ? id : text,
         text,
         answer: typeof answer === "string" ? answer : null,
+        topics: taggedTopics(question["topics"]),
       },
     ];
   });
@@ -48,7 +52,12 @@ export function HomeworkQuestions({ homework }: { homework: HomeworkDetail }) {
   const rows: QuestionRow[] =
     linked.length > 0
       ? linked
-      : (byId.data ?? []).map((row) => ({ id: row.id, text: row.text, answer: row.answer }));
+      : (byId.data ?? []).map((row) => ({
+          id: row.id,
+          text: row.text,
+          answer: row.answer,
+          topics: taggedTopics(row.topics),
+        }));
 
   if (rows.length === 0) {
     return null;
@@ -64,6 +73,7 @@ export function HomeworkQuestions({ homework }: { homework: HomeworkDetail }) {
           <li key={row.id} className={styles.question}>
             {row.text}
             {row.answer ? <span className={styles.answer}>Answer: {row.answer}</span> : null}
+            {row.topics.length > 0 ? <TopicChips topics={row.topics} className={styles.questionTopics} /> : null}
           </li>
         ))}
       </ol>

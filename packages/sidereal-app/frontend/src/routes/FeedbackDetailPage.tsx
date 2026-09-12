@@ -1,3 +1,4 @@
+import { ArrowLeft } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -23,7 +24,7 @@ export function FeedbackDetailPage() {
     return (
       <div>
         <Link to={backTo} className={pageStyles.back}>
-          ← Feedback
+          <ArrowLeft size={14} aria-hidden="true" /> Feedback
         </Link>
         {isLoading ? (
           <p className={pageStyles.loading}>
@@ -41,6 +42,7 @@ export function FeedbackDetailPage() {
     <ArtefactDetail
       backTo={backTo}
       backLabel="Feedback"
+      eyebrow="Feedback"
       title={`Feedback for ${feedback.student?.name ?? "this student"}`}
       meta={
         <>

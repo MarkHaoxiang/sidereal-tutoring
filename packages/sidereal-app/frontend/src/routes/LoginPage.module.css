@@ -1,29 +1,127 @@
 .page {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
   min-height: 100%;
+}
+
+/* The night-sky half. It is the same in both themes: the panel is the brand, not a
+   surface that follows the theme. */
+.brand {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  padding: 3rem;
+  background:
+    radial-gradient(120% 90% at 15% 0%, #1e2748 0%, transparent 60%),
+    var(--color-night);
+  color: var(--color-night-fg);
+  overflow: hidden;
+}
+
+.sky {
+  position: absolute;
+  top: 8%;
+  right: -3rem;
+  color: var(--color-night-star);
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+.brandInner {
+  position: relative;
+  max-width: 26rem;
+}
+
+.wordmark {
+  color: var(--color-night-fg);
+}
+
+.tagline {
+  margin: 1.5rem 0 0;
+  font-family: var(--font-serif);
+  font-optical-sizing: auto;
+  font-size: var(--font-size-h2);
+  line-height: 1.45;
+  font-weight: 400;
+  color: var(--color-night-fg-muted);
+  text-wrap: pretty;
+}
+
+.formSide {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 1.5rem;
+  padding: 3rem 2rem;
 }
 
-.card {
+.form {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 1.25rem;
   width: 100%;
-  max-width: 24rem;
-  padding: 2rem;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-card);
-  background: var(--color-bg-raised);
+  max-width: 22rem;
+}
+
+.intro {
+  margin-bottom: 0.25rem;
 }
 
 .title {
   margin: 0;
-  font-size: 1.25rem;
+  font-family: var(--font-serif);
+  font-optical-sizing: auto;
+  font-size: var(--font-size-h1);
+  line-height: var(--line-height-h1);
+  font-weight: 600;
+  letter-spacing: var(--tracking-display);
 }
 
 .subtitle {
-  margin: 0.25rem 0 0;
+  margin: 0.375rem 0 0;
   color: var(--color-fg-muted);
+}
+
+.submit {
+  margin-top: 0.25rem;
+  min-height: 2.5rem;
+}
+
+@media (max-width: 56rem) {
+  .page {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+
+  .brand {
+    align-items: center;
+    padding: 2.5rem 1.5rem;
+  }
+
+  /* Stacked, the panel is short: the mark moves off the corner so it never sits
+     behind the line of copy. */
+  .sky {
+    top: -9rem;
+    right: -11rem;
+    opacity: 0.18;
+  }
+
+  .tagline {
+    margin-top: 1rem;
+    font-size: var(--font-size-h3);
+  }
+
+  .formSide {
+    padding: 2.5rem 1.5rem 3rem;
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 26rem) {
+  .brand {
+    padding: 2rem 1rem;
+  }
+
+  .formSide {
+    padding: 2rem 1rem 2.5rem;
+  }
 }

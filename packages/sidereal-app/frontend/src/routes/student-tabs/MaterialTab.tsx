@@ -3,7 +3,7 @@ import { useState } from "react";
 import { AddMaterialDialog } from "@/components/material/AddMaterialDialog";
 import { MaterialRow } from "@/components/material/MaterialRow";
 import styles from "@/components/material/material.module.css";
-import { Button, EmptyState, Spinner } from "@/components/ui";
+import { Button, EmptyState, SkeletonRows } from "@/components/ui";
 import { useDocuments } from "@/lib/queries";
 
 import { useStudentTab } from "./context";
@@ -19,11 +19,7 @@ export function MaterialTab() {
 
   return (
     <div>
-      {isLoading ? (
-        <p className={styles.status}>
-          <Spinner /> Loading material…
-        </p>
-      ) : null}
+      {isLoading ? <SkeletonRows count={3} label="Loading material" /> : null}
       {isError ? <p className={styles.status}>Could not load this student's material.</p> : null}
 
       {data && data.length === 0 ? (

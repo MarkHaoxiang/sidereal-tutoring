@@ -5,6 +5,10 @@
 @import "tailwindcss/utilities.css";
 
 @import "@fontsource-variable/inter";
+/* The "standard" cut carries the weight and optical-size axes and leaves Fraunces's
+   SOFT and WONK axes out; `font-optical-sizing: auto` is what makes the display sizes
+   bookish rather than a scaled-up text face. */
+@import "@fontsource-variable/fraunces/standard.css";
 
 /* `dark:` fires when the element is, or is inside, body[data-theme="dark"] — the only
    theme switch in this app. There is no ".dark" class. */
@@ -14,76 +18,141 @@
    via @theme inline below; nothing here restates a Tailwind default.
 
    Convention for every CSS module in this app: spacing is the 8px scale written in
-   rem — 0.25/0.5/0.75/1/1.5/2/3rem, no other values; radius comes from the three
+   rem — 0.25/0.5/0.75/1/1.5/2/3rem, no other values; radius comes from the four
    --radius-* tokens (control = inputs and buttons, card = cards, dialogs and panels,
-   pill = chips and tabs), never a literal; colour comes from a --color-* token,
-   never a literal. A `-tint` colour is a background that carries its non-tint
-   sibling as the foreground on top of it. */
+   sm = chips' square siblings and swatches, pill = chips and tabs), never a literal;
+   colour comes from a --color-* token, never a literal; a text size comes from a
+   --font-size-* / --line-height-* pair. A `-tint` colour is a background that carries
+   its non-tint sibling as the foreground on top of it. The `night` family is the fixed
+   night-sky panel — the same in both themes, since it is a surface, not a role. */
 :root {
   color-scheme: light;
-  --color-bg: #f8f9fb;
-  --color-bg-raised: #ffffff;
-  --color-fg: #14181f;
-  --color-fg-muted: #5b6472;
-  --color-border: #dde1e7;
-  --color-accent: #3555d1;
-  --color-accent-fg: #ffffff;
-  --color-accent-tint: #e5eafa;
-  --color-danger: #c23636;
-  --color-danger-tint: #fae5e5;
-  --color-success: #237a4b;
-  --color-success-tint: #e0f1e7;
-  --color-warning: #8f5a10;
-  --color-warning-tint: #faeedb;
-  --color-muted-tint: #eceff3;
+  --color-bg: #f5f1e8;
+  --color-bg-raised: #fffcf6;
+  --color-bg-sunken: #efe9dc;
+  --color-fg: #1c1b2a;
+  --color-fg-muted: #5a5870;
+  --color-border: #e0d9ca;
+  --color-border-strong: #cdc3ae;
+  --color-accent: #33407f;
+  --color-accent-fg: #fffcf6;
+  --color-accent-tint: #e4e4f1;
+  --color-accent-hover: #28336a;
+  --color-danger: #b3352f;
+  --color-danger-fg: #fffcf6;
+  --color-danger-tint: #fae3e0;
+  --color-success: #1f6b46;
+  --color-success-tint: #dfeee4;
+  /* The soft gold, and the single secondary accent: "handed in", "due soon", the mark.
+     --color-warning is that same gold — the one status tone it carries. */
+  --color-warning: #7c5810;
+  --color-warning-tint: #f8edd4;
+  --color-gold-bright: #b8862f;
+  --color-muted-tint: #ebe5d8;
+  --color-focus: #33407f;
+  --color-night: #141a30;
+  --color-night-fg: #f2eee4;
+  --color-night-fg-muted: #b9bdd4;
+  --color-night-line: #2c3350;
+  --color-night-star: #e4be7b;
+  --shadow-raised: 0 1px 2px rgb(28 27 42 / 5%);
+  --shadow-lifted: 0 12px 32px -12px rgb(28 27 42 / 22%);
+  --radius-sm: 0.25rem;
   --radius-control: 0.5rem;
-  --radius-card: 0.625rem;
+  --radius-card: 0.75rem;
   --radius-pill: 999px;
   --font-sans: "Inter Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-serif: "Fraunces Variable", "Iowan Old Style", Georgia, "Times New Roman", serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  /* The type scale. Display and h1/h2 are the serif; everything below is Inter. */
+  --font-size-display: 2.5rem;
+  --line-height-display: 1.05;
+  --font-size-h1: 1.875rem;
+  --line-height-h1: 1.15;
+  --font-size-h2: 1.3125rem;
+  --line-height-h2: 1.25;
+  --font-size-h3: 1.0625rem;
+  --line-height-h3: 1.35;
+  --font-size-body: 0.875rem;
+  --line-height-body: 1.65;
+  --font-size-small: 0.8125rem;
+  --line-height-small: 1.5;
+  --font-size-eyebrow: 0.6875rem;
+  --tracking-eyebrow: 0.14em;
+  --tracking-display: -0.015em;
   /* The student view sets its shell to this instead of the body's 14px: a little larger
      to read, and the only place the base text size differs. */
   --font-size-student: 0.9375rem;
+  --duration-fast: 120ms;
+  --duration-dialog: 180ms;
+  --ease-out: cubic-bezier(0.22, 0.8, 0.3, 1);
 }
 
 body[data-theme="dark"] {
   color-scheme: dark;
-  --color-bg: #131720;
-  --color-bg-raised: #1b212c;
-  --color-fg: #e7eaef;
-  --color-fg-muted: #97a1b0;
-  --color-border: #2b323f;
-  --color-accent: #7f9bff;
-  --color-accent-fg: #10131a;
-  --color-accent-tint: #232d47;
-  --color-danger: #e5837f;
-  --color-danger-tint: #3b2326;
-  --color-success: #63c793;
-  --color-success-tint: #16332a;
-  --color-warning: #e2b063;
-  --color-warning-tint: #362c1a;
-  --color-muted-tint: #242b37;
+  --color-bg: #0e1322;
+  --color-bg-raised: #161c2e;
+  --color-bg-sunken: #0a0e1a;
+  --color-fg: #e9e7f2;
+  --color-fg-muted: #9ba2ba;
+  --color-border: #262e45;
+  --color-border-strong: #3a4463;
+  --color-accent: #a8b6ff;
+  --color-accent-fg: #10162a;
+  --color-accent-tint: #1f2743;
+  --color-accent-hover: #c3ccff;
+  --color-danger: #f19490;
+  --color-danger-fg: #10162a;
+  --color-danger-tint: #3a2024;
+  --color-success: #6fd2a2;
+  --color-success-tint: #12301f;
+  --color-warning: #e4be7b;
+  --color-warning-tint: #2e2617;
+  --color-gold-bright: #e4be7b;
+  --color-muted-tint: #1c2338;
+  --color-focus: #a8b6ff;
+  --color-night: #0a0e1a;
+  --color-night-fg: #e9e7f2;
+  --color-night-fg-muted: #9ba2ba;
+  --color-night-line: #262e45;
+  --shadow-raised: 0 1px 2px rgb(0 0 0 / 30%);
+  --shadow-lifted: 0 14px 34px -14px rgb(0 0 0 / 70%);
 }
 
 @theme inline {
   --color-bg: var(--color-bg);
   --color-bg-raised: var(--color-bg-raised);
+  --color-bg-sunken: var(--color-bg-sunken);
   --color-fg: var(--color-fg);
   --color-fg-muted: var(--color-fg-muted);
   --color-border: var(--color-border);
+  --color-border-strong: var(--color-border-strong);
   --color-accent: var(--color-accent);
   --color-accent-fg: var(--color-accent-fg);
   --color-accent-tint: var(--color-accent-tint);
+  --color-accent-hover: var(--color-accent-hover);
   --color-danger: var(--color-danger);
+  --color-danger-fg: var(--color-danger-fg);
   --color-danger-tint: var(--color-danger-tint);
   --color-success: var(--color-success);
   --color-success-tint: var(--color-success-tint);
   --color-warning: var(--color-warning);
   --color-warning-tint: var(--color-warning-tint);
+  --color-gold-bright: var(--color-gold-bright);
   --color-muted-tint: var(--color-muted-tint);
+  --color-focus: var(--color-focus);
+  --color-night: var(--color-night);
+  --color-night-fg: var(--color-night-fg);
+  --color-night-fg-muted: var(--color-night-fg-muted);
+  --color-night-line: var(--color-night-line);
+  --color-night-star: var(--color-night-star);
+  --radius-sm: var(--radius-sm);
   --radius-control: var(--radius-control);
   --radius-card: var(--radius-card);
   --radius-pill: var(--radius-pill);
   --font-sans: var(--font-sans);
+  --font-serif: var(--font-serif);
+  --font-mono: var(--font-mono);
 }
 
 /* Preflight is off, so the handful of resets it would have given us are reapplied
@@ -103,8 +172,10 @@ body {
   background-color: var(--color-bg);
   color: var(--color-fg);
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 button,
@@ -120,10 +191,21 @@ a {
   color: inherit;
 }
 
+::selection {
+  background: var(--color-accent-tint);
+  color: var(--color-accent);
+}
+
+/* One focus ring for the whole app: anything that does not set its own gets this. */
+:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
 /* The one global block: generated markdown is rendered as raw HTML by <Markdown>,
    so its elements cannot carry CSS-module class names. */
 .prose {
-  line-height: 1.6;
+  line-height: var(--line-height-body);
   overflow-wrap: anywhere;
 }
 
@@ -140,20 +222,26 @@ a {
 .prose h3,
 .prose h4 {
   margin: 1.5rem 0 0.5rem;
-  line-height: 1.3;
+  font-family: var(--font-serif);
+  font-optical-sizing: auto;
+  font-weight: 600;
+  letter-spacing: var(--tracking-display);
 }
 
 .prose h1 {
-  font-size: 1.25rem;
+  font-size: var(--font-size-h2);
+  line-height: var(--line-height-h2);
 }
 
 .prose h2 {
-  font-size: 1.125rem;
+  font-size: var(--font-size-h3);
+  line-height: var(--line-height-h3);
 }
 
 .prose h3,
 .prose h4 {
   font-size: 1rem;
+  line-height: var(--line-height-h3);
 }
 
 .prose p,
@@ -176,17 +264,19 @@ a {
 
 .prose a {
   color: var(--color-accent);
+  text-underline-offset: 0.2em;
 }
 
 .prose blockquote {
   padding: 0.25rem 0 0.25rem 1rem;
-  border-left: 2px solid var(--color-border);
+  border-left: 2px solid var(--color-gold-bright);
   color: var(--color-fg-muted);
+  font-style: italic;
 }
 
 .prose code {
   padding: 0.125rem 0.25rem;
-  border-radius: var(--radius-control);
+  border-radius: var(--radius-sm);
   background: var(--color-muted-tint);
   font-size: 0.9em;
 }
@@ -220,6 +310,8 @@ a {
 
 .prose th {
   background: var(--color-muted-tint);
+  font-size: var(--font-size-small);
+  letter-spacing: 0.02em;
 }
 
 .prose hr {

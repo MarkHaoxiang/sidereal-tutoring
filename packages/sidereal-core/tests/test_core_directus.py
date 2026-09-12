@@ -109,13 +109,76 @@ async def test_delete_item_accepts_an_empty_response() -> None:
     assert seen[0].url.path == f"/items/students/{STUDENT_ID}"
 
 
-async def test_me_returns_the_token_holder() -> None:
-    body = {"data": {"id": str(STUDENT_ID), "email": "tutor@example.test", "status": "active"}}
+async def test_me_asks_directus_whether_the_caller_is_an_admin() -> None:
+    seen: list[str] = []
+    me = {"id": str(STUDENT_ID), "email": "tutor@example.test", "role": ROLE_ROW["id"]}
 
-    async with client_for(lambda _: httpx.Response(200, json=body)) as client:
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.url.path)
+        if request.url.path == "/policies/me/globals":
+            return httpx.Response(200, json={"data": {"app_access": True, "admin_access": True}})
+        return httpx.Response(200, json={"data": me})
+
+    async with client_for(handler) as client:
         user = await client.me()
 
+    assert sorted(seen) == ["/policies/me/globals", "/users/me"]
     assert user.email == "tutor@example.test"
+    assert user.role == UUID(ROLE_ROW["id"])
+    assert user.admin_access
+
+
+async def test_a_directus_that_refuses_the_globals_leaves_the_caller_a_non_admin() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/policies/me/globals":
+            return httpx.Response(403, json={"errors": [{"message": "No."}]})
+        return httpx.Response(200, json={"data": {"id": str(STUDENT_ID)}})
+
+    async with client_for(handler) as client:
+        user = await client.me()
+
+    assert not user.admin_access
+
+
+async def test_a_related_row_is_created_through_its_owner_and_answers_with_its_id() -> None:
+    seen: list[httpx.Request] = []
+    new_user = "44444444-4444-4444-8444-444444444444"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"data": {"id": str(STUDENT_ID), "user": {"id": new_user}}})
+
+    async with client_for(handler) as client:
+        created = await client.create_related(
+            Collection.STUDENTS, STUDENT_ID, "user", {"email": "tutee@example.test"}
+        )
+
+    assert seen[0].method == "PATCH"
+    assert seen[0].url.params.get("fields") == "user.id"
+    assert json.loads(seen[0].content) == {"user": {"email": "tutee@example.test"}}
+    assert created == UUID(new_user)
+
+
+async def test_counts_come_back_as_numbers_and_group_by_a_field() -> None:
+    seen: list[httpx.Request] = []
+    rows = [
+        {"tutor": ROLE_ROW["id"], "count": {"id": "2"}},
+        {"tutor": None, "count": {"id": "1"}},
+    ]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        if request.url.params.get("groupBy"):
+            return httpx.Response(200, json={"data": rows})
+        return httpx.Response(200, json={"data": [{"count": {"id": None}}]})
+
+    async with client_for(handler) as client:
+        empty = await client.count_items(Collection.STUDENTS)
+        grouped = await client.count_items_by(Collection.STUDENTS, "tutor")
+
+    assert seen[0].url.params.get("aggregate[count]") == "id"
+    assert empty == 0
+    assert grouped == {ROLE_ROW["id"]: 2}
 
 
 async def test_error_response_carries_status_and_directus_errors() -> None:

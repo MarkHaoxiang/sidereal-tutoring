@@ -5,10 +5,11 @@ from __future__ import annotations
 from collections.abc import Sequence
 from datetime import date
 from enum import Enum
+from importlib.metadata import version
 from typing import Any
 from uuid import UUID
 
-from sidereal_core import logins
+from sidereal_core import logins, tutors
 from sidereal_core.logins import Identity, StudentLogin
 from sidereal_core.models import (
     Collection,
@@ -16,17 +17,24 @@ from sidereal_core.models import (
     DocumentKind,
     GenerationJob,
     GenerationKind,
+    Homework,
+    HomeworkFormat,
     JobStatus,
     Student,
     StudentStatus,
 )
+from sidereal_core.students import visible_student
+from sidereal_core.tutors import AdminHealth, AdminJob, TutorAccount, TutorStatus
 from sidereal_generate.jobs import JobInput, run_job, start_job
+from sidereal_generate.settings import generate_settings
+from sidereal_generate.typst import recompile_homework
 from sidereal_ingest.documents import PathSource, UrlSource, create_document, process_document
 from sidereal_ingest.web import SCHEMES
 
 from sidereal_mcp.services import Services
 
 DEFAULT_LIMIT = 50
+VERSION = version("sidereal-mcp")
 
 
 async def list_students(
@@ -88,6 +96,8 @@ async def ingest_source(
     `kind` overrides how the row is filed; which ingester runs is decided by `source`. A
     source that could not be read comes back as a `failed` row carrying the reason.
     """
+    if student_id is not None:
+        await visible_student(services.directus, student_id)
     document = await create_document(
         services.directus,
         UrlSource(source) if source.startswith(SCHEMES) else PathSource(source),
@@ -103,12 +113,27 @@ async def generate_homework(
     student_id: UUID,
     document_ids: Sequence[UUID] = (),
     instructions: str | None = None,
+    format: HomeworkFormat = HomeworkFormat.MARKDOWN,  # noqa: A002 - the domain's field name.
 ) -> GenerationJob:
     return await _generate(
         services,
         GenerationKind.HOMEWORK,
-        JobInput(student=student_id, documents=tuple(document_ids), instructions=instructions),
+        JobInput(
+            student=student_id,
+            documents=tuple(document_ids),
+            instructions=instructions,
+            format=format,
+        ),
     )
+
+
+async def preview_typst(services: Services, source: str) -> list[str]:
+    """Render Typst source to one SVG per page. Source that will not compile raises."""
+    return await services.typeset.render_svg(source)
+
+
+async def compile_homework(services: Services, homework_id: UUID) -> Homework:
+    return await recompile_homework(services.directus, services.typeset, homework_id)
 
 
 async def generate_feedback(
@@ -168,11 +193,56 @@ async def update_generation_job(
     )
 
 
+async def list_tutors(services: Services) -> list[TutorAccount]:
+    return await tutors.list_tutors(services.directus)
+
+
+async def create_tutor(
+    services: Services,
+    email: str,
+    password: str,
+    first_name: str | None = None,
+    last_name: str | None = None,
+) -> TutorAccount:
+    return await tutors.create_tutor(services.directus, email, password, first_name, last_name)
+
+
+async def reset_tutor_password(services: Services, user_id: UUID, password: str) -> TutorAccount:
+    return await tutors.reset_tutor_password(services.directus, user_id, password)
+
+
+async def set_tutor_status(services: Services, user_id: UUID, status: TutorStatus) -> TutorAccount:
+    return await tutors.set_tutor_status(services.directus, user_id, status)
+
+
+async def remove_tutor(services: Services, user_id: UUID) -> None:
+    await tutors.remove_tutor(services.directus, user_id)
+
+
+async def list_jobs(
+    services: Services, status: JobStatus | None = None, limit: int = DEFAULT_LIMIT
+) -> list[AdminJob]:
+    return await tutors.list_jobs(services.directus, status, limit)
+
+
+async def admin_health(services: Services) -> AdminHealth:
+    settings = generate_settings()
+    return await tutors.admin_health(
+        services.directus,
+        services.typeset,
+        api_version=VERSION,
+        backend=settings.backend.value,
+        model=settings.model,
+    )
+
+
 async def _generate(services: Services, kind: GenerationKind, job_input: JobInput) -> GenerationJob:
+    # Directus cannot check a create through a relation, so the student is read first.
+    await visible_student(services.directus, job_input.student)
     job = await start_job(
         services.directus, kind, job_input, model=services.generators.for_kind(kind)
     )
-    return await run_job(services.directus, services.generators, job.id)
+    return await run_job(services.directus, services.generators, job.id, typeset=services.typeset)
 
 
 def _eq(**fields: object) -> dict[str, Any] | None:

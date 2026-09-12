@@ -1,4 +1,4 @@
-import { Card, EmptyState, Markdown, Spinner } from "@/components/ui";
+import { Card, EmptyState, Markdown, SkeletonRows } from "@/components/ui";
 import { formatDate } from "@/lib/format";
 import { useMyPlans } from "@/lib/queries";
 import type { MyPlan } from "@/lib/queries";
@@ -36,11 +36,7 @@ export function StudentPlanPage() {
     <div className={styles.stack}>
       <h1 className={styles.heading}>Your study plan</h1>
 
-      {isLoading ? (
-        <p className={styles.loading}>
-          <Spinner /> Loading your plan…
-        </p>
-      ) : null}
+      {isLoading ? <SkeletonRows count={1} label="Loading your study plan" /> : null}
       {isError ? <p className={styles.status}>Your study plan could not be loaded. Try again in a moment.</p> : null}
 
       {active.map((plan) => (

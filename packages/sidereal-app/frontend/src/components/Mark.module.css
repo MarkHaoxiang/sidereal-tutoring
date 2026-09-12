@@ -1,0 +1,11 @@
+.mark {
+  display: block;
+  flex: none;
+  color: var(--color-gold-bright);
+}
+
+.constellation {
+  display: block;
+  flex: none;
+  max-width: 100%;
+}

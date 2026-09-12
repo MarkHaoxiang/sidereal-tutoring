@@ -46,6 +46,16 @@ chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["serde", "v4"] }
 url = "2.5"
 
+# The Typst compiler, embedded as a library by services/typeset. Pinned exactly: the crates
+# are versioned in lockstep and the `World` wrapper tracks one minor of them. `typst-as-lib`
+# is built without its `packages` feature, so no package resolver exists to reach the network.
+typst = "=0.15.1"
+typst-as-lib = "=0.16.0"
+typst-assets = { version = "=0.15.1", features = ["fonts"] }
+typst-layout = "=0.15.1"
+typst-pdf = "=0.15.1"
+typst-svg = "=0.15.1"
+
 # An HTTP stub for the tests of anything that talks to Directus. Registered here because two
 # members share it; it is a dev-dependency everywhere and never links into a binary.
 wiremock = "0.6"

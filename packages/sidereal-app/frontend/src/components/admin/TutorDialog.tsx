@@ -1,0 +1,176 @@
+import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
+
+import { generatePassword } from "@/components/students/password";
+import { Button, Dialog, Field, Input } from "@/components/ui";
+import { ApiError, apiError } from "@/lib/api";
+import { useCreateTutor, useResetTutorPassword } from "@/lib/queries";
+import type { TutorAccount } from "@/lib/queries";
+
+import styles from "./admin.module.css";
+
+const PASSWORD_HELP =
+  "Copy this password now and give it to the tutor — it is not shown again. You can set a new one whenever you need to.";
+
+export interface TutorDialogProps {
+  open: boolean;
+  onClose: () => void;
+  /** "create" asks for the name and email too; "reset" only sets a new password. */
+  mode: "create" | "reset";
+  tutor?: TutorAccount | null;
+}
+
+export function TutorDialog({ open, onClose, mode, tutor }: TutorDialogProps) {
+  const createTutor = useCreateTutor();
+  const resetPassword = useResetTutorPassword();
+  const [email, setEmail] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [password, setPassword] = useState("");
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const wasOpen = useRef(false);
+
+  // Clear the form as the dialog opens, so a password from a previous visit is never
+  // offered again as if it were the live one.
+  useEffect(() => {
+    if (open && !wasOpen.current) {
+      setEmail("");
+      setFirstName("");
+      setLastName("");
+      setPassword("");
+      setEmailError(null);
+      setPasswordError(null);
+    }
+    wasOpen.current = open;
+  }, [open]);
+
+  const creating = mode === "create";
+  const pending = createTutor.isPending || resetPassword.isPending;
+
+  const save = async () => {
+    const address = email.trim();
+    if (creating && !address.includes("@")) {
+      setEmailError("Enter the email address the tutor will sign in with.");
+      return;
+    }
+    if (password.length < 8) {
+      setPasswordError("A password needs at least 8 characters. Generate takes care of it for you.");
+      return;
+    }
+    try {
+      if (creating) {
+        const added = await createTutor.mutateAsync({
+          email: address,
+          password,
+          first_name: firstName.trim() || null,
+          last_name: lastName.trim() || null,
+        });
+        toast.success(`${added.email ?? "The tutor"} can sign in now`);
+      } else {
+        if (!tutor) {
+          return;
+        }
+        await resetPassword.mutateAsync({ userId: tutor.user_id, password });
+        toast.success("New password saved");
+      }
+      onClose();
+    } catch (error) {
+      const code = error instanceof ApiError ? error.code : undefined;
+      const message = apiError(error);
+      if (code === "invalid_email" || code === "tutor_refused") {
+        setEmailError(message);
+      } else if (code === "weak_password") {
+        setPasswordError(message);
+      } else {
+        toast.error(message);
+      }
+    }
+  };
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title={creating ? "Add a tutor" : "Reset password"}
+      busy={pending}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose} disabled={pending}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            loading={pending}
+            onClick={() => {
+              void save();
+            }}
+          >
+            {creating ? "Add tutor" : "Save password"}
+          </Button>
+        </>
+      }
+    >
+      {creating ? (
+        <>
+          <Field label="Email" required help="They sign in with this address." error={emailError}>
+            <Input
+              type="email"
+              value={email}
+              autoFocus
+              autoComplete="off"
+              onChange={(event) => {
+                setEmail(event.target.value);
+                setEmailError(null);
+              }}
+            />
+          </Field>
+          <div className={styles.nameRow}>
+            <Field label="First name" className={styles.nameField}>
+              <Input
+                value={firstName}
+                autoComplete="off"
+                onChange={(event) => {
+                  setFirstName(event.target.value);
+                }}
+              />
+            </Field>
+            <Field label="Last name" className={styles.nameField}>
+              <Input
+                value={lastName}
+                autoComplete="off"
+                onChange={(event) => {
+                  setLastName(event.target.value);
+                }}
+              />
+            </Field>
+          </div>
+        </>
+      ) : null}
+
+      <Field label="Password" required help={PASSWORD_HELP} error={passwordError}>
+        <div className={styles.passwordRow}>
+          <Input
+            className={styles.password}
+            value={password}
+            autoComplete="off"
+            spellCheck={false}
+            autoFocus={!creating}
+            onChange={(event) => {
+              setPassword(event.target.value);
+              setPasswordError(null);
+            }}
+          />
+          <Button
+            onClick={() => {
+              setPassword(generatePassword());
+              setPasswordError(null);
+            }}
+          >
+            Generate
+          </Button>
+        </div>
+      </Field>
+    </Dialog>
+  );
+}

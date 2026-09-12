@@ -1,7 +1,7 @@
 import { readUser } from "@directus/sdk";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { ApiError, api, apiError, unwrap } from "@/lib/api";
+import { api, expectNoContent, unwrap } from "@/lib/api";
 import type { components } from "@/lib/api-schema";
 import { directus } from "@/lib/directus";
 
@@ -36,18 +36,6 @@ export interface CreateLoginInput {
 export interface ResetPasswordInput {
   studentId: string;
   password: string;
-}
-
-function detailCode(error: unknown): string | undefined {
-  const code = (error as { detail?: { code?: unknown } } | null | undefined)?.detail?.code;
-  return typeof code === "string" ? code : undefined;
-}
-
-/** A 204 carries no body, which `unwrap` would read as a failure; the status decides. */
-function expectNoContent(result: { error?: unknown; response: Response }): void {
-  if (!result.response.ok) {
-    throw new ApiError(apiError(result.error), detailCode(result.error), result.response.status);
-  }
 }
 
 export function useCreateStudentLogin() {

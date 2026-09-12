@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { Wordmark } from "@/components/Wordmark";
 import { Button } from "@/components/ui";
 import { useAuth, userDisplayName } from "@/lib/auth-context";
 import { cx } from "@/lib/cx";
@@ -36,8 +37,8 @@ export function StudentNav() {
   return (
     <header className={styles.nav}>
       <div className={styles.inner}>
-        <Link to="/me" className={styles.brand}>
-          Sidereal Tutoring
+        <Link to="/me" className={styles.brand} aria-label="Sidereal Tutoring — home">
+          <Wordmark size="sm" />
         </Link>
 
         <button
@@ -67,18 +68,28 @@ export function StudentNav() {
             </NavLink>
           ))}
           <span className={styles.spacer} />
-          <span className={styles.user}>{userDisplayName(user)}</span>
-          <ThemeToggle />
-          <Button
-            variant="ghost"
-            size="sm"
-            loading={signingOut}
-            onClick={() => {
-              void signOut();
-            }}
-          >
-            Sign out
-          </Button>
+          <span className={styles.account}>
+            <Link
+              to="/me/account"
+              className={styles.user}
+              onClick={() => {
+                setMenuOpen(false);
+              }}
+            >
+              {userDisplayName(user)}
+            </Link>
+            <ThemeToggle />
+            <Button
+              variant="ghost"
+              size="sm"
+              loading={signingOut}
+              onClick={() => {
+                void signOut();
+              }}
+            >
+              Sign out
+            </Button>
+          </span>
         </nav>
       </div>
     </header>

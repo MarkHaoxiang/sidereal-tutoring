@@ -1,0 +1,33 @@
+[package]
+name = "sidereal-typeset"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Compiles Typst sources to PDF or SVG with the compiler embedded as a library"
+
+[[bin]]
+name = "sidereal-typeset"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+sidereal-common = { workspace = true }
+
+anyhow = { workspace = true }
+axum = { workspace = true }
+serde = { workspace = true }
+tokio = { workspace = true, features = ["net", "sync", "time"] }
+tracing = { workspace = true }
+typst = { workspace = true }
+typst-as-lib = { workspace = true }
+typst-assets = { workspace = true }
+typst-layout = { workspace = true }
+typst-pdf = { workspace = true }
+typst-svg = { workspace = true }
+
+[dev-dependencies]
+reqwest = { workspace = true }
+serde_json = { workspace = true }

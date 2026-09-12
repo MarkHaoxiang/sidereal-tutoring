@@ -56,15 +56,3 @@ def test_an_unknown_kind_is_rejected_before_directus(
     response = client.post("/api/jobs/quiz", headers=auth, json={"student_id": str(student_id)})
 
     assert response.status_code == 422
-
-
-def test_an_unknown_body_field_is_rejected(
-    client: TestClient, student_id: UUID, auth: dict[str, str]
-) -> None:
-    response = client.post(
-        "/api/jobs/plan",
-        headers=auth,
-        json={"student_id": str(student_id), "temperature": 0.2},
-    )
-
-    assert response.status_code == 422

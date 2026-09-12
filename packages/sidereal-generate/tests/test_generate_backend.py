@@ -24,15 +24,9 @@ STUDENT = Student(
 )
 
 
-def test_the_backend_defaults_to_claude() -> None:
+def test_the_backend_defaults_to_claude_reads_the_environment_and_names_what_it_accepts() -> None:
     assert generate_settings({}).backend is GenerateBackend.CLAUDE
-
-
-def test_the_backend_is_read_from_the_environment() -> None:
     assert generate_settings({"SIDEREAL_GENERATE_BACKEND": "fake"}).backend is GenerateBackend.FAKE
-
-
-def test_an_unknown_backend_is_refused_by_name() -> None:
     with pytest.raises(ValueError, match="claude, fake"):
         generate_settings({"SIDEREAL_GENERATE_BACKEND": "gpt"})
 
