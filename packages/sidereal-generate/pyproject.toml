@@ -8,6 +8,7 @@ dependencies = [
     "sidereal-ingest",
     "anthropic",
     "pydantic>=2",
+    "openai",
 ]
 
 [tool.uv.sources]

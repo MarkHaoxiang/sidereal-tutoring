@@ -129,15 +129,18 @@ async def generate_homework(
     )
 
 
-async def extract_paper(services: Services, document_id: UUID) -> GenerationJob:
-    """Read one ready document into a `papers` row, its PDFs and its `questions` rows."""
-    return await _generate(
-        services, GenerationKind.PAPER_EXTRACT, JobInput(documents=(document_id,))
-    )
+async def extract_paper(
+    services: Services, document_id: UUID, mark_scheme_id: UUID | None = None
+) -> GenerationJob:
+    """Read a ready document into a `papers` row, its PDFs and its `questions` rows."""
+    documents = (document_id,) if mark_scheme_id is None else (document_id, mark_scheme_id)
+    return await _generate(services, GenerationKind.PAPER_EXTRACT, JobInput(documents=documents))
 
 
 async def render_paper(services: Services, paper_id: UUID) -> Paper:
-    return await rerender_paper(services.directus, services.typeset, paper_id)
+    return await rerender_paper(
+        services.directus, services.typeset, paper_id, services.generators.paper
+    )
 
 
 async def paper_worksheet_pdf(
@@ -264,7 +267,7 @@ async def admin_health(services: Services) -> AdminHealth:
         services.typeset,
         api_version=VERSION,
         backend=settings.backend.value,
-        model=settings.model,
+        model=settings.active_model,
     )
 
 

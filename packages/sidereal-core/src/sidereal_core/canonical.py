@@ -22,6 +22,8 @@ class RenderKind(StrEnum):
     PAPER = "paper"
     MARK_SCHEME = "mark_scheme"
     WORKSHEET = "worksheet"
+    QUESTION = "question"
+    MARKUP = "markup"
 
 
 class RenderOutput(StrEnum):
@@ -121,4 +123,14 @@ class CanonicalWorksheet(BaseModel):
     questions: tuple[CanonicalQuestion, ...] = ()
 
 
-type CanonicalDocument = CanonicalPaper | CanonicalMarkScheme | CanonicalWorksheet
+class CanonicalMarkup(BaseModel):
+    """Typst markup on its own, for a fragment that has no structure to walk."""
+
+    model_config = _CANONICAL
+
+    text: str
+
+
+type CanonicalDocument = (
+    CanonicalPaper | CanonicalMarkScheme | CanonicalWorksheet | CanonicalQuestion | CanonicalMarkup
+)

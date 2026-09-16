@@ -13,7 +13,9 @@
 //   plans     usePlans({...}) · usePlan(id) · useUpdatePlan · useDeletePlan
 //   topics    useTopics() (the whole tree) · useTopicUsage(id) · useCreateTopic ·
 //             useUpdateTopic · useDeleteTopic · useTagDocument · useTagHomework
-//   typeset   usePreviewTypst() (source → SVG pages) · useCompileHomework(id)
+//   typeset   usePreviewTypst() (source → SVG pages) · useRenderTypst(body)
+//             (a canonical document → SVG pages or its Typst, cached by a hash of the
+//             body) · useCompileHomework(id)
 //   jobs      useCreateJob() then useJob(jobId) — it polls until succeeded/failed
 //   logins    the student's sign-in, through the FastAPI app rather than Directus:
 //             useCreateStudentLogin · useResetStudentPassword · useRemoveStudentLogin

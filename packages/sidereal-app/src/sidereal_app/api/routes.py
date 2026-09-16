@@ -4,6 +4,7 @@ from importlib.metadata import version
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Response
+from sidereal_core.canonical import RenderOutput
 from sidereal_core.logins import (
     Identity,
     StudentLogin,
@@ -54,9 +55,12 @@ from sidereal_app.api.models import (
     JobRequest,
     LoginRequest,
     PasswordRequest,
+    QuestionRenderRequest,
+    RenderRequest,
     TutorRequest,
     TutorStatusRequest,
     TypstPreview,
+    TypstRender,
     TypstRequest,
     WorksheetRequest,
 )
@@ -96,7 +100,7 @@ async def read_admin_health(admin: Admin, client: Directus, typeset: Typeset) ->
         typeset,
         api_version=VERSION,
         backend=settings.backend.value,
-        model=settings.model,
+        model=settings.active_model,
     )
 
 
@@ -239,10 +243,13 @@ def _check_input(kind: GenerationKind, body: JobRequest) -> None:
             detail=detail(FORMAT_UNSUPPORTED, "Only homework can be written in Typst."),
         )
     if kind is GenerationKind.PAPER_EXTRACT:
-        if len(body.document_ids) != 1:
+        if not 1 <= len(body.document_ids) <= 2:
             raise HTTPException(
                 status_code=422,
-                detail=detail(DOCUMENT_REQUIRED, "A paper is read from exactly one document."),
+                detail=detail(
+                    DOCUMENT_REQUIRED,
+                    "A paper is read from its own document, or two with its mark scheme second.",
+                ),
             )
     elif body.student_id is None:
         raise HTTPException(
@@ -257,6 +264,19 @@ async def preview_typst(body: TypstRequest, tutor: Tutor, typeset: Typeset) -> T
     return TypstPreview(pages=await typeset.render_svg(body.source))
 
 
+@router.post("/typeset/render")
+async def render_canonical(body: RenderRequest, tutor: Tutor, typeset: Typeset) -> TypstRender:
+    """A canonical structure previewed in the house style. Nothing is read or stored."""
+    scheme = body.mark_scheme if isinstance(body, QuestionRenderRequest) else None
+    if body.output is RenderOutput.SOURCE:
+        source = await typeset.render(
+            body.kind, body.document, RenderOutput.SOURCE, mark_scheme=scheme
+        )
+        return TypstRender(pages=[], source=source)
+    pages = await typeset.render(body.kind, body.document, RenderOutput.SVG, mark_scheme=scheme)
+    return TypstRender(pages=pages, source=None)
+
+
 @router.post("/homework/{homework_id}/compile", status_code=202)
 async def compile_homework(
     homework_id: UUID, tutor: Tutor, client: Directus, typeset: Typeset
@@ -266,10 +286,19 @@ async def compile_homework(
 
 
 @router.post("/papers/{paper_id}/render", status_code=202)
-async def render_paper(paper_id: UUID, tutor: Tutor, client: Directus, typeset: Typeset) -> Paper:
-    """Render the stored structure again — what a tutor runs after reviewing an extraction."""
+async def render_paper(
+    paper_id: UUID,
+    tutor: Tutor,
+    client: Directus,
+    typeset: Typeset,
+    generators: GeneratorSet,
+) -> Paper:
+    """Render the stored structure again — what a tutor runs after reviewing an extraction.
+
+    Maths the compiler refuses is repaired against its diagnostics before it gives up.
+    """
     await client.get_item(Collection.PAPERS, Paper, paper_id)
-    return await rerender_paper(client, typeset, paper_id)
+    return await rerender_paper(client, typeset, paper_id, generators.paper)
 
 
 @router.post("/papers/{paper_id}/worksheet")

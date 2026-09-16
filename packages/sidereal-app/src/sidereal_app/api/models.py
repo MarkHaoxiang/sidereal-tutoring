@@ -5,6 +5,16 @@ from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+from sidereal_core.canonical import (
+    CanonicalMarkScheme,
+    CanonicalMarkSchemeQuestion,
+    CanonicalMarkup,
+    CanonicalPaper,
+    CanonicalQuestion,
+    CanonicalWorksheet,
+    RenderKind,
+    RenderOutput,
+)
 from sidereal_core.models import HomeworkFormat
 from sidereal_core.tutors import TutorStatus
 from sidereal_ingest.documents import FileSource, TextSource, UrlSource
@@ -46,6 +56,55 @@ class TypstPreview(BaseModel):
     """One SVG per page, ready to drop into the tutor's editor."""
 
     pages: list[str]
+
+
+class RenderBase(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    output: Literal[RenderOutput.SVG, RenderOutput.SOURCE] = RenderOutput.SVG
+
+
+class PaperRenderRequest(RenderBase):
+    kind: Literal[RenderKind.PAPER]
+    document: CanonicalPaper
+
+
+class MarkSchemeRenderRequest(RenderBase):
+    kind: Literal[RenderKind.MARK_SCHEME]
+    document: CanonicalMarkScheme
+
+
+class WorksheetRenderRequest(RenderBase):
+    kind: Literal[RenderKind.WORKSHEET]
+    document: CanonicalWorksheet
+
+
+class QuestionRenderRequest(RenderBase):
+    kind: Literal[RenderKind.QUESTION]
+    document: CanonicalQuestion
+    mark_scheme: CanonicalMarkSchemeQuestion | None = None
+
+
+class MarkupRenderRequest(RenderBase):
+    kind: Literal[RenderKind.MARKUP]
+    document: CanonicalMarkup
+
+
+type RenderRequest = Annotated[
+    PaperRenderRequest
+    | MarkSchemeRenderRequest
+    | WorksheetRenderRequest
+    | QuestionRenderRequest
+    | MarkupRenderRequest,
+    Field(discriminator="kind"),
+]
+
+
+class TypstRender(BaseModel):
+    """`pages` is empty when `output` is `source`, and `source` is null when it is `svg`."""
+
+    pages: list[str]
+    source: str | None
 
 
 class LoginRequest(BaseModel):

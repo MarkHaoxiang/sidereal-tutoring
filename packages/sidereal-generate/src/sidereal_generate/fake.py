@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from pydantic import BaseModel
 from sidereal_core.canonical import (
     CanonicalMarkScheme,
@@ -21,6 +23,7 @@ from sidereal_generate.models import (
     PaperExtraction,
     PlanOutput,
 )
+from sidereal_generate.usage import UsageTally
 
 FAKE_MODEL = "fake"
 FAKE_PREFIX = "[fake]"
@@ -38,8 +41,11 @@ class FakeGenerator[OutputT: BaseModel]:
     def model(self) -> str:
         return self._model
 
-    async def generate(self, request: GenerationRequest) -> OutputT:
+    async def generate(
+        self, request: GenerationRequest, *, usage: UsageTally | None = None
+    ) -> OutputT:
         self.requests.append(request)
+        _spend(usage)
         return self.output
 
 
@@ -52,7 +58,9 @@ class FailingGenerator[OutputT: BaseModel]:
     def model(self) -> str:
         return self._model
 
-    async def generate(self, request: GenerationRequest) -> OutputT:
+    async def generate(
+        self, request: GenerationRequest, *, usage: UsageTally | None = None
+    ) -> OutputT:
         raise self.error
 
 
@@ -61,7 +69,10 @@ class FakeHomeworkGenerator:
 
     model = FAKE_MODEL
 
-    async def generate(self, request: GenerationRequest) -> HomeworkOutput:
+    async def generate(
+        self, request: GenerationRequest, *, usage: UsageTally | None = None
+    ) -> HomeworkOutput:
+        _spend(usage)
         typst = request.format is HomeworkFormat.TYPST
         return HomeworkOutput(
             title=f"{FAKE_PREFIX} Homework for {request.student.name}",
@@ -80,14 +91,20 @@ class FakeHomeworkGenerator:
 class FakeFeedbackGenerator:
     model = FAKE_MODEL
 
-    async def generate(self, request: GenerationRequest) -> FeedbackOutput:
+    async def generate(
+        self, request: GenerationRequest, *, usage: UsageTally | None = None
+    ) -> FeedbackOutput:
+        _spend(usage)
         return FeedbackOutput(content=_content("Feedback", request))
 
 
 class FakePlanGenerator:
     model = FAKE_MODEL
 
-    async def generate(self, request: GenerationRequest) -> PlanOutput:
+    async def generate(
+        self, request: GenerationRequest, *, usage: UsageTally | None = None
+    ) -> PlanOutput:
+        _spend(usage)
         return PlanOutput(
             title=f"{FAKE_PREFIX} Study plan for {request.student.name}",
             content=_content("Study plan", request),
@@ -99,7 +116,14 @@ class FakePaperExtractor:
 
     model = FAKE_MODEL
 
-    async def extract(self, document: Document) -> PaperExtraction:
+    async def extract(
+        self,
+        document: Document,
+        mark_scheme: Document | None = None,
+        *,
+        usage: UsageTally | None = None,
+    ) -> PaperExtraction:
+        _spend(usage)
         title = f"{FAKE_PREFIX} {document.title}"
         return PaperExtraction(
             paper=CanonicalPaper(
@@ -149,6 +173,28 @@ class FakePaperExtractor:
                 ),
             ),
         )
+
+    async def repair(
+        self,
+        extraction: PaperExtraction,
+        diagnostics: str,
+        *,
+        usage: UsageTally | None = None,
+    ) -> PaperExtraction:
+        _spend(usage)
+        return _repaired(extraction)
+
+
+def _repaired(extraction: PaperExtraction) -> PaperExtraction:
+    """What the fake `repair` returns: the same paper with `$PQ$`-style names spaced."""
+    fixed = re.sub(r"\$([A-Z])([A-Z])\$", r"$\1 \2$", extraction.model_dump_json())
+    return PaperExtraction.model_validate_json(fixed)
+
+
+def _spend(usage: UsageTally | None) -> None:
+    """A fake call costs nothing, and a tally that counted it would say otherwise."""
+    if usage is not None:
+        usage.record(prompt_tokens=0, completion_tokens=0, cost_usd=0.0)
 
 
 def _typst_body(request: GenerationRequest) -> str:

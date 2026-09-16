@@ -22,8 +22,8 @@ dev = [
     "sidereal-mcp",
     "sidereal-app",
     "pytest>=8",
-    # The Anthropic SDK's HTTP layer. Named here so sidereal-generate's tests can hand
-    # it a MockTransport instead of reaching the network.
+    # The Anthropic and OpenAI SDKs' HTTP layer. Named here so sidereal-generate's tests
+    # can hand them a MockTransport instead of reaching the network.
     "httpx2",
     "pytest-asyncio",
     "pytest-cov",

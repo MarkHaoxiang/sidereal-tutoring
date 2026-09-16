@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+import logging
+import os
+from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 
 import httpx
@@ -33,6 +35,7 @@ from sidereal_core.typeset import (
     TypesetError,
     TypesetUnavailableError,
 )
+from sidereal_generate.jobs import default_generators
 from sidereal_generate.papers import PaperError
 from sidereal_generate.typst import NotTypstError
 from sidereal_ingest import HttpxFetcher, default_ingesters
@@ -61,6 +64,10 @@ from sidereal_app.api.errors import (
 from sidereal_app.api.routes import VERSION, router
 
 TITLE = "Sidereal Tutoring"
+# uvicorn configures its own loggers and leaves the root alone, so without this the
+# packages' own records reach no handler and only WARNING and worse are ever seen.
+LOG_LEVEL = "SIDEREAL_LOG_LEVEL"
+DEFAULT_LOG_LEVEL = "INFO"
 FETCH_TIMEOUT = 20.0
 LOGIN_ERRORS: dict[type[Exception], tuple[int, str]] = {
     LoginExistsError: (409, LOGIN_EXISTS),
@@ -76,6 +83,16 @@ TUTOR_ERRORS: dict[type[Exception], tuple[int, str]] = {
 }
 
 
+def configure_logging(env: Mapping[str, str] | None = None) -> None:
+    """Give the packages' loggers a handler. A host that configured one keeps it."""
+    source = os.environ if env is None else env
+    level = (source.get(LOG_LEVEL) or DEFAULT_LOG_LEVEL).upper()
+    logging.basicConfig(level=level, format="%(levelname)s %(name)s %(message)s")
+    logging.getLogger("sidereal_core").setLevel(level)
+    logging.getLogger("sidereal_ingest").setLevel(level)
+    logging.getLogger("sidereal_generate").setLevel(level)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # One pool for every Directus call, one for fetching material, one for typesetting. All
@@ -88,10 +105,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.http = pool
         app.state.ingesters = default_ingesters(HttpxFetcher(http_client=web))
         app.state.typeset = TypesetClient(typeset_settings().url, http_client=typeset)
+        app.state.generators = default_generators()
         yield
 
 
 def create_app() -> FastAPI:
+    configure_logging()
     app = FastAPI(title=TITLE, version=VERSION, lifespan=lifespan)
     app.include_router(router)
     app.add_exception_handler(DirectusUnavailableError, _unavailable)
@@ -139,7 +158,7 @@ def _typeset_failed(request: Request, exc: Exception) -> JSONResponse:
         status_code=422,
         content=error_body(
             TYPESET_FAILED,
-            "That Typst source did not compile.",
+            "That Typst source did not compile." if diagnostics else str(exc),
             diagnostics=[diagnostic.model_dump(mode="json") for diagnostic in diagnostics],
         ),
     )

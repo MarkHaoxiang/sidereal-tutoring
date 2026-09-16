@@ -13,10 +13,20 @@ from anthropic import (
     PermissionDeniedError,
     RateLimitError,
 )
+from openai import APIConnectionError as OpenAIConnectionError
+from openai import APIStatusError as OpenAIStatusError
+from openai import AuthenticationError as OpenAIAuthenticationError
+from openai import InternalServerError as OpenAIInternalServerError
+from openai import PermissionDeniedError as OpenAIPermissionDeniedError
+from openai import RateLimitError as OpenAIRateLimitError
 from sidereal_core.directus import DirectusError, DirectusUnavailableError
 from sidereal_core.models import Collection, GenerationKind, JobStatus
 from sidereal_core.testing import FakeDirectus, FakeTypeset
-from sidereal_generate.base import GenerationError
+from sidereal_generate.base import (
+    GenerationError,
+    GenerationNotConfiguredError,
+    GenerationTruncatedError,
+)
 from sidereal_generate.fake import FailingGenerator, FakeGenerator, FakePaperExtractor
 from sidereal_generate.jobs import Generators, JobInput, run_job, start_job
 from sidereal_generate.models import (
@@ -38,11 +48,17 @@ HOMEWORK = HomeworkOutput(
 FEEDBACK = FeedbackOutput(content="Strong on factorising.")
 PLAN = PlanOutput(title="Spring term", content="Six weeks of algebra.")
 ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 
 def _anthropic[E: APIStatusError](error: type[E], status: int) -> E:
     """An SDK error built the way the SDK builds one, without a request going out."""
     request = httpx2.Request("POST", ANTHROPIC_URL)
+    return error("refused", response=httpx2.Response(status, request=request), body=None)
+
+
+def _openrouter[E: OpenAIStatusError](error: type[E], status: int) -> E:
+    request = httpx2.Request("POST", OPENROUTER_URL)
     return error("refused", response=httpx2.Response(status, request=request), body=None)
 
 
@@ -210,6 +226,25 @@ async def test_a_job_whose_input_is_unusable_fails_rather_than_raising() -> None
             _anthropic(InternalServerError, 500),
             "The generation service could not finish this request.",
         ),
+        (
+            _openrouter(OpenAIAuthenticationError, 401),
+            "The generation service refused the request.",
+        ),
+        (
+            _openrouter(OpenAIPermissionDeniedError, 403),
+            "The generation service refused the request.",
+        ),
+        (_openrouter(OpenAIRateLimitError, 429), "The generation service is busy"),
+        (
+            OpenAIConnectionError(request=httpx2.Request("POST", OPENROUTER_URL)),
+            "The generation service could not be reached.",
+        ),
+        (
+            _openrouter(OpenAIInternalServerError, 500),
+            "The generation service could not finish this request.",
+        ),
+        (GenerationNotConfiguredError("OPENROUTER_API_KEY is not set"), "Generation is not set up"),
+        (GenerationTruncatedError("ran out of output budget"), "The answer was cut off"),
         (GenerationError("no tool call"), "The generated result could not be used."),
         (RuntimeError("model refused"), "Generation failed unexpectedly."),
     ],

@@ -5,13 +5,28 @@ Sits above sidereal-ingest. Imports core and ingest only.
 ## Invariants
 
 - Every generator is one `Generator[OutputT]` implementation, so two can be compared on the same request.
-- `SIDEREAL_GENERATE_BACKEND` decides what `default_generators()` builds: `claude` (default) or `fake`.
-  Fake output is prefixed `[fake]` and says so in its body; it never passes as real generation.
-- No network at import and none in tests. The Anthropic client is built on first `generate()`, never in
+- `SIDEREAL_GENERATE_BACKEND` decides what `default_generators()` builds: `claude` (default),
+  `openrouter` or `fake`. Fake output is prefixed `[fake]` and says so in its body; it never passes as
+  real generation.
+- No network at import and none in tests. The SDK client is built on first `generate()`, never in
   `__init__`, so constructing a generator needs no credentials.
-- Output comes back through a forced strict tool call whose `input_schema` is the output model's JSON
-  schema. Every output field is required and optional ones are nullable — a strict schema has no
-  optional properties.
+- Both backends send the same `strict_schema` of the same output model, so two can be compared on the
+  same request. The model id is configuration (`SIDEREAL_GENERATE_MODEL`, `OPENROUTER_MODEL`), never a
+  commit, and `admin_health` reports the one the chosen backend calls.
+- Claude asks through a forced strict tool call whose `input_schema` is that schema. Every output
+  field is required and optional ones are nullable — a strict schema has no optional properties.
+- OpenRouter asks for `response_format` `json_schema` with `strict: true` first; a 400 or 404 means the
+  model has no strict mode, and the same schema goes out once as a forced function call. That refusal
+  is remembered for the life of the generator.
+- A missing `OPENROUTER_API_KEY` is a `GenerationNotConfiguredError` raised before any request, and the
+  job says so in a sentence.
+- The model's reasoning is spent from `max_tokens`, so a budget sized to the answer alone can be gone
+  before the answer starts. `finish_reason: length` is a `GenerationTruncatedError` and its own
+  sentence — never "returned nothing" — and an extraction carries the larger
+  `SIDEREAL_GENERATE_EXTRACT_MAX_TOKENS` budget. The `claude` backend clamps that to the 21,333
+  above which its SDK demands streaming, which nothing here does yet.
+- Every model call leaves one INFO line carrying `finish_reason` and `usage`: a paid call says what it
+  cost without anyone raising the log level.
 - A reply with no tool call, or one that fails validation, raises `GenerationError`. A half-filled
   artefact is never returned.
 - Prompts are module-level constants in `prompts.py`, not built at call time.
@@ -43,7 +58,19 @@ Sits above sidereal-ingest. Imports core and ingest only.
   appended; a second refusal is a `GenerationError` and no paper is written.
 - A render that fails leaves the row, a `generated_from.warning` and a succeeded job — the structure
   is the work. A `rerender_paper` failure is the tutor's to see, so it raises.
-- `paper_extract` carries exactly one document and no student; every other kind carries a student.
-  Either mismatch is a `JobInputError` whose sentence the tutor reads.
+- `paper_extract` carries one document and no student, or two with the mark scheme second; every
+  other kind carries a student. Either mismatch is a `JobInputError` whose sentence the tutor reads.
+- Maths is normalised before any compile and after every repair: inside `$...$`, a name Typst does
+  not know becomes quoted text and `dx` becomes `dif x`. The compiler stops at the first unknown
+  variable, so a fault left in costs a whole round-trip to the model to find.
+- Source the compiler still refuses is sent back with its diagnostics for a repair that may change
+  only the maths, at most twice, at extraction and at every later render. What compiled is written
+  back to the row, so a tutor's next render starts from source the renderer accepts.
+- A job files what its calls cost in `generated_from.usage`, summed over the extraction, its retry
+  and every repair. A price is filed only when every call in the job carried one.
+- Transcription asks for little thinking: an extraction and a repair send
+  `SIDEREAL_GENERATE_REASONING` (`low` by default) and file the effort they used, because reasoning
+  is spent from the same budget as the answer. Writing homework, feedback or a plan sends no effort
+  and leaves the depth to the model.
 - `strict_schema` is what makes every property required: the canonical models carry defaults so a
   hand-edited structure still reads, and a strict schema has no optional properties.

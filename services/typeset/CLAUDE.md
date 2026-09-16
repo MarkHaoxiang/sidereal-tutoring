@@ -28,8 +28,14 @@
   and nowhere else. The helpers a rendered source may call are `paper-question`, `part`,
   `subpart`, `answerlines`, `scheme-question`, `scheme-row` and `scheme-note`; adding a helper
   means adding it to the `.typ` file, not to the Rust.
-- **`questions.typ` defines the question helpers once** and is concatenated before `paper.typ`
-  and `worksheet.typ`, so both kinds lay questions out identically.
+- **`questions.typ` defines the question helpers once** and is concatenated before `paper.typ`,
+  `worksheet.typ` and `fragment.typ`, so every kind lays questions out identically.
+- **A fragment is the paper, cropped.** `question` and `markup` call the same helpers through
+  `fragment.typ`, whose page is the A4 text width (`210mm - 4.4cm`) and `height: auto`, so an
+  svg fragment is always one page. Its margin is the overhang Typst's cap-height-to-baseline
+  line box leaves outside the page, not padding — widening it would stop matching the paper.
+- **`mark_scheme` is a sibling of `document`, not a field of it**, and belongs to
+  `kind: "question"` alone; sent with any other kind it is a 422 at `mark_scheme`.
 - **Deserialization is `deny_unknown_fields` everywhere**: a field the structure does not have
   is a 422 naming its path, never a dropped value. Field names are snake_case and stable —
   they are mirrored by the pydantic and TypeScript models.

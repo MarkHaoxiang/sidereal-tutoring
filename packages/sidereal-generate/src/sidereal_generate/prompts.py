@@ -4,6 +4,14 @@ from sidereal_core.models import Document
 
 from sidereal_generate.models import GenerationRequest
 
+_TYPST_MATHS = (
+    "Maths is Typst, not LaTeX: `$x^2 - 5x + 6$` inline and `$ ... $` with spaces inside the "
+    "delimiters for a display line. Use `frac(a, b)` or `a / b`, `sqrt(x)`, `integral`, `sum`, "
+    "`pi`, `alpha`, `->`, `<=`. A backslash command such as `\\frac` is a compile error, and so "
+    "is a `#` call: a field is text, never Typst code. Letters written together are one name, so "
+    'a segment, product or pair of points is `$P Q$` or `$"PQ"$` — `$PQ$` is an unknown variable '
+    "and will not compile."
+)
 _AUDIENCE = (
     "You write for a private tutor and their student. Plain language, no jargon, no filler. "
     "Use only the material you are given; if it does not cover something, leave it out rather "
@@ -28,9 +36,7 @@ HOMEWORK_TYPST_PROMPT = (
     "that. Two helpers are already in scope and are the only ones you may call: `#question[...]` "
     "opens a numbered question, and `#answerlines(n)` leaves n ruled lines for the student's "
     "working. Follow every `#question[...]` with an `#answerlines(n)` sized to the work it asks "
-    "for. Write maths in Typst syntax, not LaTeX: `$x^2 - 5x + 6$` inline and `$ ... $` on its "
-    "own line for display, `frac(a, b)`, `sqrt(x)`, `integral`, `alpha`. A backslash command "
-    "such as `\\frac` is a compile error. Ordinary prose is written plainly; `*bold*` and "
+    f"for. {_TYPST_MATHS} Ordinary prose is written plainly; `*bold*` and "
     "`_italic_` are the only markup you need. The worked answers go in the `questions` list, "
     "never in `content`: the student's copy is what you are writing."
 )
@@ -61,10 +67,8 @@ PAPER_PROMPT = (
     "part. `marks` is the figure in the margin, for the question when it carries one and for "
     "each part when they do. `answer_lines` is how many ruled lines the student's working needs, "
     "at most 60, and is left null where the paper gives no answer space.\n"
-    "Maths is Typst, not LaTeX: `$x^2 - 5x + 6$` inline, `$ ... $` with spaces inside the "
-    "delimiters for a display line, `frac(a, b)`, `sqrt(x)`, `integral`, `alpha`, `<=`. A "
-    "backslash command such as `\\frac` is a compile error. Prose is written plainly, with "
-    "`*bold*` and `_italic_` the only markup you need; a field is text, never Typst code.\n"
+    f"{_TYPST_MATHS} Prose is written plainly, with "
+    "`*bold*` and `_italic_` the only markup you need.\n"
     "A mark scheme answers the paper by the same numbers and labels, and its `marks` say how "
     "the marks for a part are earned."
 )
@@ -73,17 +77,33 @@ HOMEWORK_TOOL = "emit_homework"
 FEEDBACK_TOOL = "emit_feedback"
 PLAN_TOOL = "emit_plan"
 PAPER_TOOL = "emit_paper"
+PAPER_REPAIR = (
+    "The paper you returned does not compile. Return the whole structure again with only the "
+    "maths corrected: every other field must come back byte for byte as it is. Do not answer, "
+    "reword, add or drop a question. The compiler stops at the first fault it meets, so fix "
+    "every one it names *and* every other instance of the same mistake anywhere in the paper — "
+    "one round has to clear the whole class. "
+    f"{_TYPST_MATHS}\n"
+    "The compiler reported:"
+)
 PAPER_RETRY = (
     "Your previous answer did not fit the structure. Return the whole paper again, corrected. "
     "The validator reported:"
 )
 
 
-def render_document(document: Document) -> str:
-    """The one document a paper is read out of."""
+def render_document(document: Document, mark_scheme: Document | None = None) -> str:
+    """The paper, and the mark scheme beside it when the tutor filed one."""
+    parts = [_tagged("document", document)]
+    if mark_scheme is not None:
+        parts.append(_tagged("mark_scheme", mark_scheme))
+    return "\n".join(parts)
+
+
+def _tagged(tag: str, document: Document) -> str:
     return (
-        f'<document id="{document.id}" kind="{document.kind.value}" title="{document.title}">\n'
-        f"{document.text or ''}\n</document>"
+        f'<{tag} id="{document.id}" kind="{document.kind.value}" title="{document.title}">\n'
+        f"{document.text or ''}\n</{tag}>"
     )
 
 

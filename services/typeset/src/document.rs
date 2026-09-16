@@ -12,6 +12,8 @@ pub enum DocumentKind {
     Paper,
     MarkScheme,
     Worksheet,
+    Question,
+    Markup,
 }
 
 #[derive(Debug)]
@@ -19,6 +21,11 @@ pub enum Document {
     Paper(Paper),
     MarkScheme(MarkScheme),
     Worksheet(Worksheet),
+    Question {
+        question: Question,
+        scheme: Option<MarkSchemeQuestion>,
+    },
+    Markup(Markup),
 }
 
 #[derive(Debug, Deserialize)]
@@ -86,6 +93,12 @@ pub struct MarkSchemePart {
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct Markup {
+    pub text: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Worksheet {
     pub title: String,
     pub student: Option<String>,
@@ -118,7 +131,8 @@ impl Document {
         match self {
             Self::Paper(paper) => questions(&paper.questions, &mut errors),
             Self::Worksheet(worksheet) => questions(&worksheet.questions, &mut errors),
-            Self::MarkScheme(_) => {}
+            Self::Question { question, .. } => question_errors(question, "", &mut errors),
+            Self::MarkScheme(_) | Self::Markup(_) => {}
         }
         errors
     }
@@ -126,29 +140,42 @@ impl Document {
 
 fn questions(questions: &[Question], errors: &mut Vec<ValidationError>) {
     for (index, question) in questions.iter().enumerate() {
-        let path = format!("questions[{index}]");
-        answer_lines(question.answer_lines, &path, errors);
-        for (index, part) in question.parts.iter().enumerate() {
-            let path = format!("{path}.parts[{index}]");
+        question_errors(question, &format!("questions[{index}]"), errors);
+    }
+}
+
+/// `root` is empty for a question sent on its own, so a fragment's errors are addressed the way
+/// the fragment is indexed: `parts[0].answer_lines`, not `questions[0].parts[0].answer_lines`.
+fn question_errors(question: &Question, root: &str, errors: &mut Vec<ValidationError>) {
+    answer_lines(question.answer_lines, root, errors);
+    for (index, part) in question.parts.iter().enumerate() {
+        let path = field(root, &format!("parts[{index}]"));
+        answer_lines(part.answer_lines, &path, errors);
+        for (index, part) in part.parts.iter().enumerate() {
+            let path = field(&path, &format!("parts[{index}]"));
             answer_lines(part.answer_lines, &path, errors);
-            for (index, part) in part.parts.iter().enumerate() {
-                let path = format!("{path}.parts[{index}]");
-                answer_lines(part.answer_lines, &path, errors);
-                if !part.parts.is_empty() {
-                    errors.push(ValidationError::new(
-                        format!("{path}.parts"),
-                        "parts nest one level only: a part of a part has no parts of its own",
-                    ));
-                }
+            if !part.parts.is_empty() {
+                errors.push(ValidationError::new(
+                    field(&path, "parts"),
+                    "parts nest one level only: a part of a part has no parts of its own",
+                ));
             }
         }
+    }
+}
+
+fn field(path: &str, name: &str) -> String {
+    if path.is_empty() {
+        name.to_owned()
+    } else {
+        format!("{path}.{name}")
     }
 }
 
 fn answer_lines(lines: Option<u32>, path: &str, errors: &mut Vec<ValidationError>) {
     if lines.is_some_and(|lines| lines > MAX_ANSWER_LINES) {
         errors.push(ValidationError::new(
-            format!("{path}.answer_lines"),
+            field(path, "answer_lines"),
             format!("at most {MAX_ANSWER_LINES} ruled lines"),
         ));
     }

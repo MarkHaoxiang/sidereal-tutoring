@@ -5,6 +5,7 @@ const QUESTIONS: &str = include_str!("../template/questions.typ");
 const PAPER: &str = include_str!("../template/paper.typ");
 const MARK_SCHEME: &str = include_str!("../template/mark_scheme.typ");
 const WORKSHEET: &str = include_str!("../template/worksheet.typ");
+const FRAGMENT: &str = include_str!("../template/fragment.typ");
 
 pub fn wrap_homework(title: &str, student: Option<&str>, due: Option<&str>, body: &str) -> String {
     format!(
@@ -26,6 +27,11 @@ pub(crate) fn worksheet_preamble() -> String {
 
 pub(crate) fn mark_scheme_preamble() -> String {
     MARK_SCHEME.to_owned()
+}
+
+/// A fragment may carry a question and its scheme entry, so it gets both sets of helpers.
+pub(crate) fn fragment_preamble() -> String {
+    format!("{QUESTIONS}\n{MARK_SCHEME}\n{FRAGMENT}")
 }
 
 /// A Typst string literal, or `none` for an absent value.

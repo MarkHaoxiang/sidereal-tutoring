@@ -56,8 +56,8 @@ def test_a_paper_extract_job_needs_no_student_and_writes_the_paper(
     assert fake_directus.files[paper["mark_scheme_pdf"]][1].startswith(b"%PDF")
 
 
-@pytest.mark.parametrize("documents", [[], ["a", "b"]])
-def test_a_paper_extract_job_takes_exactly_one_document(
+@pytest.mark.parametrize("documents", [[], ["a", "b", "b"]])
+def test_a_paper_extract_job_takes_one_document_or_two(
     client: TestClient,
     fake_directus: FakeDirectus,
     document_id: UUID,
@@ -71,6 +71,28 @@ def test_a_paper_extract_job_takes_exactly_one_document(
     assert response.status_code == 422
     assert response.json()["detail"]["code"] == "document_required"
     assert fake_directus.rows(Collection.GENERATION_JOBS) == []
+
+
+def test_a_paper_extract_job_accepts_a_mark_scheme_beside_the_paper(
+    client: TestClient,
+    fake_directus: FakeDirectus,
+    document_id: UUID,
+    auth: dict[str, str],
+) -> None:
+    scheme = fake_directus.seed(
+        Collection.DOCUMENTS,
+        {"title": "Mark scheme", "kind": "upload", "status": "ready", "text": "1 (a) 3x^2 (2)"},
+    )
+
+    response = client.post(
+        "/api/jobs/paper_extract",
+        headers=auth,
+        json={"document_ids": [str(document_id), scheme["id"]]},
+    )
+
+    assert response.status_code == 202
+    job = fake_directus.rows(Collection.GENERATION_JOBS)[0]
+    assert job["input"]["documents"] == [str(document_id), scheme["id"]]
 
 
 def test_every_other_kind_still_needs_a_student(

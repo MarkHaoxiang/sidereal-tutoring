@@ -1,19 +1,25 @@
 import { Pencil } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Outlet, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
 import { Provenance } from "@/components/artefacts/Provenance";
 import { addedByName } from "@/components/material/authors";
-import { MarkSchemeEditor } from "@/components/papers/MarkSchemeEditor";
-import { QuestionsEditor } from "@/components/papers/QuestionsEditor";
 import { WorksheetDialog } from "@/components/papers/WorksheetDialog";
 import { buildPatch, paperDraft } from "@/components/papers/draft";
 import type { PaperDraft } from "@/components/papers/draft";
-import { Button, ConfirmDialog, Field, Input, PageHeader, PdfView, SkeletonRows, StatusChip, Textarea } from "@/components/ui";
+import {
+  Button,
+  ConfirmDialog,
+  Input,
+  PageHeader,
+  SkeletonRows,
+  StatusChip,
+  TabPanel,
+  Tabs,
+} from "@/components/ui";
 import { apiError } from "@/lib/api";
 import { callerRole, useAuth } from "@/lib/auth-context";
-import { fileIdOf } from "@/lib/files";
 import { formatDateTime } from "@/lib/format";
 import {
   relationId,
@@ -25,8 +31,11 @@ import {
 } from "@/lib/queries";
 import type { PaperStatus } from "@/lib/schema";
 
+import type { PaperTabContext } from "./paper-tabs/context";
 import pageStyles from "./page.module.css";
 import styles from "@/components/papers/papers.module.css";
+
+const PANEL_ID = "paper-sections";
 
 // Where a paper goes next, and what the button that takes it there says.
 const NEXT_STATUS: Record<PaperStatus, { label: string; status: PaperStatus } | null> = {
@@ -47,7 +56,6 @@ export function PaperDetailPage() {
 
   const [draft, setDraft] = useState<PaperDraft | null>(null);
   const [baseline, setBaseline] = useState("");
-  const [tab, setTab] = useState<"questions" | "scheme">("questions");
   const [renaming, setRenaming] = useState(false);
   const [problems, setProblems] = useState<string[]>([]);
   const [asking, setAsking] = useState(false);
@@ -70,13 +78,21 @@ export function PaperDetailPage() {
     setProblems([]);
   }, [paper]);
 
+  const tabs = useMemo(
+    () => [
+      { to: `/library/papers/${paperId ?? ""}/questions`, label: "Questions" },
+      { to: `/library/papers/${paperId ?? ""}/scheme`, label: "Mark scheme" },
+      { to: `/library/papers/${paperId ?? ""}/source`, label: "Source" },
+      { to: `/library/papers/${paperId ?? ""}/printable`, label: "Printable" },
+    ],
+    [paperId]
+  );
+
   const dirty = draft !== null && JSON.stringify(draft) !== baseline;
   const busy = save.isPending || render.isPending;
   const authorId = relationId(paper?.user_created);
   const canDelete = callerRole(me) === "admin" || (user !== null && authorId === user.id);
   const next = paper ? NEXT_STATUS[paper.status] : null;
-  const renderedPdf = fileIdOf(paper?.rendered_pdf);
-  const schemePdf = fileIdOf(paper?.mark_scheme_pdf);
 
   const edit = (patch: Partial<PaperDraft>) => {
     // What the last Save refused is about the draft as it was, so an edit clears it.
@@ -146,12 +162,28 @@ export function PaperDetailPage() {
     }
   };
 
+  const context: PaperTabContext | null =
+    paper && draft
+      ? {
+          paper,
+          draft,
+          edit,
+          rendering: render.isPending,
+          rerender: () => {
+            void rerender();
+          },
+          makeWorksheet: () => {
+            setAsking(true);
+          },
+        }
+      : null;
+
   return (
     <div>
       {isLoading ? <SkeletonRows count={3} label="Loading the paper" /> : null}
       {isError ? <p className={pageStyles.status}>Could not load this paper.</p> : null}
 
-      {paper && draft ? (
+      {paper && draft && context ? (
         <>
           <PageHeader
             back={{ to: "/library/papers", label: "Papers" }}
@@ -264,161 +296,12 @@ export function PaperDetailPage() {
               </ul>
             ) : null}
 
-            <section className={styles.section}>
-              <div className={styles.sectionHeader}>
-                <h2 className={styles.sectionTitle}>Details</h2>
-              </div>
-              <div className={styles.meta}>
-                <Field label="Source">
-                  <Input
-                    value={draft.source}
-                    placeholder="Where this paper came from"
-                    onChange={(event) => {
-                      edit({ source: event.target.value });
-                    }}
-                  />
-                </Field>
-                <Field label="Board">
-                  <Input
-                    value={draft.board}
-                    onChange={(event) => {
-                      edit({ board: event.target.value });
-                    }}
-                  />
-                </Field>
-                <Field label="Year">
-                  <Input
-                    type="number"
-                    min={0}
-                    step={1}
-                    value={draft.year}
-                    onChange={(event) => {
-                      edit({ year: event.target.value });
-                    }}
-                  />
-                </Field>
-                <Field label="Time (minutes)">
-                  <Input
-                    type="number"
-                    min={0}
-                    step={1}
-                    value={draft.timeMinutes}
-                    onChange={(event) => {
-                      edit({ timeMinutes: event.target.value });
-                    }}
-                  />
-                </Field>
-                <Field label="Total marks">
-                  <Input
-                    type="number"
-                    min={0}
-                    step={1}
-                    value={draft.totalMarks}
-                    onChange={(event) => {
-                      edit({ totalMarks: event.target.value });
-                    }}
-                  />
-                </Field>
-                <Field label="Instructions" className={styles.metaWide}>
-                  <Textarea
-                    rows={2}
-                    value={draft.instructions}
-                    placeholder="What the paper tells a candidate before question 1."
-                    onChange={(event) => {
-                      edit({ instructions: event.target.value });
-                    }}
-                  />
-                </Field>
-              </div>
-            </section>
-
-            <section className={styles.section}>
-              <div className={styles.switch} role="tablist" aria-label="Questions or mark scheme">
-                <button
-                  type="button"
-                  role="tab"
-                  className={styles.switchButton}
-                  aria-selected={tab === "questions"}
-                  onClick={() => {
-                    setTab("questions");
-                  }}
-                >
-                  Questions
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  className={styles.switchButton}
-                  aria-selected={tab === "scheme"}
-                  onClick={() => {
-                    setTab("scheme");
-                  }}
-                >
-                  Mark scheme
-                </button>
-              </div>
-
-              {tab === "questions" ? (
-                <QuestionsEditor
-                  questions={draft.questions}
-                  onChange={(questions) => {
-                    edit({ questions });
-                  }}
-                />
-              ) : (
-                <MarkSchemeEditor
-                  scheme={draft.scheme}
-                  numbers={draft.questions.map((question) => question.number).filter(Boolean)}
-                  onChange={(scheme) => {
-                    edit({ scheme });
-                  }}
-                />
-              )}
-            </section>
-
-            <section className={styles.section}>
-              <div className={styles.sectionHeader}>
-                <h2 className={styles.sectionTitle}>Printable</h2>
-                <div className={styles.headerActions}>
-                  <Button
-                    onClick={() => {
-                      setAsking(true);
-                    }}
-                  >
-                    Make a worksheet
-                  </Button>
-                  <Button
-                    loading={render.isPending}
-                    onClick={() => {
-                      void rerender();
-                    }}
-                  >
-                    Re-render
-                  </Button>
-                </div>
-              </div>
-
-              {renderedPdf === null && schemePdf === null ? (
-                <p className={styles.status}>
-                  There are no PDFs yet. Re-render to make them from the structure above.
-                </p>
-              ) : (
-                <div className={styles.pdfs}>
-                  {renderedPdf ? (
-                    <div className={styles.pdf}>
-                      <p className={styles.pdfLabel}>The paper</p>
-                      <PdfView fileId={renderedPdf} fallbackName={`${paper.title}.pdf`} />
-                    </div>
-                  ) : null}
-                  {schemePdf ? (
-                    <div className={styles.pdf}>
-                      <p className={styles.pdfLabel}>The mark scheme</p>
-                      <PdfView fileId={schemePdf} fallbackName={`${paper.title} mark scheme.pdf`} />
-                    </div>
-                  ) : null}
-                </div>
-              )}
-            </section>
+            <div>
+              <Tabs label="Paper sections" items={tabs} panelId={PANEL_ID} />
+              <TabPanel id={PANEL_ID}>
+                <Outlet context={context} />
+              </TabPanel>
+            </div>
           </div>
 
           {canDelete ? (

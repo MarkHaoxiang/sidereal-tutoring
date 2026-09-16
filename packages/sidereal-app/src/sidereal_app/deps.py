@@ -13,7 +13,7 @@ from sidereal_core.logins import CallerRole, Identity, identify
 from sidereal_core.models import DirectusUser
 from sidereal_core.settings import directus_settings
 from sidereal_core.typeset import TypesetClient
-from sidereal_generate.jobs import Generators, default_generators
+from sidereal_generate.jobs import Generators
 from sidereal_ingest.base import Ingester
 
 from sidereal_app.api.errors import (
@@ -67,8 +67,9 @@ async def get_current_user(
         ) from exc
 
 
-def get_generators() -> Generators:
-    return default_generators()
+def get_generators(request: Request) -> Generators:
+    """Built once by the lifespan: the backend's client and its pool outlive the request."""
+    return cast("Generators", request.app.state.generators)
 
 
 def get_typeset(request: Request) -> TypesetClient:

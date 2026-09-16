@@ -255,6 +255,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/typeset/render": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Render Canonical
+         * @description A canonical structure previewed in the house style. Nothing is read or stored.
+         */
+        post: operations["render_canonical_api_typeset_render_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/homework/{homework_id}/compile": {
         parameters: {
             query?: never;
@@ -287,6 +307,8 @@ export interface paths {
         /**
          * Render Paper
          * @description Render the stored structure again — what a tutor runs after reviewing an extraction.
+         *
+         *     Maths the compiler refuses is repaired against its diagnostics before it gives up.
          */
         post: operations["render_paper_api_papers__paper_id__render_post"];
         delete?: never;
@@ -370,6 +392,133 @@ export interface components {
          * @enum {string}
          */
         CallerRole: "admin" | "tutor" | "student";
+        /** CanonicalMarkScheme */
+        CanonicalMarkScheme: {
+            /** Title */
+            title: string;
+            /**
+             * Questions
+             * @default []
+             */
+            questions?: components["schemas"]["CanonicalMarkSchemeQuestion"][];
+        };
+        /** CanonicalMarkSchemePart */
+        CanonicalMarkSchemePart: {
+            /** Label */
+            label: string;
+            /** Answer */
+            answer: string;
+            /** Marks */
+            marks?: number | null;
+            /** Notes */
+            notes?: string | null;
+        };
+        /** CanonicalMarkSchemeQuestion */
+        CanonicalMarkSchemeQuestion: {
+            /** Number */
+            number: string;
+            /**
+             * Parts
+             * @default []
+             */
+            parts?: components["schemas"]["CanonicalMarkSchemePart"][];
+            /** Answer */
+            answer?: string | null;
+            /** Notes */
+            notes?: string | null;
+        };
+        /**
+         * CanonicalMarkup
+         * @description Typst markup on its own, for a fragment that has no structure to walk.
+         */
+        CanonicalMarkup: {
+            /** Text */
+            text: string;
+        };
+        /** CanonicalPaper */
+        CanonicalPaper: {
+            /** Title */
+            title: string;
+            /** Source */
+            source?: string | null;
+            /** Board */
+            board?: string | null;
+            /** Year */
+            year?: number | null;
+            /** Time Minutes */
+            time_minutes?: number | null;
+            /** Total Marks */
+            total_marks?: number | null;
+            /** Instructions */
+            instructions?: string | null;
+            /**
+             * Questions
+             * @default []
+             */
+            questions?: components["schemas"]["CanonicalQuestion"][];
+        };
+        /** CanonicalPart */
+        CanonicalPart: {
+            /** Label */
+            label: string;
+            /** Text */
+            text: string;
+            /** Marks */
+            marks?: number | null;
+            /** Answer Lines */
+            answer_lines?: number | null;
+            /**
+             * Parts
+             * @default []
+             */
+            parts?: components["schemas"]["CanonicalSubPart"][];
+        };
+        /** CanonicalQuestion */
+        CanonicalQuestion: {
+            /** Number */
+            number: string;
+            /** Stem */
+            stem?: string | null;
+            /** Marks */
+            marks?: number | null;
+            /**
+             * Parts
+             * @default []
+             */
+            parts?: components["schemas"]["CanonicalPart"][];
+            /** Answer Lines */
+            answer_lines?: number | null;
+        };
+        /**
+         * CanonicalSubPart
+         * @description `(a)` then `(i)`: parts nest one level, so a part of a part holds none of its own.
+         */
+        CanonicalSubPart: {
+            /** Label */
+            label: string;
+            /** Text */
+            text: string;
+            /** Marks */
+            marks?: number | null;
+            /** Answer Lines */
+            answer_lines?: number | null;
+        };
+        /** CanonicalWorksheet */
+        CanonicalWorksheet: {
+            /** Title */
+            title: string;
+            /** Student */
+            student?: string | null;
+            /** Due */
+            due?: string | null;
+            /** Intro */
+            intro?: string | null;
+            /**
+             * Questions
+             * @default []
+             */
+            questions?: components["schemas"]["CanonicalQuestion"][];
+        };
         /** DirectusHealth */
         DirectusHealth: {
             /** Ok */
@@ -647,6 +796,36 @@ export interface components {
             /** Password */
             password: string;
         };
+        /** MarkSchemeRenderRequest */
+        MarkSchemeRenderRequest: {
+            /**
+             * Output
+             * @default svg
+             * @enum {string}
+             */
+            output?: "svg" | "source";
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "mark_scheme";
+            document: components["schemas"]["CanonicalMarkScheme"];
+        };
+        /** MarkupRenderRequest */
+        MarkupRenderRequest: {
+            /**
+             * Output
+             * @default svg
+             * @enum {string}
+             */
+            output?: "svg" | "source";
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "markup";
+            document: components["schemas"]["CanonicalMarkup"];
+        };
         /** Paper */
         Paper: {
             /** Title */
@@ -697,6 +876,21 @@ export interface components {
             /** User Updated */
             user_updated?: string | null;
         };
+        /** PaperRenderRequest */
+        PaperRenderRequest: {
+            /**
+             * Output
+             * @default svg
+             * @enum {string}
+             */
+            output?: "svg" | "source";
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "paper";
+            document: components["schemas"]["CanonicalPaper"];
+        };
         /**
          * PaperStatus
          * @enum {string}
@@ -706,6 +900,22 @@ export interface components {
         PasswordRequest: {
             /** Password */
             password: string;
+        };
+        /** QuestionRenderRequest */
+        QuestionRenderRequest: {
+            /**
+             * Output
+             * @default svg
+             * @enum {string}
+             */
+            output?: "svg" | "source";
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "question";
+            document: components["schemas"]["CanonicalQuestion"];
+            mark_scheme?: components["schemas"]["CanonicalMarkSchemeQuestion"] | null;
         };
         /** StudentLogin */
         StudentLogin: {
@@ -785,6 +995,16 @@ export interface components {
             /** Pages */
             pages: string[];
         };
+        /**
+         * TypstRender
+         * @description `pages` is empty when `output` is `source`, and `source` is null when it is `svg`.
+         */
+        TypstRender: {
+            /** Pages */
+            pages: string[];
+            /** Source */
+            source: string | null;
+        };
         /** TypstRequest */
         TypstRequest: {
             /** Source */
@@ -812,6 +1032,21 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** WorksheetRenderRequest */
+        WorksheetRenderRequest: {
+            /**
+             * Output
+             * @default svg
+             * @enum {string}
+             */
+            output?: "svg" | "source";
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "worksheet";
+            document: components["schemas"]["CanonicalWorksheet"];
         };
         /** WorksheetRequest */
         WorksheetRequest: {
@@ -1304,6 +1539,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TypstPreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    render_canonical_api_typeset_render_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PaperRenderRequest"] | components["schemas"]["MarkSchemeRenderRequest"] | components["schemas"]["WorksheetRenderRequest"] | components["schemas"]["QuestionRenderRequest"] | components["schemas"]["MarkupRenderRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TypstRender"];
                 };
             };
             /** @description Validation Error */

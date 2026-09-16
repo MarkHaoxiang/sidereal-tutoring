@@ -34,6 +34,7 @@ def test_the_schema_names_every_route(client: TestClient) -> None:
         "/api/papers/{paper_id}/render",
         "/api/papers/{paper_id}/worksheet",
         "/api/typeset/preview",
+        "/api/typeset/render",
         "/api/homework/{homework_id}/compile",
         "/api/admin/health",
         "/api/admin/tutors",

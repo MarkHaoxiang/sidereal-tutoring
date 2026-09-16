@@ -13,7 +13,10 @@ use serde_json::Value;
 use serde_path_to_error::{Path, Segment};
 
 use crate::compile::{Compiled, Diagnostic, Output, compile};
-use crate::document::{Document, DocumentKind, MarkScheme, Paper, ValidationError, Worksheet};
+use crate::document::{
+    Document, DocumentKind, MarkScheme, MarkSchemeQuestion, Markup, Paper, Question,
+    ValidationError, Worksheet,
+};
 use crate::render::render;
 use crate::template::wrap_homework;
 
@@ -155,6 +158,10 @@ fn render_pdf() -> RenderOutput {
 pub struct RenderRequest {
     pub kind: DocumentKind,
     pub document: Value,
+    /// A `question` fragment's scheme entry, rendered under the question. It belongs to no
+    /// other kind.
+    #[serde(default)]
+    pub mark_scheme: Option<Value>,
     #[serde(default = "render_pdf")]
     pub output: RenderOutput,
 }
@@ -163,12 +170,29 @@ pub struct RenderRequest {
 /// with the path to it instead of a bare message.
 async fn render_document(body: Bytes) -> Result<Response, ApiError> {
     let request: RenderRequest = from_slice(&body)?;
+    let scheme = request.mark_scheme;
+    if scheme.is_some() && request.kind != DocumentKind::Question {
+        return Err(ApiError::Invalid(vec![ValidationError {
+            path: "mark_scheme".to_owned(),
+            message: "a mark scheme entry belongs to kind \"question\" only".to_owned(),
+        }]));
+    }
+
     let document = match request.kind {
-        DocumentKind::Paper => Document::Paper(from_value::<Paper>(request.document)?),
+        DocumentKind::Paper => Document::Paper(from_value::<Paper>(request.document, "")?),
         DocumentKind::MarkScheme => {
-            Document::MarkScheme(from_value::<MarkScheme>(request.document)?)
+            Document::MarkScheme(from_value::<MarkScheme>(request.document, "")?)
         }
-        DocumentKind::Worksheet => Document::Worksheet(from_value::<Worksheet>(request.document)?),
+        DocumentKind::Worksheet => {
+            Document::Worksheet(from_value::<Worksheet>(request.document, "")?)
+        }
+        DocumentKind::Question => Document::Question {
+            question: from_value::<Question>(request.document, "")?,
+            scheme: scheme
+                .map(|scheme| from_value::<MarkSchemeQuestion>(scheme, "mark_scheme"))
+                .transpose()?,
+        },
+        DocumentKind::Markup => Document::Markup(from_value::<Markup>(request.document, "")?),
     };
 
     let errors = document.validate();
@@ -203,21 +227,27 @@ fn from_slice<T: DeserializeOwned>(bytes: &[u8]) -> Result<T, ApiError> {
             serde_json::error::Category::Syntax | serde_json::error::Category::Eof => {
                 ApiError::BadJson(error.inner().to_string())
             }
-            _ => ApiError::Invalid(vec![invalid(error)]),
+            _ => ApiError::Invalid(vec![invalid(error, "")]),
         }
     })
 }
 
 /// The document is deserialized on its own so the reported paths are rooted at the document,
-/// as the field names in the structure are.
-fn from_value<T: DeserializeOwned>(document: Value) -> Result<T, ApiError> {
+/// as the field names in the structure are; `root` names the request field a sibling structure
+/// arrived in, so a fragment's scheme entry is still addressed from the body.
+fn from_value<T: DeserializeOwned>(document: Value, root: &str) -> Result<T, ApiError> {
     serde_path_to_error::deserialize(document)
-        .map_err(|error| ApiError::Invalid(vec![invalid(error)]))
+        .map_err(|error| ApiError::Invalid(vec![invalid(error, root)]))
 }
 
-fn invalid(error: serde_path_to_error::Error<serde_json::Error>) -> ValidationError {
+fn invalid(error: serde_path_to_error::Error<serde_json::Error>, root: &str) -> ValidationError {
+    let path = path(error.path());
     ValidationError {
-        path: path(error.path()),
+        path: match (root, path.as_str()) {
+            ("", _) => path,
+            (root, "") => root.to_owned(),
+            (root, path) => format!("{root}.{path}"),
+        },
         message: error.inner().to_string(),
     }
 }

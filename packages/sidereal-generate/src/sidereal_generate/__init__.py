@@ -1,10 +1,13 @@
 from sidereal_generate.base import (
     FeedbackGenerator,
     GenerationError,
+    GenerationNotConfiguredError,
+    GenerationTruncatedError,
     Generator,
     HomeworkGenerator,
     PaperExtractor,
     PlanGenerator,
+    strict_schema,
 )
 from sidereal_generate.claude import (
     AnthropicGenerator,
@@ -13,7 +16,6 @@ from sidereal_generate.claude import (
     homework_generator,
     paper_extractor,
     plan_generator,
-    strict_schema,
 )
 from sidereal_generate.fake import (
     FailingGenerator,
@@ -39,6 +41,11 @@ from sidereal_generate.models import (
     PaperExtraction,
     PlanOutput,
 )
+from sidereal_generate.openrouter import (
+    OpenRouterCall,
+    OpenRouterGenerator,
+    OpenRouterPaperExtractor,
+)
 from sidereal_generate.papers import (
     PaperError,
     WorksheetResult,
@@ -47,9 +54,13 @@ from sidereal_generate.papers import (
     rerender_paper,
 )
 from sidereal_generate.settings import (
+    DEFAULT_EXTRACT_MAX_TOKENS,
     DEFAULT_MODEL,
+    DEFAULT_OPENROUTER_MODEL,
     GenerateBackend,
     GenerateSettings,
+    OpenRouterSettings,
+    ReasoningEffort,
     generate_settings,
 )
 from sidereal_generate.typst import (
@@ -60,9 +71,12 @@ from sidereal_generate.typst import (
     recompile_homework,
     upload_pdf,
 )
+from sidereal_generate.usage import UsageTally
 
 __all__ = [
+    "DEFAULT_EXTRACT_MAX_TOKENS",
     "DEFAULT_MODEL",
+    "DEFAULT_OPENROUTER_MODEL",
     "AnthropicGenerator",
     "AnthropicPaperExtractor",
     "Compiled",
@@ -78,7 +92,9 @@ __all__ = [
     "GenerateSettings",
     "GeneratedQuestion",
     "GenerationError",
+    "GenerationNotConfiguredError",
     "GenerationRequest",
+    "GenerationTruncatedError",
     "Generator",
     "Generators",
     "HomeworkGenerator",
@@ -86,11 +102,17 @@ __all__ = [
     "JobInput",
     "JobInputError",
     "NotTypstError",
+    "OpenRouterCall",
+    "OpenRouterGenerator",
+    "OpenRouterPaperExtractor",
+    "OpenRouterSettings",
     "PaperError",
     "PaperExtraction",
     "PaperExtractor",
     "PlanGenerator",
     "PlanOutput",
+    "ReasoningEffort",
+    "UsageTally",
     "WorksheetResult",
     "compile_body",
     "default_generators",

@@ -10,6 +10,7 @@ from sidereal_core.canonical import (
     MAX_ANSWER_LINES,
     CanonicalMarkScheme,
     CanonicalMarkSchemeQuestion,
+    CanonicalMarkup,
     CanonicalPaper,
     CanonicalPart,
     CanonicalQuestion,
@@ -122,6 +123,41 @@ async def test_a_worksheet_renders_to_source_and_a_mark_scheme_to_pages() -> Non
     assert "A. Tutee" in source
     assert len(pages) == 2
     assert [call["kind"] for call in fake.rendered] == ["worksheet", "mark_scheme"]
+
+
+async def test_a_fragment_is_a_kind_of_its_own() -> None:
+    fake = FakeTypeset()
+
+    async with fake.client() as client:
+        pages = await client.render(
+            RenderKind.QUESTION,
+            PAPER.questions[0],
+            RenderOutput.SVG,
+            mark_scheme=CanonicalMarkSchemeQuestion(number="1", answer="$3 x^2$"),
+        )
+        await client.render(
+            RenderKind.MARKUP, CanonicalMarkup(text="$x^2 - 5x + 6$"), RenderOutput.SVG
+        )
+
+    assert len(pages) == 1
+    assert fake.rendered[0]["mark_scheme"] == {
+        "number": "1",
+        "parts": [],
+        "answer": "$3 x^2$",
+        "notes": None,
+    }
+    assert "mark_scheme" not in fake.rendered[1]
+    assert fake.rendered[1]["document"] == {"text": "$x^2 - 5x + 6$"}
+
+
+async def test_a_mark_scheme_entry_the_renderer_refuses_fails_the_fragment() -> None:
+    async with FakeTypeset().client() as client:
+        with pytest.raises(TypesetError, match="does-not-compile"):
+            await client.render(
+                RenderKind.QUESTION,
+                PAPER.questions[0],
+                mark_scheme=CanonicalMarkSchemeQuestion(number="1", answer=FAIL_MARKER),
+            )
 
 
 async def test_a_document_the_renderer_refuses_carries_what_it_said() -> None:

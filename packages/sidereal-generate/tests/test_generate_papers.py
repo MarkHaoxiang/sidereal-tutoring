@@ -19,8 +19,12 @@ from sidereal_core.models import (
     PaperStatus,
 )
 from sidereal_core.testing import FAIL_MARKER, FakeDirectus, FakeTypeset
-from sidereal_generate.base import GenerationError
-from sidereal_generate.claude import AnthropicPaperExtractor, paper_extractor, strict_schema
+from sidereal_generate.base import GenerationError, strict_schema
+from sidereal_generate.claude import (
+    NON_STREAMING_MAX_TOKENS,
+    AnthropicPaperExtractor,
+    paper_extractor,
+)
 from sidereal_generate.fake import (
     FakeFeedbackGenerator,
     FakeHomeworkGenerator,
@@ -31,6 +35,7 @@ from sidereal_generate.jobs import Generators, JobInput, run_job, start_job
 from sidereal_generate.models import PaperExtraction
 from sidereal_generate.papers import PaperError, paper_worksheet, rerender_paper
 from sidereal_generate.prompts import PAPER_TOOL
+from sidereal_generate.usage import UsageTally
 
 DOCUMENT_ID = UUID("22222222-2222-4222-8222-222222222222")
 Handler = Callable[[httpx2.Request], httpx2.Response]
@@ -152,11 +157,26 @@ async def test_a_render_that_fails_still_files_the_paper_and_the_job_succeeds() 
     class Failing:
         model = "fake"
 
-        async def extract(self, document: Document) -> PaperExtraction:
+        async def extract(
+            self,
+            document: Document,
+            mark_scheme: Document | None = None,
+            *,
+            usage: UsageTally | None = None,
+        ) -> PaperExtraction:
             extraction = await FakePaperExtractor().extract(document)
             return extraction.model_copy(
                 update={"paper": extraction.paper.model_copy(update={"title": FAIL_MARKER})}
             )
+
+        async def repair(
+            self,
+            extraction: PaperExtraction,
+            diagnostics: str,
+            *,
+            usage: UsageTally | None = None,
+        ) -> PaperExtraction:
+            return extraction
 
     async with fake.client() as client:
         job = await start_job(
@@ -191,7 +211,7 @@ async def test_a_document_with_no_text_fails_the_job_with_a_sentence_a_tutor_can
     assert fake.rows(Collection.PAPERS) == []
 
 
-async def test_a_job_that_names_no_single_document_fails_before_anything_is_written() -> None:
+async def test_a_job_that_names_no_document_fails_before_anything_is_written() -> None:
     fake = seeded()
 
     async with fake.client() as client:
@@ -201,7 +221,7 @@ async def test_a_job_that_names_no_single_document_fails_before_anything_is_writ
         finished = await run_job(client, generators(), job.id, typeset=FakeTypeset().client())
 
     assert finished.status is JobStatus.FAILED
-    assert finished.error == "A paper is read from exactly one document."
+    assert finished.error == "A paper is read from one document, or two with its mark scheme."
 
 
 async def test_rendering_again_replaces_both_pdfs_from_the_stored_structure() -> None:
@@ -214,7 +234,7 @@ async def test_rendering_again_replaces_both_pdfs_from_the_stored_structure() ->
     stored["structure"]["questions"][0]["stem"] = "Corrected stem."
 
     async with fake.client() as client:
-        paper = await rerender_paper(client, typeset.client(), paper_id)
+        paper = await rerender_paper(client, typeset.client(), paper_id, FakePaperExtractor())
 
     assert str(paper.rendered_pdf) != before
     assert paper.mark_scheme_pdf is not None
@@ -231,7 +251,7 @@ async def test_rendering_a_paper_whose_structure_was_broken_says_which_field() -
 
     async with fake.client() as client:
         with pytest.raises(PaperError, match=r"questions\.0"):
-            await rerender_paper(client, FakeTypeset().client(), paper_id)
+            await rerender_paper(client, FakeTypeset().client(), paper_id, FakePaperExtractor())
 
 
 async def test_a_worksheet_takes_the_questions_asked_for_in_the_order_asked() -> None:
@@ -394,3 +414,170 @@ def test_building_an_extractor_needs_no_credentials(monkeypatch: pytest.MonkeyPa
 
 def test_generators_report_the_extractors_model() -> None:
     assert generators().for_kind(GenerationKind.PAPER_EXTRACT) == "fake"
+
+
+async def test_an_extraction_never_asks_anthropic_for_more_than_it_answers_unstreamed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The SDK refuses a non-streaming request above its ceiling, and nothing here streams."""
+    monkeypatch.setenv("SIDEREAL_GENERATE_EXTRACT_MAX_TOKENS", "128000")
+    seen: list[httpx2.Request] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        seen.append(request)
+        return httpx2.Response(200, json=message(PAPER_INPUT))
+
+    await extractor_for(handler).extract(document())
+
+    assert json.loads(seen[0].content)["max_tokens"] == NON_STREAMING_MAX_TOKENS
+
+
+SCHEME_ID = UUID("33333333-3333-4333-8333-333333333333")
+
+
+class Recorder:
+    """An extractor that says what it was handed, and repairs by dropping the fail marker."""
+
+    model = "fake"
+
+    def __init__(self) -> None:
+        self.seen: list[tuple[str, str | None]] = []
+        self.repairs: list[str] = []
+        self.fail_once = False
+
+    async def extract(
+        self,
+        document: Document,
+        mark_scheme: Document | None = None,
+        *,
+        usage: UsageTally | None = None,
+    ) -> PaperExtraction:
+        self.seen.append((document.title, None if mark_scheme is None else mark_scheme.title))
+        if usage is not None:
+            usage.record(prompt_tokens=100, completion_tokens=20, reasoning_tokens=5, cost_usd=0.25)
+        extraction = await FakePaperExtractor().extract(document)
+        if not self.fail_once:
+            return extraction
+        return extraction.model_copy(
+            update={"paper": extraction.paper.model_copy(update={"title": FAIL_MARKER})}
+        )
+
+    async def repair(
+        self,
+        extraction: PaperExtraction,
+        diagnostics: str,
+        *,
+        usage: UsageTally | None = None,
+    ) -> PaperExtraction:
+        self.repairs.append(diagnostics)
+        if usage is not None:
+            usage.record(prompt_tokens=50, completion_tokens=10, cost_usd=0.25)
+        return extraction.model_copy(
+            update={
+                "paper": extraction.paper.model_copy(
+                    update={"title": extraction.paper.title.replace(FAIL_MARKER, "repaired")}
+                )
+            }
+        )
+
+
+def with_extractor(extractor: Recorder) -> Generators:
+    return Generators(
+        homework=FakeHomeworkGenerator(),
+        feedback=FakeFeedbackGenerator(),
+        plan=FakePlanGenerator(),
+        paper=extractor,
+    )
+
+
+async def run_with(
+    fake: FakeDirectus, typeset: FakeTypeset, extractor: Recorder, documents: tuple[UUID, ...]
+) -> GenerationJob:
+    async with fake.client() as client:
+        job = await start_job(
+            client, GenerationKind.PAPER_EXTRACT, JobInput(documents=documents), model="fake"
+        )
+        return await run_job(client, with_extractor(extractor), job.id, typeset=typeset.client())
+
+
+def seeded_with_scheme() -> FakeDirectus:
+    fake = seeded()
+    fake.seed(
+        Collection.DOCUMENTS,
+        {
+            "id": str(SCHEME_ID),
+            "title": "Mock paper 1 mark scheme",
+            "kind": "upload",
+            "status": "ready",
+            "text": "1 (a) $3 x^2$ (2)",
+        },
+    )
+    return fake
+
+
+async def test_a_second_document_reaches_the_extractor_as_the_mark_scheme() -> None:
+    fake, extractor = seeded_with_scheme(), Recorder()
+
+    finished = await run_with(fake, FakeTypeset(), extractor, (DOCUMENT_ID, SCHEME_ID))
+
+    assert finished.status is JobStatus.SUCCEEDED
+    assert extractor.seen == [("Mock paper 1", "Mock paper 1 mark scheme")]
+
+
+async def test_a_paper_alone_hands_the_extractor_no_mark_scheme() -> None:
+    fake, extractor = seeded(), Recorder()
+
+    await run_with(fake, FakeTypeset(), extractor, (DOCUMENT_ID,))
+
+    assert extractor.seen == [("Mock paper 1", None)]
+
+
+async def test_source_the_compiler_refuses_is_repaired_against_its_diagnostics() -> None:
+    fake, extractor = seeded(), Recorder()
+    extractor.fail_once = True
+
+    finished = await run_with(fake, FakeTypeset(), extractor, (DOCUMENT_ID,))
+
+    assert finished.status is JobStatus.SUCCEEDED
+    assert len(extractor.repairs) == 1
+    assert extractor.repairs[0]  # the compiler's own report, not a summary of it
+    paper = fake.rows(Collection.PAPERS)[0]
+    # What compiled is what is stored, so the tutor's next render starts from it.
+    assert FAIL_MARKER not in paper["structure"]["title"]
+    assert paper["rendered_pdf"]
+    assert "warning" not in paper["generated_from"]
+
+
+async def test_a_job_files_what_its_calls_cost() -> None:
+    fake, extractor = seeded(), Recorder()
+    extractor.fail_once = True
+
+    await run_with(fake, FakeTypeset(), extractor, (DOCUMENT_ID,))
+
+    usage = fake.rows(Collection.PAPERS)[0]["generated_from"]["usage"]
+    # The extraction and the repair are both the job's cost.
+    assert usage["calls"] == 2
+    assert usage["prompt_tokens"] == 150
+    assert usage["completion_tokens"] == 30
+    assert usage["total_tokens"] == 180
+    assert usage["reasoning_tokens"] == 5
+    assert usage["cost_usd"] == 0.5
+
+
+async def test_a_render_that_works_clears_an_earlier_failure_warning() -> None:
+    fake, extractor = seeded(), Recorder()
+    extractor.fail_once = True
+    typeset = FakeTypeset()
+    # The extraction's renders all fail, so the row is filed with the warning.
+    finished = await run_with(fake, typeset, extractor, (DOCUMENT_ID,))
+    paper_id = finished.output_id
+    assert paper_id is not None
+    stored = fake.items[Collection.PAPERS][str(paper_id)]
+    stored["structure"]["title"] = FAIL_MARKER
+    stored["generated_from"]["warning"] = "The paper could not be rendered."
+
+    async with fake.client() as client:
+        paper = await rerender_paper(client, typeset.client(), paper_id, extractor)
+
+    assert paper.rendered_pdf is not None
+    assert "warning" not in (paper.generated_from or {})

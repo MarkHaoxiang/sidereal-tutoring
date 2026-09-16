@@ -15,6 +15,7 @@ from sidereal_generate.fake import (
 from sidereal_generate.jobs import Generators, JobInput, run_job, start_job
 from sidereal_generate.models import GeneratedQuestion, GenerationRequest, HomeworkOutput
 from sidereal_generate.typst import NotTypstError, recompile_homework, slug
+from sidereal_generate.usage import UsageTally
 
 STUDENT_ID = UUID("11111111-1111-4111-8111-111111111111")
 GOOD_BODY = "#question[Factorise $x^2 - 5x + 6$.]\n#answerlines(4)\n"
@@ -42,8 +43,12 @@ class SequenceGenerator:
         self.outputs = outputs
         self.requests: list[GenerationRequest] = []
 
-    async def generate(self, request: GenerationRequest) -> HomeworkOutput:
+    async def generate(
+        self, request: GenerationRequest, *, usage: UsageTally | None = None
+    ) -> HomeworkOutput:
         self.requests.append(request)
+        if usage is not None:
+            usage.record(prompt_tokens=1, completion_tokens=2, cost_usd=0.5)
         return self.outputs[min(len(self.requests) - 1, len(self.outputs) - 1)]
 
 

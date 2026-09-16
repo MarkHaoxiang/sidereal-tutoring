@@ -130,9 +130,15 @@ per-tutor row scoping is unavailable; with the grant key loaded those become usa
 | `SIDEREAL_DIRECTUS_URL` | `http://localhost:8055` | Directus base URL, for every Python package and Rust service. |
 | `SIDEREAL_DIRECTUS_TOKEN` | no `Authorization` header is sent, so Directus applies public permissions and rejects the call as a `DirectusError` | The agent's static token. Used by `sidereal-mcp` and the Rust services; **`sidereal-app` never reads it** — it builds its client from the caller's own bearer token. |
 | `SIDEREAL_DATA_DIR` | `data` | Root of the ingest fetch cache (`data/web/`). Git-ignored. |
-| `SIDEREAL_GENERATE_MODEL` | `claude-sonnet-5` | Model id for every generator. Configuration, not a commit. |
-| `SIDEREAL_GENERATE_MAX_TOKENS` | `8000` | Output cap per generation request. Not in `.env.example`. |
+| `SIDEREAL_GENERATE_BACKEND` | `claude` | Which backend `default_generators()` builds: `claude`, `openrouter` or `fake`. |
+| `SIDEREAL_GENERATE_MODEL` | `claude-sonnet-5` | Model id the `claude` backend calls. Configuration, not a commit. |
+| `SIDEREAL_GENERATE_MAX_TOKENS` | `16000` | Output cap per generation request; the model's reasoning is spent from it too, so a cap sized to the answer alone can be gone before the answer starts. Not in `.env.example`. |
+| `SIDEREAL_GENERATE_REASONING` | `low` | How much thinking a paper extraction or a Typst repair asks for (`low`, `medium`, `high`). Reading a paper is transcription: on the June 2023 AQA paper, the model's own default spent 17,078 of 22,929 output tokens on reasoning. Generation of homework, feedback and plans sends no effort. Not in `.env.example`. |
+| `SIDEREAL_GENERATE_EXTRACT_MAX_TOKENS` | `48000` | Output cap for a paper extraction — the longest answer anything here asks for. A 36-page paper spent 20,000 without finishing, because the model's reasoning is spent from the same budget. The cap bills nothing until it is used; the `claude` backend clamps to 21,333, above which its SDK refuses a non-streaming request. Not in `.env.example`. |
 | `ANTHROPIC_API_KEY` | `POST /api/jobs/{kind}` still returns 202 and the background job lands in `failed`, its `error` column reading `TypeError: Could not resolve authentication method…`. Nothing else is affected: health, auth, ingestion and reading jobs all work. | Read by the Anthropic SDK, which is built on the first `generate()` and never at import — so the packages load and the tests pass with no key set. |
+| `OPENROUTER_API_KEY` | on the `openrouter` backend a job lands in `failed` reading "Generation is not set up yet. Ask an administrator to configure it."; nothing else is affected | Read on the first `generate()` and never at import. See below. |
+| `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | The gateway. Overridable so a proxy or a local mock can stand in. |
+| `OPENROUTER_MODEL` | `anthropic/claude-sonnet-5` | Model id the `openrouter` backend calls. Configuration, not a commit. |
 | `SIDEREAL_TRANSCRIPTS_ADDR` | `127.0.0.1:50051` | Bind address of the transcripts service. Ports are allocated in `services/README.md`, one per service. |
 | `SIDEREAL_TRANSCRIPTS_POLL_SECS` | `30` | Seconds between polls. |
 | `SIDEREAL_TYPESET_ADDR` | `127.0.0.1:50052` | Bind address of the typeset service. |
@@ -149,6 +155,24 @@ Two more live in `packages/sidereal-app/frontend`, not in the root `.env`:
 | --- | --- | --- |
 | `VITE_DIRECTUS_URL` | `http://localhost:8055` | Where the browser reaches Directus. In `frontend/.env`, copied from `frontend/.env.example`; inlined into the bundle at build time. |
 | `SIDEREAL_API_PROXY` | `http://localhost:8000` | Where `vite dev`/`vite preview` proxy `/api`. Dev-server only, deliberately not `VITE_`-prefixed. |
+
+### The OpenRouter key
+
+Same posture as the Directus license key, same store: `OPENROUTER_API_KEY` lives in
+`~/.config/sidereal-tutoring/env` (mode 600), never in the tree, a fixture or a log line. Load
+it into the shell before running anything that generates:
+
+```sh
+set -a; . ~/.config/sidereal-tutoring/env; set +a
+```
+
+Two dials go with it, both optional: `OPENROUTER_BASE_URL` and `OPENROUTER_MODEL`. Changing the
+model is configuration, not a commit.
+
+The credit behind the key is prepaid and capped by hand, and **the cap is the safety
+mechanism**: an agent may spend against it when asked to, but may not raise it, top it up, or
+extend to any other paid service. Tests and CI stay offline regardless — `./run_tests.sh` passes
+with no key set anywhere, and must keep doing so.
 
 ## Checks
 

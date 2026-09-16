@@ -1,4 +1,4 @@
-import { ApiError } from "@/lib/api";
+import { ApiError, apiError } from "@/lib/api";
 
 export interface Diagnostic {
   message: string;
@@ -48,6 +48,19 @@ export function readDiagnostics(body: unknown): Diagnostic[] {
     const diagnostic = asDiagnostic(row);
     return diagnostic ? [diagnostic] : [];
   });
+}
+
+/** One line for a tutor: what the compiler said, or whatever else refused the render. */
+export function typstProblem(error: unknown): string {
+  if (error instanceof TypstError && error.diagnostics.length > 0) {
+    return error.diagnostics
+      .map((diagnostic) => {
+        const place = diagnosticPlace(diagnostic);
+        return place ? `${place}: ${diagnostic.message}` : diagnostic.message;
+      })
+      .join("; ");
+  }
+  return apiError(error);
 }
 
 /** "Line 12, column 4" — the place a diagnostic points at, or nothing when it points nowhere. */

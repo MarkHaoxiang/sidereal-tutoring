@@ -10,7 +10,6 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 from sidereal_core.canonical import (
-    CanonicalDocument,
     CanonicalMarkScheme,
     CanonicalPaper,
     CanonicalQuestion,
@@ -29,11 +28,13 @@ from sidereal_core.models import (
     QuestionDraft,
 )
 from sidereal_core.students import visible_student
-from sidereal_core.typeset import TypesetClient, TypesetClientError
+from sidereal_core.typeset import TypesetClient, TypesetClientError, TypesetError
 
-from sidereal_generate.base import PaperExtractor
+from sidereal_generate.base import GenerationError, PaperExtractor
 from sidereal_generate.models import PaperExtraction
 from sidereal_generate.typst import upload_pdf
+from sidereal_generate.typst_maths import normalise_model
+from sidereal_generate.usage import UsageTally
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,9 @@ RENDER_WARNING = (
     "The paper could not be rendered, so it has no PDFs yet. Its structure is saved; "
     "render it again once the typeset service answers."
 )
+# Two rounds: the compiler names one fault at a time, and a third round has never been the
+# difference between a paper that renders and one that does not.
+REPAIR_ROUNDS = 2
 
 
 class PaperError(Exception):
@@ -62,12 +66,20 @@ async def extract_paper(
     typeset: TypesetClient,
     document_id: UUID,
     provenance: dict[str, Any],
+    *,
+    mark_scheme_id: UUID | None = None,
+    usage: UsageTally | None = None,
 ) -> UUID:
     """Read a ready document into a `papers` row, its PDFs and its `questions` rows."""
-    document = await client.get_item(Collection.DOCUMENTS, Document, document_id)
-    if not (document.text or "").strip():
-        raise PaperError("That document has no text yet, so there is no paper to read.")
-    extraction = await extractor.extract(document)
+    document = await _readable(
+        client, document_id, "That document has no text yet, so there is no paper to read."
+    )
+    scheme = (
+        None
+        if mark_scheme_id is None
+        else await _readable(client, mark_scheme_id, "That mark scheme has no text yet.")
+    )
+    extraction = normalise_model(await extractor.extract(document, scheme, usage=usage))
     paper = await client.create_item(
         Collection.PAPERS,
         Paper,
@@ -86,23 +98,43 @@ async def extract_paper(
             generated_from=provenance,
         ),
     )
-    await _link_pdfs(client, typeset, paper.id, extraction, provenance)
+    extraction = await _link_pdfs(client, typeset, extractor, paper.id, extraction, usage)
     await _write_questions(client, paper.id, document_id, extraction)
     return paper.id
 
 
-async def rerender_paper(client: DirectusClient, typeset: TypesetClient, paper_id: UUID) -> Paper:
-    """Render the stored structure again: it is the source of truth and the PDFs follow it."""
+async def rerender_paper(
+    client: DirectusClient,
+    typeset: TypesetClient,
+    paper_id: UUID,
+    extractor: PaperExtractor,
+    *,
+    usage: UsageTally | None = None,
+) -> Paper:
+    """Render the stored structure again, repairing maths the compiler refuses as it goes.
+
+    What compiles is what is stored: a repair that works is written back, so the tutor's
+    next render starts from source the renderer accepts.
+    """
     paper = await client.get_item(Collection.PAPERS, Paper, paper_id)
-    structure = _canonical(CanonicalPaper, paper.structure, "This paper has no structure.")
-    updates = {"rendered_pdf": str(await _render(client, typeset, RenderKind.PAPER, structure))}
-    if paper.mark_scheme:
-        scheme = _canonical(
-            CanonicalMarkScheme, paper.mark_scheme, "This paper has no mark scheme."
-        )
-        updates["mark_scheme_pdf"] = str(
-            await _render(client, typeset, RenderKind.MARK_SCHEME, scheme)
-        )
+    extraction = PaperExtraction(
+        paper=_canonical(CanonicalPaper, paper.structure, "This paper has no structure."),
+        mark_scheme=(
+            None
+            if not paper.mark_scheme
+            else _canonical(
+                CanonicalMarkScheme, paper.mark_scheme, "This paper has no mark scheme."
+            )
+        ),
+    )
+    repaired, pdfs = await _rendered(client, typeset, extractor, normalise_model(extraction), usage)
+    updates: dict[str, Any] = {**_structure(repaired), "rendered_pdf": str(pdfs[0])}
+    if pdfs[1] is not None:
+        updates["mark_scheme_pdf"] = str(pdfs[1])
+    # The row rendered, so an earlier failure's warning is no longer true of it.
+    generated_from = dict(paper.generated_from or {})
+    if generated_from.pop("warning", None) is not None:
+        updates["generated_from"] = generated_from
     return await client.update_item(Collection.PAPERS, Paper, paper_id, updates)
 
 
@@ -136,40 +168,102 @@ async def paper_worksheet(
 async def _link_pdfs(
     client: DirectusClient,
     typeset: TypesetClient,
+    extractor: PaperExtractor,
     paper_id: UUID,
     extraction: PaperExtraction,
-    provenance: dict[str, Any],
-) -> None:
+    usage: UsageTally | None,
+) -> PaperExtraction:
     """A render that fails leaves the row and a warning: the structure is the work, not the PDF."""
+    paper = await client.get_item(Collection.PAPERS, Paper, paper_id)
+    generated_from = dict(paper.generated_from or {})
     try:
-        rendered = await _render(client, typeset, RenderKind.PAPER, extraction.paper)
-        scheme = (
-            None
-            if extraction.mark_scheme is None
-            else await _render(client, typeset, RenderKind.MARK_SCHEME, extraction.mark_scheme)
-        )
+        extraction, pdfs = await _rendered(client, typeset, extractor, extraction, usage)
     except TypesetClientError:
         logger.exception("paper %s could not be rendered", paper_id)
-        await client.update_item(
-            Collection.PAPERS,
-            Paper,
-            paper_id,
-            {"generated_from": {**provenance, "warning": RENDER_WARNING}},
-        )
-        return
-    await client.update_item(
-        Collection.PAPERS,
-        Paper,
-        paper_id,
-        {
-            "rendered_pdf": str(rendered),
-            "mark_scheme_pdf": None if scheme is None else str(scheme),
-        },
+        updates: dict[str, Any] = {"generated_from": {**generated_from, "warning": RENDER_WARNING}}
+    else:
+        updates = {
+            **_structure(extraction),
+            "rendered_pdf": str(pdfs[0]),
+            "mark_scheme_pdf": None if pdfs[1] is None else str(pdfs[1]),
+            "generated_from": generated_from,
+        }
+    spent = None if usage is None else usage.provenance()
+    if spent is not None:
+        updates["generated_from"] = {**updates["generated_from"], "usage": spent}
+    await client.update_item(Collection.PAPERS, Paper, paper_id, updates)
+    return extraction
+
+
+async def _rendered(
+    client: DirectusClient,
+    typeset: TypesetClient,
+    extractor: PaperExtractor,
+    extraction: PaperExtraction,
+    usage: UsageTally | None,
+) -> tuple[PaperExtraction, tuple[UUID, UUID | None]]:
+    """Render, and when the compiler refuses the maths, ask for it corrected and render again.
+
+    The repaired structure comes back with the file ids so the caller stores what compiled:
+    a row that keeps source the renderer refused fails the tutor's next render too.
+    """
+    for attempt in range(REPAIR_ROUNDS + 1):
+        try:
+            return extraction, await _render_both(client, typeset, extraction)
+        except TypesetError as exc:
+            if attempt == REPAIR_ROUNDS or not exc.diagnostics:
+                raise
+            logger.warning("paper did not compile, asking for a repair: %s", exc)
+            extraction = await _repair(extractor, extraction, exc, usage)
+    raise AssertionError  # pragma: no cover - the loop returns or raises.
+
+
+async def _repair(
+    extractor: PaperExtractor,
+    extraction: PaperExtraction,
+    error: TypesetError,
+    usage: UsageTally | None,
+) -> PaperExtraction:
+    """A repair that is itself unusable leaves the compiler's own error to be raised."""
+    diagnostics = "\n".join(str(diagnostic) for diagnostic in error.diagnostics)
+    try:
+        return normalise_model(await extractor.repair(extraction, diagnostics, usage=usage))
+    except GenerationError:
+        logger.exception("the repair of an uncompilable paper could not be read")
+        raise error from None
+
+
+async def _render_both(
+    client: DirectusClient, typeset: TypesetClient, extraction: PaperExtraction
+) -> tuple[UUID, UUID | None]:
+    rendered = await _render(client, typeset, RenderKind.PAPER, extraction.paper)
+    scheme = (
+        None
+        if extraction.mark_scheme is None
+        else await _render(client, typeset, RenderKind.MARK_SCHEME, extraction.mark_scheme)
     )
+    return rendered, scheme
+
+
+def _structure(extraction: PaperExtraction) -> dict[str, Any]:
+    return {
+        "structure": extraction.paper.model_dump(mode="json"),
+        "mark_scheme": _dump(extraction.mark_scheme),
+    }
+
+
+async def _readable(client: DirectusClient, document_id: UUID, missing: str) -> Document:
+    document = await client.get_item(Collection.DOCUMENTS, Document, document_id)
+    if not (document.text or "").strip():
+        raise PaperError(missing)
+    return document
 
 
 async def _render(
-    client: DirectusClient, typeset: TypesetClient, kind: RenderKind, document: CanonicalDocument
+    client: DirectusClient,
+    typeset: TypesetClient,
+    kind: RenderKind,
+    document: CanonicalPaper | CanonicalMarkScheme | CanonicalWorksheet,
 ) -> UUID:
     return await upload_pdf(client, document.title, await typeset.render(kind, document))
 

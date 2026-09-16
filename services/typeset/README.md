@@ -31,7 +31,8 @@ POST /compile   {"source": "…", "output": "pdf" | "svg"}     output defaults t
 POST /template  {"kind": "homework", "title": "…", "student": "…"|null,
                  "due": "2026-09-25"|null, "body": "…"}
      200  {"source": "…"}  the body wrapped in the house template
-POST /render    {"kind": "paper" | "mark_scheme" | "worksheet", "document": {…},
+POST /render    {"kind": "paper" | "mark_scheme" | "worksheet" | "question" | "markup",
+                 "document": {…}, "mark_scheme": {…}|null,
                  "output": "pdf" | "svg" | "source"}      output defaults to pdf
      200  application/pdf bytes, {"pages": […]}, or {"source": "…"}
      400  {"message": …}   the body is not JSON
@@ -58,6 +59,7 @@ Part        { label: "a", text, marks?, answer_lines?, parts: [Part] }
 MarkScheme  { title, questions: [{ number, answer?, notes?,
                                    parts: [{ label, answer, marks?, notes? }] }] }
 Worksheet   { title, student?, due?, intro?, questions: [Question] }
+Markup      { text }
 ```
 
 `worksheet` is the structured successor to the `homework` body of `POST /template`; both the
@@ -95,6 +97,41 @@ curl -sS localhost:50052/render -H 'content-type: application/json' -o paper.pdf
   }
 }'
 ```
+
+## Rendering a fragment
+
+`question` and `markup` render one node rather than a document, for showing a tutor one
+question — or one field they are editing — as it will be printed. `question` takes a
+`Question` as its `document` and may carry one `MarkScheme` question entry in a sibling
+`mark_scheme`, drawn under it. `markup` takes `{"text": "…"}`, the same markup a text field
+carries, escaped the same way.
+
+A fragment has no header, no page numbering and no margins: it is set on a page as wide as an
+A4 paper's text column and only as tall as the fragment, so `"output": "svg"` is always one
+page and the crop is tight. Everything else is the paper's — same helpers, same fonts, same
+line breaks.
+
+```sh
+curl -sS localhost:50052/render -H 'content-type: application/json' -d '{
+  "kind": "question", "output": "svg",
+  "document": {
+    "number": "4",
+    "stem": "The curve $C$ has equation $y = x^3 - 6x^2 + 9x + 1$.",
+    "parts": [
+      { "label": "a", "text": "Find $(d y) / (d x)$.", "marks": 2 },
+      { "label": "b", "text": "Hence find the stationary points of $C$.", "marks": 5 }
+    ]
+  },
+  "mark_scheme": {
+    "number": "4",
+    "parts": [{ "label": "a", "answer": "$(d y) / (d x) = 3x^2 - 12x + 9$", "marks": 2 }]
+  }
+}'
+```
+
+Typst bakes fill colours into its SVG — the page ships as a white rectangle behind black
+glyphs — so a fragment must be shown on a paper-coloured surface, in a dark theme too, and
+never tinted by inheriting the surrounding text colour.
 
 ## Writing a homework body
 

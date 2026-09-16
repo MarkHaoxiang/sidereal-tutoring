@@ -11,7 +11,7 @@ pub use api::{COMPILE_TIMEOUT, MAX_SOURCE_BYTES, RenderOutput, RenderRequest, ro
 pub use compile::{Compiled, Diagnostic, Output, compile};
 pub use document::{
     Document, DocumentKind, MAX_ANSWER_LINES, MarkScheme, MarkSchemePart, MarkSchemeQuestion,
-    Paper, Part, Question, ValidationError, Worksheet,
+    Markup, Paper, Part, Question, ValidationError, Worksheet,
 };
 pub use render::render;
 pub use template::wrap_homework;

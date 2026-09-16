@@ -673,6 +673,77 @@
         ]
       }
     },
+    "/api/typeset/render": {
+      "post": {
+        "summary": "Render Canonical",
+        "description": "A canonical structure previewed in the house style. Nothing is read or stored.",
+        "operationId": "render_canonical_api_typeset_render_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/PaperRenderRequest"
+                  },
+                  {
+                    "$ref": "#/components/schemas/MarkSchemeRenderRequest"
+                  },
+                  {
+                    "$ref": "#/components/schemas/WorksheetRenderRequest"
+                  },
+                  {
+                    "$ref": "#/components/schemas/QuestionRenderRequest"
+                  },
+                  {
+                    "$ref": "#/components/schemas/MarkupRenderRequest"
+                  }
+                ],
+                "title": "Body",
+                "discriminator": {
+                  "propertyName": "kind",
+                  "mapping": {
+                    "paper": "#/components/schemas/PaperRenderRequest",
+                    "mark_scheme": "#/components/schemas/MarkSchemeRenderRequest",
+                    "worksheet": "#/components/schemas/WorksheetRenderRequest",
+                    "question": "#/components/schemas/QuestionRenderRequest",
+                    "markup": "#/components/schemas/MarkupRenderRequest"
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TypstRender"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/homework/{homework_id}/compile": {
       "post": {
         "summary": "Compile Homework",
@@ -722,7 +793,7 @@
     "/api/papers/{paper_id}/render": {
       "post": {
         "summary": "Render Paper",
-        "description": "Render the stored structure again \u2014 what a tutor runs after reviewing an extraction.",
+        "description": "Render the stored structure again \u2014 what a tutor runs after reviewing an extraction.\n\nMaths the compiler refuses is repaired against its diagnostics before it gives up.",
         "operationId": "render_paper_api_papers__paper_id__render_post",
         "security": [
           {
@@ -958,6 +1029,417 @@
           "student"
         ],
         "title": "CallerRole"
+      },
+      "CanonicalMarkScheme": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "questions": {
+            "items": {
+              "$ref": "#/components/schemas/CanonicalMarkSchemeQuestion"
+            },
+            "type": "array",
+            "title": "Questions",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "title": "CanonicalMarkScheme"
+      },
+      "CanonicalMarkSchemePart": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "answer": {
+            "type": "string",
+            "title": "Answer"
+          },
+          "marks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Marks"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "label",
+          "answer"
+        ],
+        "title": "CanonicalMarkSchemePart"
+      },
+      "CanonicalMarkSchemeQuestion": {
+        "properties": {
+          "number": {
+            "type": "string",
+            "title": "Number"
+          },
+          "parts": {
+            "items": {
+              "$ref": "#/components/schemas/CanonicalMarkSchemePart"
+            },
+            "type": "array",
+            "title": "Parts",
+            "default": []
+          },
+          "answer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "number"
+        ],
+        "title": "CanonicalMarkSchemeQuestion"
+      },
+      "CanonicalMarkup": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "CanonicalMarkup",
+        "description": "Typst markup on its own, for a fragment that has no structure to walk."
+      },
+      "CanonicalPaper": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "board": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Board"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year"
+          },
+          "time_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time Minutes"
+          },
+          "total_marks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Marks"
+          },
+          "instructions": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instructions"
+          },
+          "questions": {
+            "items": {
+              "$ref": "#/components/schemas/CanonicalQuestion"
+            },
+            "type": "array",
+            "title": "Questions",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "title": "CanonicalPaper"
+      },
+      "CanonicalPart": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "marks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Marks"
+          },
+          "answer_lines": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer Lines"
+          },
+          "parts": {
+            "items": {
+              "$ref": "#/components/schemas/CanonicalSubPart"
+            },
+            "type": "array",
+            "title": "Parts",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "label",
+          "text"
+        ],
+        "title": "CanonicalPart"
+      },
+      "CanonicalQuestion": {
+        "properties": {
+          "number": {
+            "type": "string",
+            "title": "Number"
+          },
+          "stem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stem"
+          },
+          "marks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Marks"
+          },
+          "parts": {
+            "items": {
+              "$ref": "#/components/schemas/CanonicalPart"
+            },
+            "type": "array",
+            "title": "Parts",
+            "default": []
+          },
+          "answer_lines": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer Lines"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "number"
+        ],
+        "title": "CanonicalQuestion"
+      },
+      "CanonicalSubPart": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "marks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Marks"
+          },
+          "answer_lines": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer Lines"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "label",
+          "text"
+        ],
+        "title": "CanonicalSubPart",
+        "description": "`(a)` then `(i)`: parts nest one level, so a part of a part holds none of its own."
+      },
+      "CanonicalWorksheet": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "student": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Student"
+          },
+          "due": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due"
+          },
+          "intro": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intro"
+          },
+          "questions": {
+            "items": {
+              "$ref": "#/components/schemas/CanonicalQuestion"
+            },
+            "type": "array",
+            "title": "Questions",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "title": "CanonicalWorksheet"
       },
       "DirectusHealth": {
         "properties": {
@@ -1852,6 +2334,62 @@
         ],
         "title": "LoginRequest"
       },
+      "MarkSchemeRenderRequest": {
+        "properties": {
+          "output": {
+            "type": "string",
+            "enum": [
+              "svg",
+              "source"
+            ],
+            "title": "Output",
+            "default": "svg"
+          },
+          "kind": {
+            "type": "string",
+            "const": "mark_scheme",
+            "title": "Kind"
+          },
+          "document": {
+            "$ref": "#/components/schemas/CanonicalMarkScheme"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "document"
+        ],
+        "title": "MarkSchemeRenderRequest"
+      },
+      "MarkupRenderRequest": {
+        "properties": {
+          "output": {
+            "type": "string",
+            "enum": [
+              "svg",
+              "source"
+            ],
+            "title": "Output",
+            "default": "svg"
+          },
+          "kind": {
+            "type": "string",
+            "const": "markup",
+            "title": "Kind"
+          },
+          "document": {
+            "$ref": "#/components/schemas/CanonicalMarkup"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "document"
+        ],
+        "title": "MarkupRenderRequest"
+      },
       "Paper": {
         "properties": {
           "title": {
@@ -2061,6 +2599,34 @@
         ],
         "title": "Paper"
       },
+      "PaperRenderRequest": {
+        "properties": {
+          "output": {
+            "type": "string",
+            "enum": [
+              "svg",
+              "source"
+            ],
+            "title": "Output",
+            "default": "svg"
+          },
+          "kind": {
+            "type": "string",
+            "const": "paper",
+            "title": "Kind"
+          },
+          "document": {
+            "$ref": "#/components/schemas/CanonicalPaper"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "document"
+        ],
+        "title": "PaperRenderRequest"
+      },
       "PaperStatus": {
         "type": "string",
         "enum": [
@@ -2083,6 +2649,44 @@
           "password"
         ],
         "title": "PasswordRequest"
+      },
+      "QuestionRenderRequest": {
+        "properties": {
+          "output": {
+            "type": "string",
+            "enum": [
+              "svg",
+              "source"
+            ],
+            "title": "Output",
+            "default": "svg"
+          },
+          "kind": {
+            "type": "string",
+            "const": "question",
+            "title": "Kind"
+          },
+          "document": {
+            "$ref": "#/components/schemas/CanonicalQuestion"
+          },
+          "mark_scheme": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CanonicalMarkSchemeQuestion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "document"
+        ],
+        "title": "QuestionRenderRequest"
       },
       "StudentLogin": {
         "properties": {
@@ -2295,6 +2899,35 @@
         "title": "TypstPreview",
         "description": "One SVG per page, ready to drop into the tutor's editor."
       },
+      "TypstRender": {
+        "properties": {
+          "pages": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Pages"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          }
+        },
+        "type": "object",
+        "required": [
+          "pages",
+          "source"
+        ],
+        "title": "TypstRender",
+        "description": "`pages` is empty when `output` is `source`, and `source` is null when it is `svg`."
+      },
       "TypstRequest": {
         "properties": {
           "source": {
@@ -2368,6 +3001,34 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "WorksheetRenderRequest": {
+        "properties": {
+          "output": {
+            "type": "string",
+            "enum": [
+              "svg",
+              "source"
+            ],
+            "title": "Output",
+            "default": "svg"
+          },
+          "kind": {
+            "type": "string",
+            "const": "worksheet",
+            "title": "Kind"
+          },
+          "document": {
+            "$ref": "#/components/schemas/CanonicalWorksheet"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "document"
+        ],
+        "title": "WorksheetRenderRequest"
       },
       "WorksheetRequest": {
         "properties": {

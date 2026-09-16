@@ -16,6 +16,11 @@ from anthropic import (
     PermissionDeniedError,
     RateLimitError,
 )
+from openai import APIConnectionError as OpenAIConnectionError
+from openai import APIError as OpenAIError
+from openai import AuthenticationError as OpenAIAuthenticationError
+from openai import PermissionDeniedError as OpenAIPermissionDeniedError
+from openai import RateLimitError as OpenAIRateLimitError
 from pydantic import BaseModel, ConfigDict
 from sidereal_core.directus import DirectusClient, DirectusError, DirectusUnavailableError
 from sidereal_core.models import (
@@ -42,6 +47,8 @@ from sidereal_core.typeset import TypesetClient, TypesetError, TypesetUnavailabl
 from sidereal_generate.base import (
     FeedbackGenerator,
     GenerationError,
+    GenerationNotConfiguredError,
+    GenerationTruncatedError,
     HomeworkGenerator,
     PaperExtractor,
     PlanGenerator,
@@ -64,9 +71,14 @@ from sidereal_generate.models import (
     HomeworkOutput,
     PlanOutput,
 )
+from sidereal_generate.openrouter import feedback_generator as openrouter_feedback_generator
+from sidereal_generate.openrouter import homework_generator as openrouter_homework_generator
+from sidereal_generate.openrouter import paper_extractor as openrouter_paper_extractor
+from sidereal_generate.openrouter import plan_generator as openrouter_plan_generator
 from sidereal_generate.papers import PaperError, extract_paper
 from sidereal_generate.settings import GenerateBackend, generate_settings
 from sidereal_generate.typst import TYPST_WARNING, Compiled, generate_typst, upload_pdf
+from sidereal_generate.usage import UsageTally
 
 logger = logging.getLogger(__name__)
 MATERIAL_GONE = (401, 403, 404)
@@ -112,7 +124,8 @@ class Generators:
 
 
 def default_generators() -> Generators:
-    """`SIDEREAL_GENERATE_BACKEND` decides: `claude` calls Anthropic, `fake` calls nothing."""
+    """`SIDEREAL_GENERATE_BACKEND` decides: `claude` calls Anthropic, `openrouter` calls
+    OpenRouter, `fake` calls nothing. No client is built until the first `generate()`."""
     match generate_settings().backend:
         case GenerateBackend.FAKE:
             return Generators(
@@ -127,6 +140,13 @@ def default_generators() -> Generators:
                 feedback=feedback_generator(),
                 plan=plan_generator(),
                 paper=paper_extractor(),
+            )
+        case GenerateBackend.OPENROUTER:
+            return Generators(
+                homework=openrouter_homework_generator(),
+                feedback=openrouter_feedback_generator(),
+                plan=openrouter_plan_generator(),
+                paper=openrouter_paper_extractor(),
             )
 
 
@@ -187,18 +207,33 @@ def _message(exc: BaseException) -> str:
             return "Some of the selected material could no longer be read."
         case DirectusError():
             return "The material library refused this request."
-        case AuthenticationError() | PermissionDeniedError():
+        case (
+            AuthenticationError()
+            | PermissionDeniedError()
+            | OpenAIAuthenticationError()
+            | OpenAIPermissionDeniedError()
+        ):
             return "The generation service refused the request."
-        case RateLimitError():
+        case RateLimitError() | OpenAIRateLimitError():
             return "The generation service is busy; try again in a minute."
-        case APIConnectionError():
+        case APIConnectionError() | OpenAIConnectionError():
             return "The generation service could not be reached. Try again shortly."
-        case APIError():
+        case APIError() | OpenAIError():
             return "The generation service could not finish this request."
+        case GenerationNotConfiguredError():
+            return "Generation is not set up yet. Ask an administrator to configure it."
+        case GenerationTruncatedError():
+            return "The answer was cut off before it was finished. Try again with less material."
         case GenerationError():
             return "The generated result could not be used. Try again."
         case _:
             return "Generation failed unexpectedly."
+
+
+def _spent(provenance: dict[str, Any], usage: UsageTally) -> dict[str, Any]:
+    """What the job's calls cost, filed beside what they produced. Shown nowhere yet."""
+    spent = usage.provenance()
+    return provenance if spent is None else {**provenance, "usage": spent}
 
 
 async def _patch(client: DirectusClient, job_id: UUID, data: dict[str, Any]) -> GenerationJob:
@@ -230,24 +265,42 @@ async def _run(
     job_input: JobInput,
     typeset: TypesetClient,
 ) -> tuple[Collection, UUID]:
+    # One tally for the whole job: a retry and a repair are part of what it cost.
+    usage = UsageTally()
     provenance = {
         "job": str(job.id),
         "model": generators.for_kind(job.kind),
         "documents": [str(document_id) for document_id in job_input.documents],
     }
     if job.kind is GenerationKind.PAPER_EXTRACT:
+        paper_id, scheme_id = _paper_documents(job_input)
         return Collection.PAPERS, await extract_paper(
-            client, generators.paper, typeset, _one_document(job_input), provenance
+            client,
+            generators.paper,
+            typeset,
+            paper_id,
+            provenance,
+            mark_scheme_id=scheme_id,
+            usage=usage,
         )
     return await _generate(
-        client, generators, job.kind, job_input, await _load(client, job_input), provenance, typeset
+        client,
+        generators,
+        job.kind,
+        job_input,
+        await _load(client, job_input),
+        provenance,
+        typeset,
+        usage,
     )
 
 
-def _one_document(job_input: JobInput) -> UUID:
-    if len(job_input.documents) != 1:
-        raise JobInputError("A paper is read from exactly one document.")
-    return job_input.documents[0]
+def _paper_documents(job_input: JobInput) -> tuple[UUID, UUID | None]:
+    """The paper, and the mark scheme when the tutor filed one beside it."""
+    if not 1 <= len(job_input.documents) <= 2:
+        raise JobInputError("A paper is read from one document, or two with its mark scheme.")
+    paper, *scheme = job_input.documents
+    return paper, scheme[0] if scheme else None
 
 
 async def _generate(
@@ -258,26 +311,29 @@ async def _generate(
     request: GenerationRequest,
     provenance: dict[str, Any],
     typeset: TypesetClient,
+    usage: UsageTally,
 ) -> tuple[Collection, UUID]:
     match kind:
         case GenerationKind.HOMEWORK:
             compiled: Compiled | None = None
             if job_input.format is HomeworkFormat.TYPST:
-                output, compiled = await generate_typst(generators.homework, typeset, request)
+                output, compiled = await generate_typst(
+                    generators.homework, typeset, request, usage=usage
+                )
             else:
-                output = await generators.homework.generate(request)
+                output = await generators.homework.generate(request, usage=usage)
             return Collection.HOMEWORK, await _write_homework(
-                client, request, output, compiled, provenance
+                client, request, output, compiled, _spent(provenance, usage)
             )
         case GenerationKind.FEEDBACK:
-            feedback = await generators.feedback.generate(request)
+            feedback = await generators.feedback.generate(request, usage=usage)
             return Collection.FEEDBACK, await _write_feedback(
-                client, request.student.id, feedback, provenance
+                client, request.student.id, feedback, _spent(provenance, usage)
             )
         case GenerationKind.PLAN:
-            plan = await generators.plan.generate(request)
+            plan = await generators.plan.generate(request, usage=usage)
             return Collection.PLANS, await _write_plan(
-                client, request.student.id, job_input, plan, provenance
+                client, request.student.id, job_input, plan, _spent(provenance, usage)
             )
         case GenerationKind.PAPER_EXTRACT:  # handled before a request is built.
             raise JobInputError("A paper is read from a document, not generated for a student.")

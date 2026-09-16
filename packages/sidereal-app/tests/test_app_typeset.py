@@ -10,6 +10,16 @@ from sidereal_core.testing import DEFAULT_USER_ID, FAIL_MARKER, FakeDirectus, Fa
 STUDENT = UUID("11111111-1111-4111-8111-111111111111")
 SOURCE = "#question[Factorise $x^2 - 5x + 6$.]\n#answerlines(4)\n"
 BROKEN = f"#question[Factorise $x^2 - 5x + 6$.]\n{FAIL_MARKER}\n"
+QUESTION = {
+    "number": "3",
+    "stem": "The curve $C$ has equation $y = x^3$.",
+    "parts": [{"label": "a", "text": "Find $(d y) / (d x)$.", "marks": 2, "answer_lines": 3}],
+}
+SCHEME_ENTRY = {
+    "number": "3",
+    "parts": [{"label": "a", "answer": "$3 x^2$", "marks": 2}],
+    "notes": "Accept $3x^2$ unsimplified.",
+}
 
 
 @pytest.fixture
@@ -64,6 +74,115 @@ def test_a_student_may_not_preview(
     make_student(fake_directus)
 
     response = client.post("/api/typeset/preview", headers=auth, json={"source": SOURCE})
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "tutor_only"
+
+
+def test_rendering_a_question_fragment_answers_with_pages(
+    client: TestClient, fake_typeset: FakeTypeset, auth: dict[str, str]
+) -> None:
+    response = client.post(
+        "/api/typeset/render",
+        headers=auth,
+        json={"kind": "question", "document": QUESTION, "output": "svg"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["source"] is None
+    assert body["pages"][0].startswith("<svg")
+    assert fake_typeset.rendered[-1]["kind"] == "question"
+    assert "mark_scheme" not in fake_typeset.rendered[-1]
+
+
+def test_a_questions_mark_scheme_entry_goes_over_beside_it(
+    client: TestClient, fake_typeset: FakeTypeset, auth: dict[str, str]
+) -> None:
+    response = client.post(
+        "/api/typeset/render",
+        headers=auth,
+        json={"kind": "question", "document": QUESTION, "mark_scheme": SCHEME_ENTRY},
+    )
+
+    assert response.status_code == 200
+    sent = fake_typeset.rendered[-1]["mark_scheme"]
+    assert sent["number"] == "3"
+    assert sent["parts"][0]["answer"] == "$3 x^2$"
+
+
+def test_rendering_a_paper_to_source_answers_with_source_and_no_pages(
+    client: TestClient, auth: dict[str, str]
+) -> None:
+    response = client.post(
+        "/api/typeset/render",
+        headers=auth,
+        json={
+            "kind": "paper",
+            "document": {"title": "Pure Mathematics 1", "questions": [QUESTION]},
+            "output": "source",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["pages"] == []
+    assert "Pure Mathematics 1" in body["source"]
+
+
+def test_a_markup_fragment_renders(
+    client: TestClient, fake_typeset: FakeTypeset, auth: dict[str, str]
+) -> None:
+    response = client.post(
+        "/api/typeset/render",
+        headers=auth,
+        json={"kind": "markup", "document": {"text": "$x^2 - 5x + 6$"}},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["pages"][0].startswith("<svg")
+    assert fake_typeset.rendered[-1]["document"] == {"text": "$x^2 - 5x + 6$"}
+
+
+def test_a_fragment_that_will_not_compile_is_a_422_with_diagnostics(
+    client: TestClient, auth: dict[str, str]
+) -> None:
+    response = client.post(
+        "/api/typeset/render",
+        headers=auth,
+        json={"kind": "markup", "document": {"text": FAIL_MARKER}},
+    )
+
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert detail["code"] == "typeset_failed"
+    assert detail["diagnostics"]
+
+
+def test_a_document_that_does_not_match_its_kind_is_refused_before_the_service(
+    client: TestClient, fake_typeset: FakeTypeset, auth: dict[str, str]
+) -> None:
+    response = client.post(
+        "/api/typeset/render",
+        headers=auth,
+        json={"kind": "markup", "document": QUESTION},
+    )
+
+    assert response.status_code == 422
+    assert isinstance(response.json()["detail"], list)
+    assert fake_typeset.rendered == []
+
+
+def test_a_student_may_not_render(
+    client: TestClient, fake_directus: FakeDirectus, auth: dict[str, str]
+) -> None:
+    make_student(fake_directus)
+
+    response = client.post(
+        "/api/typeset/render",
+        headers=auth,
+        json={"kind": "markup", "document": {"text": "$x^2$"}},
+    )
 
     assert response.status_code == 403
     assert response.json()["detail"]["code"] == "tutor_only"

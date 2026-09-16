@@ -545,3 +545,243 @@ async fn a_body_that_is_not_json_is_a_400() {
         .unwrap();
     assert_eq!(response.status().as_u16(), 400);
 }
+
+/// A4 is 841.89pt tall; a fragment page is only as tall as the fragment.
+const A4_HEIGHT: f64 = 841.89;
+
+fn view_box_height(svg: &str) -> f64 {
+    let value = svg
+        .split_once("viewBox=\"")
+        .unwrap()
+        .1
+        .split_once('"')
+        .unwrap()
+        .0;
+    value.split_whitespace().nth(3).unwrap().parse().unwrap()
+}
+
+fn fragment() -> Value {
+    json!({
+        "number": "4",
+        "stem": "The curve $C$ has equation $y = x^3 - 6x^2 + 9x + 1$.",
+        "parts": [
+            { "label": "a", "text": "Find $(d y) / (d x)$.", "marks": 2 },
+            {
+                "label": "b",
+                "text": "Hence find the stationary points of $C$ and determine the nature of each.",
+                "marks": 5,
+            },
+        ],
+    })
+}
+
+#[tokio::test]
+async fn a_question_fragment_is_one_svg_page_no_taller_than_it_needs() {
+    let service = Service::start().await;
+
+    let rendered = service
+        .post(
+            "/render",
+            json!({ "kind": "question", "document": fragment(), "output": "source" }),
+        )
+        .await;
+    assert_eq!(rendered.status().as_u16(), 200);
+    let source = rendered.json::<Value>().await.unwrap()["source"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert!(source.contains("#show: fragment"), "{source}");
+    assert!(source.contains("#paper-question(\"4\", none)["), "{source}");
+    assert!(source.contains("#part(\"b\", 5)["), "{source}");
+    assert!(!source.contains("#show: paper"), "{source}");
+
+    let response = service
+        .post(
+            "/render",
+            json!({ "kind": "question", "document": fragment(), "output": "svg" }),
+        )
+        .await;
+    assert_eq!(
+        response.status().as_u16(),
+        200,
+        "{:?}",
+        response.text().await
+    );
+    let body: Value = response.json().await.unwrap();
+    let pages = body["pages"].as_array().unwrap();
+    assert_eq!(pages.len(), 1, "{body}");
+
+    let height = view_box_height(pages[0].as_str().unwrap());
+    assert!(height > 0.0 && height < A4_HEIGHT / 3.0, "{height}pt");
+
+    let compiled = service
+        .post(
+            "/render",
+            json!({ "kind": "question", "document": fragment(), "output": "pdf" }),
+        )
+        .await;
+    assert_eq!(
+        compiled.status().as_u16(),
+        200,
+        "{:?}",
+        compiled.text().await
+    );
+    assert!(compiled.bytes().await.unwrap().starts_with(b"%PDF"));
+}
+
+#[tokio::test]
+async fn a_scheme_entry_is_rendered_under_the_question_it_belongs_to() {
+    let service = Service::start().await;
+    let scheme = json!({
+        "number": "4",
+        "parts": [
+            {
+                "label": "a",
+                "answer": "$(d y) / (d x) = 3x^2 - 12x + 9$",
+                "marks": 2,
+                "notes": "M1 for any two terms correct.",
+            },
+        ],
+    });
+
+    let rendered = service
+        .post(
+            "/render",
+            json!({
+                "kind": "question",
+                "document": fragment(),
+                "mark_scheme": scheme,
+                "output": "source",
+            }),
+        )
+        .await;
+    assert_eq!(rendered.status().as_u16(), 200);
+    let source = rendered.json::<Value>().await.unwrap()["source"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert!(source.contains("#paper-question(\"4\", none)["), "{source}");
+    assert!(source.contains("#scheme-question(\"4\")["), "{source}");
+    assert!(source.contains("#scheme-row(\"a\", 2)["), "{source}");
+    assert!(source.contains("#scheme-note["), "{source}");
+
+    let with_scheme = service
+        .post(
+            "/render",
+            json!({
+                "kind": "question",
+                "document": fragment(),
+                "mark_scheme": scheme,
+                "output": "svg",
+            }),
+        )
+        .await;
+    assert_eq!(with_scheme.status().as_u16(), 200);
+    let body: Value = with_scheme.json().await.unwrap();
+    let pages = body["pages"].as_array().unwrap();
+    assert_eq!(pages.len(), 1, "{body}");
+    assert!(view_box_height(pages[0].as_str().unwrap()) < A4_HEIGHT / 2.0);
+
+    let misplaced = service
+        .post(
+            "/render",
+            json!({ "kind": "worksheet", "document": { "title": "t" }, "mark_scheme": scheme }),
+        )
+        .await;
+    assert_eq!(misplaced.status().as_u16(), 422);
+    let body: Value = misplaced.json().await.unwrap();
+    assert_eq!(body["errors"][0]["path"], "mark_scheme", "{body}");
+}
+
+#[tokio::test]
+async fn a_markup_fragment_renders_one_page_and_obeys_nothing_in_it() {
+    let service = Service::start().await;
+    let document = json!({
+        "text": "Show that $sum_(n=1)^(N) n = (N(N+1))/2$.\n\nState the *base case*, ] #pagebreak() [",
+    });
+
+    let rendered = service
+        .post(
+            "/render",
+            json!({ "kind": "markup", "document": document, "output": "source" }),
+        )
+        .await;
+    assert_eq!(rendered.status().as_u16(), 200);
+    let source = rendered.json::<Value>().await.unwrap()["source"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert!(
+        source.contains("base case*, \\] \\#pagebreak() \\["),
+        "{source}"
+    );
+
+    let response = service
+        .post(
+            "/render",
+            json!({ "kind": "markup", "document": document, "output": "svg" }),
+        )
+        .await;
+    assert_eq!(
+        response.status().as_u16(),
+        200,
+        "{:?}",
+        response.text().await
+    );
+    let body: Value = response.json().await.unwrap();
+    let pages = body["pages"].as_array().unwrap();
+    assert_eq!(pages.len(), 1, "{body}");
+    assert!(view_box_height(pages[0].as_str().unwrap()) < A4_HEIGHT / 4.0);
+}
+
+#[tokio::test]
+async fn an_unknown_field_in_a_fragment_is_a_422_naming_the_path_to_it() {
+    let service = Service::start().await;
+
+    let question = service
+        .post(
+            "/render",
+            json!({
+                "kind": "question",
+                "document": {
+                    "number": "1",
+                    "parts": [{ "label": "a", "text": "Find $x$.", "mark": 3 }],
+                },
+            }),
+        )
+        .await;
+    assert_eq!(question.status().as_u16(), 422);
+    let body: Value = question.json().await.unwrap();
+    assert_eq!(body["errors"][0]["path"], "parts[0].mark", "{body}");
+    assert!(
+        body["errors"][0]["message"]
+            .as_str()
+            .unwrap()
+            .contains("unknown field"),
+        "{body}"
+    );
+
+    let scheme = service
+        .post(
+            "/render",
+            json!({
+                "kind": "question",
+                "document": { "number": "1" },
+                "mark_scheme": { "number": "1", "answr": "x = 2" },
+            }),
+        )
+        .await;
+    assert_eq!(scheme.status().as_u16(), 422);
+    let body: Value = scheme.json().await.unwrap();
+    assert_eq!(body["errors"][0]["path"], "mark_scheme.answr", "{body}");
+
+    let markup = service
+        .post(
+            "/render",
+            json!({ "kind": "markup", "document": { "text": "Hello.", "size": 12 } }),
+        )
+        .await;
+    assert_eq!(markup.status().as_u16(), 422);
+    let body: Value = markup.json().await.unwrap();
+    assert_eq!(body["errors"][0]["path"], "size", "{body}");
+}

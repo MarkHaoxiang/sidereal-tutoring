@@ -204,6 +204,174 @@ function optional(value: string): string | undefined {
   return trimmed || undefined;
 }
 
+function buildQuestion(
+  question: QuestionDraft,
+  index: number,
+  problems: Problems
+): CanonicalQuestion {
+  const at = `Question ${question.number.trim() || String(index + 1)}`;
+  const number = problems.required(question.number, `${at} needs a number.`);
+  const parts: CanonicalPart[] = question.parts.map((part) => {
+    const partAt = `${at}, part ${part.label.trim() || "?"}`;
+    const subParts: CanonicalPart[] = part.parts.map((sub) => {
+      const subAt = `${partAt} (${sub.label.trim() || "?"})`;
+      // A sub-part carries no parts of its own: the structure nests one level only.
+      const builtSub: CanonicalPart = {
+        label: problems.required(sub.label, `${subAt} needs a label.`),
+        text: problems.required(sub.text, `${subAt} needs to say what it asks.`),
+      };
+      const subMarks = problems.whole(sub.marks, `${subAt}'s marks`);
+      if (subMarks !== null) {
+        builtSub.marks = subMarks;
+      }
+      const subLines = problems.whole(sub.answerLines, `${subAt}'s answer lines`, MAX_ANSWER_LINES);
+      if (subLines !== null) {
+        builtSub.answer_lines = subLines;
+      }
+      return builtSub;
+    });
+
+    // A part that only groups sub-parts asks nothing itself, so its text may be empty.
+    const built: CanonicalPart = {
+      label: problems.required(part.label, `${partAt} needs a label.`),
+      text: part.text.trim(),
+    };
+    if (built.text === "" && subParts.length === 0) {
+      problems.add(`${partAt} needs to say what it asks.`);
+    }
+    const marks = problems.whole(part.marks, `${partAt}'s marks`);
+    if (marks !== null) {
+      built.marks = marks;
+    }
+    const lines = problems.whole(part.answerLines, `${partAt}'s answer lines`, MAX_ANSWER_LINES);
+    if (lines !== null) {
+      built.answer_lines = lines;
+    }
+    if (subParts.length > 0) {
+      built.parts = subParts;
+    }
+    return built;
+  });
+
+  const built: CanonicalQuestion = { number };
+  const stem = optional(question.stem);
+  if (stem !== undefined) {
+    built.stem = stem;
+  }
+  const marks = problems.whole(question.marks, `${at}'s marks`);
+  if (marks !== null) {
+    built.marks = marks;
+  }
+  const lines = problems.whole(question.answerLines, `${at}'s answer lines`, MAX_ANSWER_LINES);
+  if (lines !== null) {
+    built.answer_lines = lines;
+  }
+  if (parts.length > 0) {
+    built.parts = parts;
+  }
+  if (built.stem === undefined && parts.length === 0) {
+    problems.add(`${at} needs a question or at least one part.`);
+  }
+  return built;
+}
+
+function buildSchemeQuestion(
+  question: SchemeQuestionDraft,
+  index: number,
+  problems: Problems
+): CanonicalMarkSchemeQuestion {
+  const at = `Mark scheme ${question.number.trim() || String(index + 1)}`;
+  const parts: CanonicalMarkSchemePart[] = question.parts.map((part) => {
+    const partAt = `${at}, part ${part.label.trim() || "?"}`;
+    const built: CanonicalMarkSchemePart = {
+      label: problems.required(part.label, `${partAt} needs a label.`),
+      answer: problems.required(part.answer, `${partAt} needs an answer.`),
+    };
+    const marks = problems.whole(part.marks, `${partAt}'s marks`);
+    if (marks !== null) {
+      built.marks = marks;
+    }
+    const notes = optional(part.notes);
+    if (notes !== undefined) {
+      built.notes = notes;
+    }
+    return built;
+  });
+  const built: CanonicalMarkSchemeQuestion = {
+    number: problems.required(question.number, `${at} needs a number.`),
+  };
+  if (parts.length > 0) {
+    built.parts = parts;
+  }
+  const answer = optional(question.answer);
+  if (answer !== undefined) {
+    built.answer = answer;
+  }
+  const notes = optional(question.notes);
+  if (notes !== undefined) {
+    built.notes = notes;
+  }
+  return built;
+}
+
+/** One question as the renderer takes it, or null while the draft is too incomplete to send. */
+export function canonicalQuestion(question: QuestionDraft, index: number): CanonicalQuestion | null {
+  const problems = new Problems();
+  const built = buildQuestion(question, index, problems);
+  return problems.all.length > 0 ? null : built;
+}
+
+/** One mark scheme entry as the renderer takes it, or null while the draft is incomplete. */
+export function canonicalSchemeQuestion(
+  question: SchemeQuestionDraft,
+  index: number
+): CanonicalMarkSchemeQuestion | null {
+  const problems = new Problems();
+  const built = buildSchemeQuestion(question, index, problems);
+  return problems.all.length > 0 ? null : built;
+}
+
+function dropLines<T extends { answer_lines?: number | null }>(value: T): T {
+  const copy = { ...value };
+  delete copy.answer_lines;
+  return copy;
+}
+
+/** The question as a mark scheme shows it: the same words, without the space to answer in. */
+export function withoutAnswerLines(question: CanonicalQuestion): CanonicalQuestion {
+  const stripped = dropLines(question);
+  if (stripped.parts === undefined) {
+    return stripped;
+  }
+  return {
+    ...stripped,
+    parts: stripped.parts.map((part) => {
+      const outer = dropLines(part);
+      return outer.parts === undefined ? outer : { ...outer, parts: outer.parts.map(dropLines) };
+    }),
+  };
+}
+
+/** What a question is worth: its own marks when it has them, else what its parts add up to. */
+export function questionMarks(question: QuestionDraft): number | null {
+  const own = Number(question.marks.trim());
+  if (question.marks.trim() && Number.isInteger(own)) {
+    return own;
+  }
+  let total = 0;
+  let counted = false;
+  for (const part of question.parts) {
+    for (const value of [part.marks, ...part.parts.map((sub) => sub.marks)]) {
+      const marks = Number(value.trim());
+      if (value.trim() && Number.isInteger(marks)) {
+        total += marks;
+        counted = true;
+      }
+    }
+  }
+  return counted ? total : null;
+}
+
 /**
  * The draft as the canonical structure, built key by key: only the fields the typeset
  * service names are ever sent, and an empty one is left out rather than sent as null.
@@ -212,102 +380,13 @@ export function buildPatch(draft: PaperDraft): Built {
   const problems = new Problems();
   const title = problems.required(draft.title, "Give the paper a title.");
 
-  const questions: CanonicalQuestion[] = draft.questions.map((question, index) => {
-    const at = `Question ${question.number.trim() || String(index + 1)}`;
-    const number = problems.required(question.number, `${at} needs a number.`);
-    const parts: CanonicalPart[] = question.parts.map((part) => {
-      const partAt = `${at}, part ${part.label.trim() || "?"}`;
-      const built: CanonicalPart = {
-        label: problems.required(part.label, `${partAt} needs a label.`),
-        text: problems.required(part.text, `${partAt} needs to say what it asks.`),
-      };
-      const marks = problems.whole(part.marks, `${partAt}'s marks`);
-      if (marks !== null) {
-        built.marks = marks;
-      }
-      const lines = problems.whole(part.answerLines, `${partAt}'s answer lines`, MAX_ANSWER_LINES);
-      if (lines !== null) {
-        built.answer_lines = lines;
-      }
-      const subParts: CanonicalPart[] = part.parts.map((sub) => {
-        const subAt = `${partAt} (${sub.label.trim() || "?"})`;
-        // A sub-part carries no parts of its own: the structure nests one level only.
-        const builtSub: CanonicalPart = {
-          label: problems.required(sub.label, `${subAt} needs a label.`),
-          text: problems.required(sub.text, `${subAt} needs to say what it asks.`),
-        };
-        const subMarks = problems.whole(sub.marks, `${subAt}'s marks`);
-        if (subMarks !== null) {
-          builtSub.marks = subMarks;
-        }
-        const subLines = problems.whole(sub.answerLines, `${subAt}'s answer lines`, MAX_ANSWER_LINES);
-        if (subLines !== null) {
-          builtSub.answer_lines = subLines;
-        }
-        return builtSub;
-      });
-      if (subParts.length > 0) {
-        built.parts = subParts;
-      }
-      return built;
-    });
+  const questions: CanonicalQuestion[] = draft.questions.map((question, index) =>
+    buildQuestion(question, index, problems)
+  );
 
-    const built: CanonicalQuestion = { number };
-    const stem = optional(question.stem);
-    if (stem !== undefined) {
-      built.stem = stem;
-    }
-    const marks = problems.whole(question.marks, `${at}'s marks`);
-    if (marks !== null) {
-      built.marks = marks;
-    }
-    const lines = problems.whole(question.answerLines, `${at}'s answer lines`, MAX_ANSWER_LINES);
-    if (lines !== null) {
-      built.answer_lines = lines;
-    }
-    if (parts.length > 0) {
-      built.parts = parts;
-    }
-    if (built.stem === undefined && parts.length === 0) {
-      problems.add(`${at} needs a question or at least one part.`);
-    }
-    return built;
-  });
-
-  const schemeQuestions: CanonicalMarkSchemeQuestion[] = draft.scheme.map((question, index) => {
-    const at = `Mark scheme ${question.number.trim() || String(index + 1)}`;
-    const parts: CanonicalMarkSchemePart[] = question.parts.map((part) => {
-      const partAt = `${at}, part ${part.label.trim() || "?"}`;
-      const built: CanonicalMarkSchemePart = {
-        label: problems.required(part.label, `${partAt} needs a label.`),
-        answer: problems.required(part.answer, `${partAt} needs an answer.`),
-      };
-      const marks = problems.whole(part.marks, `${partAt}'s marks`);
-      if (marks !== null) {
-        built.marks = marks;
-      }
-      const notes = optional(part.notes);
-      if (notes !== undefined) {
-        built.notes = notes;
-      }
-      return built;
-    });
-    const built: CanonicalMarkSchemeQuestion = {
-      number: problems.required(question.number, `${at} needs a number.`),
-    };
-    if (parts.length > 0) {
-      built.parts = parts;
-    }
-    const answer = optional(question.answer);
-    if (answer !== undefined) {
-      built.answer = answer;
-    }
-    const notes = optional(question.notes);
-    if (notes !== undefined) {
-      built.notes = notes;
-    }
-    return built;
-  });
+  const schemeQuestions: CanonicalMarkSchemeQuestion[] = draft.scheme.map((question, index) =>
+    buildSchemeQuestion(question, index, problems)
+  );
 
   const structure: CanonicalPaper = { title };
   const source = optional(draft.source);

@@ -13,6 +13,7 @@ from sidereal_core.typeset import TypesetClient, TypesetError
 
 from sidereal_generate.base import HomeworkGenerator
 from sidereal_generate.models import GenerationRequest, HomeworkOutput
+from sidereal_generate.usage import UsageTally
 
 PDF_TYPE = "application/pdf"
 RETRY_NOTE = (
@@ -55,14 +56,15 @@ async def generate_typst(
     request: GenerationRequest,
     *,
     due: date | None = None,
+    usage: UsageTally | None = None,
 ) -> tuple[HomeworkOutput, Compiled]:
     """One attempt, then one retry with the diagnostics in the prompt. Then whatever we have."""
-    output = await generator.generate(request)
+    output = await generator.generate(request, usage=usage)
     compiled = await _compile(typeset, output, request, due)
     if compiled.error is None:
         return output, compiled
     retry = request.model_copy(update={"instructions": _with_diagnostics(request, compiled.error)})
-    output = await generator.generate(retry)
+    output = await generator.generate(retry, usage=usage)
     return output, await _compile(typeset, output, retry, due)
 
 

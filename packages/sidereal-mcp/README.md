@@ -26,7 +26,7 @@ nothing until students are assigned to it.
 | `create_student_login`, `reset_student_password`, `remove_student_login` | A student's way in. |
 | `list_documents`, `ingest_source` | Source material. |
 | `generate_homework`, `generate_feedback`, `generate_plan` | Runs the job to completion and returns it. `generate_homework` takes `format`: `markdown` or `typst`. |
-| `extract_paper`, `render_paper`, `paper_worksheet` | A document read into a paper, its PDFs made again, and some of its questions as one worksheet. |
+| `extract_paper`, `render_paper`, `paper_worksheet` | A document read into a paper (with `mark_scheme_id` when its mark scheme is a second document), its PDFs made again, and some of its questions as one worksheet. |
 | `preview_typst` | Typst source to one SVG per page. |
 | `compile_homework` | Compiles a Typst row's `content` again, replacing its PDF or setting `compile_error`. |
 | `list_generation_jobs`, `update_generation_job` | The history, and a tutor's verdict on it. |

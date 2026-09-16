@@ -150,10 +150,15 @@ def _register(resolve: Resolve) -> MCPServer:
             )
 
     @server.tool()
-    async def extract_paper(ctx: Context, document_id: UUID) -> GenerationJob:
-        """Read a ready document into a paper: its structure, its PDFs and its question rows."""
+    async def extract_paper(
+        ctx: Context, document_id: UUID, mark_scheme_id: UUID | None = None
+    ) -> GenerationJob:
+        """Read a ready document into a paper: its structure, its PDFs and its question rows.
+
+        `mark_scheme_id` is the paper's mark scheme, when it was filed as its own document.
+        """
         async with caller(ctx) as services:
-            return await tools.extract_paper(services, document_id)
+            return await tools.extract_paper(services, document_id, mark_scheme_id)
 
     @server.tool()
     async def render_paper(ctx: Context, paper_id: UUID) -> Paper:

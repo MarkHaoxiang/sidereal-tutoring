@@ -10,7 +10,12 @@ from typing import Any, Literal, Self, overload
 import httpx
 from pydantic import BaseModel, ConfigDict
 
-from sidereal_core.canonical import CanonicalDocument, RenderKind, RenderOutput
+from sidereal_core.canonical import (
+    CanonicalDocument,
+    CanonicalMarkSchemeQuestion,
+    RenderKind,
+    RenderOutput,
+)
 
 # The service's own compile timeout is 10s; the client waits longer than the answer can take.
 DEFAULT_TIMEOUT = 30.0
@@ -102,21 +107,42 @@ class TypesetClient:
         return _pages(body, "/compile")
 
     @overload
-    async def render(self, kind: RenderKind, document: CanonicalDocument) -> bytes: ...
-
-    @overload
     async def render(
-        self, kind: RenderKind, document: CanonicalDocument, output: Literal[RenderOutput.PDF]
+        self,
+        kind: RenderKind,
+        document: CanonicalDocument,
+        *,
+        mark_scheme: CanonicalMarkSchemeQuestion | None = None,
     ) -> bytes: ...
 
     @overload
     async def render(
-        self, kind: RenderKind, document: CanonicalDocument, output: Literal[RenderOutput.SVG]
+        self,
+        kind: RenderKind,
+        document: CanonicalDocument,
+        output: Literal[RenderOutput.PDF],
+        *,
+        mark_scheme: CanonicalMarkSchemeQuestion | None = None,
+    ) -> bytes: ...
+
+    @overload
+    async def render(
+        self,
+        kind: RenderKind,
+        document: CanonicalDocument,
+        output: Literal[RenderOutput.SVG],
+        *,
+        mark_scheme: CanonicalMarkSchemeQuestion | None = None,
     ) -> list[str]: ...
 
     @overload
     async def render(
-        self, kind: RenderKind, document: CanonicalDocument, output: Literal[RenderOutput.SOURCE]
+        self,
+        kind: RenderKind,
+        document: CanonicalDocument,
+        output: Literal[RenderOutput.SOURCE],
+        *,
+        mark_scheme: CanonicalMarkSchemeQuestion | None = None,
     ) -> str: ...
 
     async def render(
@@ -124,17 +150,18 @@ class TypesetClient:
         kind: RenderKind,
         document: CanonicalDocument,
         output: RenderOutput = RenderOutput.PDF,
+        *,
+        mark_scheme: CanonicalMarkSchemeQuestion | None = None,
     ) -> bytes | list[str] | str:
         """A canonical document in the house style: the structure goes over, never Typst."""
-        response = await self._send(
-            "POST",
-            "/render",
-            {
-                "kind": kind.value,
-                "document": document.model_dump(mode="json"),
-                "output": output.value,
-            },
-        )
+        payload: dict[str, Any] = {
+            "kind": kind.value,
+            "document": document.model_dump(mode="json"),
+            "output": output.value,
+        }
+        if mark_scheme is not None:
+            payload["mark_scheme"] = mark_scheme.model_dump(mode="json")
+        response = await self._send("POST", "/render", payload)
         if output is RenderOutput.PDF:
             return response.content
         body = self._json(response)

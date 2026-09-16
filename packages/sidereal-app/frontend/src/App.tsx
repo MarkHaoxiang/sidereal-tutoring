@@ -29,6 +29,10 @@ import { StudentHomeworkListPage } from "./routes/me/StudentHomeworkListPage";
 import { StudentHomeworkPage } from "./routes/me/StudentHomeworkPage";
 import { StudentPlanPage } from "./routes/me/StudentPlanPage";
 import { StudentSessionsPage } from "./routes/me/StudentSessionsPage";
+import { PrintableTab } from "./routes/paper-tabs/PrintableTab";
+import { QuestionsTab } from "./routes/paper-tabs/QuestionsTab";
+import { SchemeTab } from "./routes/paper-tabs/SchemeTab";
+import { SourceTab } from "./routes/paper-tabs/SourceTab";
 import { FeedbackTab } from "./routes/student-tabs/FeedbackTab";
 import { HomeworkTab } from "./routes/student-tabs/HomeworkTab";
 import { MaterialTab } from "./routes/student-tabs/MaterialTab";
@@ -70,7 +74,13 @@ export function App() {
         <Route path="students/:id/plans/:artefactId" element={<PlanDetailPage />} />
         <Route path="library" element={<LibraryPage />} />
         <Route path="library/papers" element={<PapersPage />} />
-        <Route path="library/papers/:paperId" element={<PaperDetailPage />} />
+        <Route path="library/papers/:paperId" element={<PaperDetailPage />}>
+          <Route index element={<Navigate to="questions" replace />} />
+          <Route path="questions" element={<QuestionsTab />} />
+          <Route path="scheme" element={<SchemeTab />} />
+          <Route path="source" element={<SourceTab />} />
+          <Route path="printable" element={<PrintableTab />} />
+        </Route>
         <Route path="library/:docId" element={<MaterialDetailPage />} />
         <Route path="topics" element={<TopicsPage />} />
         <Route path="account" element={<AccountPage />} />

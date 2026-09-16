@@ -254,7 +254,7 @@ class FakeTypeset:
         """A canonical document, rendered by nobody. A `FAIL_MARKER` anywhere in it is the 422."""
         self.rendered.append(body)
         document = json.dumps(body.get("document", {}))
-        if FAIL_MARKER in document:
+        if FAIL_MARKER in document or FAIL_MARKER in json.dumps(body.get("mark_scheme")):
             return httpx.Response(
                 422,
                 json={

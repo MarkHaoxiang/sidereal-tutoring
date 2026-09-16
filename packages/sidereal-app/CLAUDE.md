@@ -14,6 +14,8 @@ Top layer. Imports core, ingest and generate; never sidereal-mcp.
   material. A background task outlives its request, so both pools must outlive it too.
 - The ingesters are built once by the lifespan, so the web fetcher's rate limit and cache are per
   process rather than per request.
+- The generators are built once by the lifespan too: the generation backend's SDK client, and the
+  connection pool inside it, are per process rather than per request.
 - A job endpoint returns 202 with the queued row and runs the generation in the background. The job row,
   not the response, carries the outcome.
 - `POST /api/documents` returns 202 with the pending row and reads the material in the background; the
@@ -38,6 +40,8 @@ Top layer. Imports core, ingest and generate; never sidereal-mcp.
 - `POST /api/homework/{id}/compile` compiles before it answers — the 202 body is the recompiled row,
   not a queued one. A failure sets `compile_error` and leaves the existing `pdf` in place.
 - One `TypesetClient` for the process, built by the lifespan over its own pool.
+- `POST /api/typeset/render` reads nothing and stores nothing: a canonical structure or a
+  markup fragment goes in, SVG pages or the rendered source come back.
 - `POST /api/jobs/paper_extract` takes exactly one document and no student; every other kind takes a
   student. Both are 422 with a `code` before a job row exists.
 - Papers are the tutor's: render and worksheet are `require_tutor`, and each reads the paper with the

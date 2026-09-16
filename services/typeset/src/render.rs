@@ -4,8 +4,12 @@
 use std::fmt::Display;
 use std::fmt::Write as _;
 
-use crate::document::{Document, MarkScheme, MarkSchemeQuestion, Paper, Part, Question, Worksheet};
-use crate::template::{literal, mark_scheme_preamble, paper_preamble, quoted, worksheet_preamble};
+use crate::document::{
+    Document, MarkScheme, MarkSchemeQuestion, Markup, Paper, Part, Question, Worksheet,
+};
+use crate::template::{
+    fragment_preamble, literal, mark_scheme_preamble, paper_preamble, quoted, worksheet_preamble,
+};
 
 /// The complete source for `document`: the template it needs, its `#show:` line, and its
 /// questions as calls to the template's helpers.
@@ -14,6 +18,8 @@ pub fn render(document: &Document) -> String {
         Document::Paper(paper) => paper_source(paper),
         Document::MarkScheme(scheme) => mark_scheme_source(scheme),
         Document::Worksheet(worksheet) => worksheet_source(worksheet),
+        Document::Question { question, scheme } => question_source(question, scheme.as_ref()),
+        Document::Markup(fragment) => markup_source(fragment),
     }
 }
 
@@ -104,6 +110,28 @@ fn worksheet_source(worksheet: &Worksheet) -> String {
     out
 }
 
+/// One question on an auto-height page the width of a paper's text column, through the same
+/// helpers a paper uses, so the app shows it exactly as it will be printed.
+fn question_source(question: &Question, scheme: Option<&MarkSchemeQuestion>) -> String {
+    let mut out = fragment_preamble();
+    out.push_str("\n#show: fragment\n");
+    questions(&mut out, std::slice::from_ref(question));
+    if let Some(scheme) = scheme {
+        scheme_question(&mut out, scheme);
+    }
+    out
+}
+
+fn markup_source(fragment: &Markup) -> String {
+    let mut out = fragment_preamble();
+    let _ = write!(
+        out,
+        "\n#show: fragment\n\n{}\n",
+        markup(fragment.text.trim()),
+    );
+    out
+}
+
 fn questions(out: &mut String, questions: &[Question]) {
     for question in questions {
         let _ = write!(
@@ -162,11 +190,15 @@ fn mark_scheme_source(scheme: &MarkScheme) -> String {
         quoted(&scheme.title),
     );
     for question in &scheme.questions {
-        let _ = write!(out, "\n#scheme-question({})[\n", quoted(&question.number));
-        scheme_rows(&mut out, question);
-        out.push_str("]\n");
+        scheme_question(&mut out, question);
     }
     out
+}
+
+fn scheme_question(out: &mut String, question: &MarkSchemeQuestion) {
+    let _ = write!(out, "\n#scheme-question({})[\n", quoted(&question.number));
+    scheme_rows(out, question);
+    out.push_str("]\n");
 }
 
 fn scheme_rows(out: &mut String, question: &MarkSchemeQuestion) {
