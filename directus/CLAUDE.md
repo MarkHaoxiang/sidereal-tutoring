@@ -8,6 +8,10 @@
   would normalise differently make the next round-trip a spurious diff.
 - Snapshots carry collections, fields and relations only. Roles, policies, permissions and the
   agent service account live in `scripts/directus-bootstrap.sh` and are created by running it.
+- A relation is only ever created or changed with its `meta` and `schema` together: a meta-only
+  `PATCH /relations/<collection>/<field>` drops the foreign key, and the snapshot then loses
+  that relation's `schema` block — which a fresh instance silently recreates as
+  `on_delete: NO ACTION`. Delete and recreate the relation with both halves to repair one.
 - Status/kind values are the lowercase tokens from the domain vocabulary
   (`active`/`paused`/`archived`, `scheduled`/`completed`/`cancelled`,
   `transcript`/`web_page`/`question_bank`/`upload`, `pending`/`processing`/`ready`/`failed`,
