@@ -7,7 +7,7 @@ from pathlib import Path
 from uuid import UUID
 
 from sidereal_core.models import Collection
-from sidereal_core.testing import FakeDirectus, FakeTypeset
+from sidereal_core.testing import DEFAULT_TOKEN, FakeDirectus, FakeTypeset
 from sidereal_generate.fake import FakeGenerator
 from sidereal_generate.jobs import Generators
 from sidereal_generate.models import (
@@ -43,10 +43,12 @@ class StubFetcher:
         return PAGE
 
 
-def build_services(fake: FakeDirectus, typeset: FakeTypeset | None = None) -> Services:
+def build_services(
+    fake: FakeDirectus, typeset: FakeTypeset | None = None, token: str = DEFAULT_TOKEN
+) -> Services:
     return Services(
         typeset=(typeset or FakeTypeset()).client(),
-        directus=fake.client(),
+        directus=fake.client(token),
         ingesters=[TranscriptIngester(), WebPageIngester(StubFetcher()), UploadIngester()],
         generators=Generators(
             homework=FakeGenerator(HOMEWORK, model="fake-homework"),

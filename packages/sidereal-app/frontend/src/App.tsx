@@ -9,6 +9,7 @@ import { AccountPage } from "./routes/AccountPage";
 import { FeedbackDetailPage } from "./routes/FeedbackDetailPage";
 import { HomePage } from "./routes/HomePage";
 import { HomeworkDetailPage } from "./routes/HomeworkDetailPage";
+import { LibraryPage } from "./routes/LibraryPage";
 import { LoginPage } from "./routes/LoginPage";
 import { MaterialDetailPage } from "./routes/MaterialDetailPage";
 import { PlanDetailPage } from "./routes/PlanDetailPage";
@@ -65,6 +66,8 @@ export function App() {
         <Route path="students/:id/homework/:artefactId" element={<HomeworkDetailPage />} />
         <Route path="students/:id/feedback/:artefactId" element={<FeedbackDetailPage />} />
         <Route path="students/:id/plans/:artefactId" element={<PlanDetailPage />} />
+        <Route path="library" element={<LibraryPage />} />
+        <Route path="library/:docId" element={<MaterialDetailPage />} />
         <Route path="topics" element={<TopicsPage />} />
         <Route path="account" element={<AccountPage />} />
       </Route>

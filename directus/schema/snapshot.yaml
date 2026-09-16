@@ -465,6 +465,31 @@ fields:
       validation: null
       validation_message: null
       width: full
+  - collection: directus_files
+    field: document_file
+    type: alias
+    meta:
+      collection: directus_files
+      conditions: null
+      display: null
+      display_options: null
+      field: document_file
+      group: null
+      hidden: true
+      interface: list-o2m
+      note: null
+      options:
+        template: '{{title}}'
+      readonly: false
+      required: false
+      searchable: true
+      sort: 3
+      special:
+        - o2m
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
   - collection: directus_users
     field: student
     type: alias
@@ -6797,27 +6822,6 @@ relations:
       on_update: NO ACTION
       on_delete: SET NULL
   - collection: documents
-    field: file
-    related_collection: directus_files
-    meta:
-      junction_field: null
-      many_collection: documents
-      many_field: file
-      one_allowed_collections: null
-      one_collection: directus_files
-      one_collection_field: null
-      one_deselect_action: nullify
-      one_field: null
-      sort_field: null
-    schema:
-      table: documents
-      column: file
-      foreign_key_table: directus_files
-      foreign_key_column: id
-      constraint_name: documents_file_foreign
-      on_update: NO ACTION
-      on_delete: SET NULL
-  - collection: documents
     field: student
     related_collection: students
     meta:
@@ -6899,6 +6903,27 @@ relations:
       foreign_key_table: directus_users
       foreign_key_column: id
       constraint_name: documents_user_updated_foreign
+      on_update: NO ACTION
+      on_delete: SET NULL
+  - collection: documents
+    field: file
+    related_collection: directus_files
+    meta:
+      junction_field: null
+      many_collection: documents
+      many_field: file
+      one_allowed_collections: null
+      one_collection: directus_files
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: document_file
+      sort_field: null
+    schema:
+      table: documents
+      column: file
+      foreign_key_table: directus_files
+      foreign_key_column: id
+      constraint_name: documents_file_foreign
       on_update: NO ACTION
       on_delete: SET NULL
   - collection: feedback

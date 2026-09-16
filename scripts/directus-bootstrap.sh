@@ -244,27 +244,49 @@ current_user='$CURRENT_USER'
 # students. Directus resolves `$CURRENT_USER` at request time.
 own_students="$(jq -nc --arg u "$current_user" '{tutor: {_eq: $u}}')"
 via_tutor="$(jq -nc --arg u "$current_user" '{student: {tutor: {_eq: $u}}}')"
-# `documents.student` and `generation_jobs.student` are nullable, so a row with no student is
-# reachable only through whoever created it.
+# `generation_jobs.student` is nullable, so a job with no student is reachable only through
+# whoever created it.
 via_tutor_or_own="$(jq -nc --arg u "$current_user" \
   '{_or: [{student: {tutor: {_eq: $u}}}, {user_created: {_eq: $u}}]}')"
-# A question hangs off a document, off homework through the junction, or off nothing but its
-# author.
-via_question="$(jq -nc --arg u "$current_user" '{_or: [
+# One agency, one library: a `documents` or `questions` row with no student behind it is shared
+# with every tutor, and only its author may change it.
+documents_read="$(jq -nc --arg u "$current_user" \
+  '{_or: [{student: {tutor: {_eq: $u}}}, {student: {_null: true}}]}')"
+documents_write="$(jq -nc --arg u "$current_user" '{_or: [
+  {student: {tutor: {_eq: $u}}},
+  {_and: [{student: {_null: true}}, {user_created: {_eq: $u}}]}
+]}')"
+# A question hangs off a document, off homework through the junction, or off neither. Every arm
+# that tests a document's student for null is guarded with `_nnull` on the document itself: a
+# question with no document left-joins to a null student and would otherwise match them all.
+library_question='{"_and": [{"document": {"_nnull": true}}, {"document": {"student": {"_null": true}}}]}'
+loose_question='{"_and": [{"document": {"_null": true}}, {"homework": {"_null": true}}]}'
+questions_read="$(jq -nc --arg u "$current_user" \
+  --argjson l "$library_question" --argjson o "$loose_question" '{_or: [
   {document: {student: {tutor: {_eq: $u}}}},
   {homework: {homework: {student: {tutor: {_eq: $u}}}}},
-  {user_created: {_eq: $u}}
+  $l,
+  $o
+]}')"
+questions_write="$(jq -nc --arg u "$current_user" \
+  --argjson l "$library_question" --argjson o "$loose_question" '{_or: [
+  {document: {student: {tutor: {_eq: $u}}}},
+  {homework: {homework: {student: {tutor: {_eq: $u}}}}},
+  {_and: [$l, {user_created: {_eq: $u}}]},
+  {_and: [$o, {user_created: {_eq: $u}}]}
 ]}')"
 via_tutor_homework="$(jq -nc --arg u "$current_user" '{homework: {student: {tutor: {_eq: $u}}}}')"
 
 ensure_scoped() {
-  # ensure_scoped <collection> <row-filter>. Read, update and delete carry the filter; create
-  # cannot. Directus ignores `permissions` on create outright and checks `validation` against
-  # the payload alone, where `student` is a bare id, so no create rule can reach through the
-  # relation to the student's tutor. The app enforces that; see directus/CLAUDE.md.
-  local collection="$1" rule="$2" action
-  for action in read update delete; do
-    ensure_permission "$policy_id" "$collection" "$action" '["*"]' "$rule"
+  # ensure_scoped <collection> <read-filter> [<write-filter>]. Read, update and delete carry a
+  # filter; create cannot. Directus ignores `permissions` on create outright and checks
+  # `validation` against the payload alone, where `student` is a bare id, so no create rule can
+  # reach through the relation to the student's tutor. The app enforces that; see
+  # directus/CLAUDE.md.
+  local collection="$1" rule="$2" write="${3:-$2}" action
+  ensure_permission "$policy_id" "$collection" read '["*"]' "$rule"
+  for action in update delete; do
+    ensure_permission "$policy_id" "$collection" "$action" '["*"]' "$write"
   done
   ensure_permission "$policy_id" "$collection" create '["*"]' '{}'
 }
@@ -292,29 +314,44 @@ if [ "$custom_rules" = true ]; then
   ensure_scoped homework "$via_tutor"
   ensure_scoped feedback "$via_tutor"
   ensure_scoped plans "$via_tutor"
-  ensure_scoped documents "$via_tutor_or_own"
+  ensure_scoped documents "$documents_read" "$documents_write"
   ensure_scoped generation_jobs "$via_tutor_or_own"
-  ensure_scoped questions "$via_question"
+  ensure_scoped questions "$questions_read" "$questions_write"
   ensure_scoped homework_questions "$via_tutor_homework"
   ensure_scoped homework_topics "$via_tutor_homework"
-  ensure_scoped document_topics "$(jq -nc --argjson d "$via_tutor_or_own" '{document: $d}')"
-  ensure_scoped question_topics "$(jq -nc --argjson q "$via_question" '{question: $q}')"
+  # A topic junction is reachable exactly as far as the row it tags.
+  ensure_scoped document_topics \
+    "$(jq -nc --argjson d "$documents_read" '{document: $d}')" \
+    "$(jq -nc --argjson d "$documents_write" '{document: $d}')"
+  ensure_scoped question_topics \
+    "$(jq -nc --argjson q "$questions_read" '{question: $q}')" \
+    "$(jq -nc --argjson q "$questions_write" '{question: $q}')"
 
   # The topic tree is the practice's shared vocabulary, not any one tutor's data.
   for action in create read update delete; do
     ensure_permission "$policy_id" topics "$action" '["*"]' '{}'
   done
 
-  # Files: their own uploads, plus whatever hangs off their students' homework through the two
-  # o2m aliases on `directus_files`. The create preset is what makes the first arm true, and
-  # delete is needed or deleting the material that owns a file orphans it in storage.
-  tutor_files="$(jq -nc --arg u "$current_user" '{_or: [
+  # Files: their own uploads, plus whatever hangs off their students' homework or documents
+  # through the three o2m aliases on `directus_files`. The create preset is what makes the
+  # first arm true, and delete is needed or deleting the material that owns a file orphans it
+  # in storage. Writing is not widened by the library: a tutor reads another tutor's library
+  # file and changes neither it nor the document behind it.
+  # The `document_file` arms use `_some` and stay separate. Under one `_or` — or without
+  # `_some` at all — the null test matches a file with no document at all, which is every file.
+  tutor_files_write="$(jq -nc --arg u "$current_user" '{_or: [
     {uploaded_by: {_eq: $u}},
     {homework_pdf: {student: {tutor: {_eq: $u}}}},
     {homework_submission_file: {student: {tutor: {_eq: $u}}}}
   ]}')"
-  for action in read update delete; do
-    ensure_permission "$policy_id" directus_files "$action" '["*"]' "$tutor_files"
+  tutor_files_read="$(jq -nc --arg u "$current_user" --argjson w "$tutor_files_write" '{_or: [
+    $w._or[],
+    {document_file: {_some: {student: {tutor: {_eq: $u}}}}},
+    {document_file: {_some: {student: {_null: true}}}}
+  ]}')"
+  ensure_permission "$policy_id" directus_files read '["*"]' "$tutor_files_read"
+  for action in update delete; do
+    ensure_permission "$policy_id" directus_files "$action" '["*"]' "$tutor_files_write"
   done
   ensure_permission "$policy_id" directus_files create '["*"]' '{}' null \
     "$(jq -nc --arg u "$current_user" '{uploaded_by: $u}')"

@@ -144,6 +144,60 @@
   white-space: nowrap;
 }
 
+/* The shared library in the generate dialog: folded away until a tutor wants it. */
+.library {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-bg-sunken);
+}
+
+.libraryToggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.625rem 0.75rem;
+  border: none;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-fg);
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.libraryToggle:hover {
+  color: var(--color-accent);
+}
+
+.libraryToggle:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
+}
+
+.libraryCount {
+  margin-left: auto;
+  color: var(--color-fg-muted);
+  font-size: var(--font-size-small);
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.libraryBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0 0.75rem 0.75rem;
+}
+
+.libraryHint {
+  margin: 0;
+  color: var(--color-fg-muted);
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+  text-wrap: pretty;
+}
+
 .dates {
   display: flex;
   flex-wrap: wrap;

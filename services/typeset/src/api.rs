@@ -1,13 +1,20 @@
+use std::fmt::Write as _;
 use std::time::Duration;
 
+use axum::body::Bytes;
 use axum::extract::DefaultBodyLimit;
 use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use serde_path_to_error::{Path, Segment};
 
 use crate::compile::{Compiled, Diagnostic, Output, compile};
+use crate::document::{Document, DocumentKind, MarkScheme, Paper, ValidationError, Worksheet};
+use crate::render::render;
 use crate::template::wrap_homework;
 
 /// The largest source the service will compile or wrap.
@@ -25,6 +32,7 @@ pub fn router() -> Router {
         .route("/healthz", get(healthz))
         .route("/compile", post(compile_source))
         .route("/template", post(apply_template))
+        .route("/render", post(render_document))
         .layer(DefaultBodyLimit::max(MAX_BODY_BYTES))
 }
 
@@ -50,15 +58,18 @@ struct SvgPages {
 }
 
 async fn compile_source(Json(request): Json<CompileRequest>) -> Result<Response, ApiError> {
-    let bytes = request.source.len();
+    compiled_response(request.source, request.output).await
+}
+
+async fn compiled_response(source: String, output: Output) -> Result<Response, ApiError> {
+    let bytes = source.len();
     if bytes > MAX_SOURCE_BYTES {
         return Err(ApiError::TooLarge(bytes));
     }
 
-    let output = request.output;
     // The compiler is synchronous and CPU-bound; the timeout cannot cancel it, but Typst caps
     // loop iterations, so a blocking task always finishes and the pool cannot fill up.
-    let task = tokio::task::spawn_blocking(move || compile(&request.source, output));
+    let task = tokio::task::spawn_blocking(move || compile(&source, output));
     let compiled = match tokio::time::timeout(COMPILE_TIMEOUT, task).await {
         Ok(Ok(compiled)) => compiled,
         Ok(Err(error)) => return Err(ApiError::Failed(error.to_string())),
@@ -127,14 +138,125 @@ async fn apply_template(Json(request): Json<TemplateRequest>) -> Result<Response
     Ok(Json(TemplateResponse { source }).into_response())
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RenderOutput {
+    Pdf,
+    Svg,
+    Source,
+}
+
+fn render_pdf() -> RenderOutput {
+    RenderOutput::Pdf
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RenderRequest {
+    pub kind: DocumentKind,
+    pub document: Value,
+    #[serde(default = "render_pdf")]
+    pub output: RenderOutput,
+}
+
+/// The body is read here rather than by `Json` so that a field serde cannot read is answered
+/// with the path to it instead of a bare message.
+async fn render_document(body: Bytes) -> Result<Response, ApiError> {
+    let request: RenderRequest = from_slice(&body)?;
+    let document = match request.kind {
+        DocumentKind::Paper => Document::Paper(from_value::<Paper>(request.document)?),
+        DocumentKind::MarkScheme => {
+            Document::MarkScheme(from_value::<MarkScheme>(request.document)?)
+        }
+        DocumentKind::Worksheet => Document::Worksheet(from_value::<Worksheet>(request.document)?),
+    };
+
+    let errors = document.validate();
+    if !errors.is_empty() {
+        tracing::info!(count = errors.len(), "document did not validate");
+        return Err(ApiError::Invalid(errors));
+    }
+
+    let source = render(&document);
+    tracing::info!(
+        ?request.kind,
+        ?request.output,
+        source_bytes = source.len(),
+        "rendered a document"
+    );
+    match request.output {
+        RenderOutput::Source => {
+            if source.len() > MAX_SOURCE_BYTES {
+                return Err(ApiError::TooLarge(source.len()));
+            }
+            Ok(Json(TemplateResponse { source }).into_response())
+        }
+        RenderOutput::Pdf => compiled_response(source, Output::Pdf).await,
+        RenderOutput::Svg => compiled_response(source, Output::Svg).await,
+    }
+}
+
+fn from_slice<T: DeserializeOwned>(bytes: &[u8]) -> Result<T, ApiError> {
+    let mut deserializer = serde_json::Deserializer::from_slice(bytes);
+    serde_path_to_error::deserialize(&mut deserializer).map_err(|error| {
+        match error.inner().classify() {
+            serde_json::error::Category::Syntax | serde_json::error::Category::Eof => {
+                ApiError::BadJson(error.inner().to_string())
+            }
+            _ => ApiError::Invalid(vec![invalid(error)]),
+        }
+    })
+}
+
+/// The document is deserialized on its own so the reported paths are rooted at the document,
+/// as the field names in the structure are.
+fn from_value<T: DeserializeOwned>(document: Value) -> Result<T, ApiError> {
+    serde_path_to_error::deserialize(document)
+        .map_err(|error| ApiError::Invalid(vec![invalid(error)]))
+}
+
+fn invalid(error: serde_path_to_error::Error<serde_json::Error>) -> ValidationError {
+    ValidationError {
+        path: path(error.path()),
+        message: error.inner().to_string(),
+    }
+}
+
+/// serde's own path, spelled the way the structure is indexed: `questions[2].parts[0].marks`.
+fn path(path: &Path) -> String {
+    let mut out = String::new();
+    for segment in path.iter() {
+        match segment {
+            Segment::Seq { index } => {
+                let _ = write!(out, "[{index}]");
+            }
+            Segment::Map { key } | Segment::Enum { variant: key } => {
+                if !out.is_empty() {
+                    out.push('.');
+                }
+                out.push_str(key);
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
 /// Everything that is not a successful response. A source the compiler rejects is a 422
 /// carrying its diagnostics — never a 500.
 #[derive(Debug)]
 enum ApiError {
     Diagnostics(Vec<Diagnostic>),
+    Invalid(Vec<ValidationError>),
+    BadJson(String),
     TooLarge(usize),
     Timeout,
     Failed(String),
+}
+
+#[derive(Debug, Serialize)]
+struct Invalid {
+    errors: Vec<ValidationError>,
 }
 
 #[derive(Debug, Serialize)]
@@ -155,6 +277,12 @@ impl IntoResponse for ApiError {
                 Json(Diagnostics { diagnostics }),
             )
                 .into_response(),
+            Self::Invalid(errors) => {
+                (StatusCode::UNPROCESSABLE_ENTITY, Json(Invalid { errors })).into_response()
+            }
+            Self::BadJson(message) => {
+                (StatusCode::BAD_REQUEST, Json(Message { message })).into_response()
+            }
             Self::TooLarge(bytes) => (
                 StatusCode::PAYLOAD_TOO_LARGE,
                 Json(Message {

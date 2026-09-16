@@ -1,6 +1,10 @@
-/// The house template, shipped in the binary. `wrap_homework` returns it followed by the
-/// `show` rule and the body, so the result is a complete document that needs no other file.
+/// The house templates, shipped in the binary. A rendered source is a template followed by a
+/// `#show:` line and a body, so the result needs no other file.
 const HOMEWORK: &str = include_str!("../template/homework.typ");
+const QUESTIONS: &str = include_str!("../template/questions.typ");
+const PAPER: &str = include_str!("../template/paper.typ");
+const MARK_SCHEME: &str = include_str!("../template/mark_scheme.typ");
+const WORKSHEET: &str = include_str!("../template/worksheet.typ");
 
 pub fn wrap_homework(title: &str, student: Option<&str>, due: Option<&str>, body: &str) -> String {
     format!(
@@ -12,11 +16,29 @@ pub fn wrap_homework(title: &str, student: Option<&str>, due: Option<&str>, body
     )
 }
 
+pub(crate) fn paper_preamble() -> String {
+    format!("{QUESTIONS}\n{PAPER}")
+}
+
+pub(crate) fn worksheet_preamble() -> String {
+    format!("{QUESTIONS}\n{WORKSHEET}")
+}
+
+pub(crate) fn mark_scheme_preamble() -> String {
+    MARK_SCHEME.to_owned()
+}
+
 /// A Typst string literal, or `none` for an absent value.
-fn literal(value: Option<&str>) -> String {
-    let Some(value) = value.filter(|value| !value.is_empty()) else {
-        return "none".to_owned();
-    };
+pub(crate) fn literal(value: Option<&str>) -> String {
+    match value.filter(|value| !value.is_empty()) {
+        Some(value) => quoted(value),
+        None => "none".to_owned(),
+    }
+}
+
+/// A Typst string literal. No input can close it: the quote and the backslash are the only
+/// characters that could, and both are escaped.
+pub(crate) fn quoted(value: &str) -> String {
     let mut out = String::with_capacity(value.len() + 2);
     out.push('"');
     for character in value.chars() {

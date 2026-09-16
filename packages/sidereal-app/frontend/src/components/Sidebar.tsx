@@ -1,4 +1,4 @@
-import { House, ListTree, LogOut, Shield, Users } from "lucide-react";
+import { House, Library, ListTree, LogOut, Shield, Users } from "lucide-react";
 import { useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 
@@ -12,6 +12,7 @@ import styles from "./Sidebar.module.css";
 const LINKS = [
   { to: "/", label: "Home", end: true, Icon: House },
   { to: "/students", label: "Students", end: false, Icon: Users },
+  { to: "/library", label: "Library", end: false, Icon: Library },
   { to: "/topics", label: "Topics", end: false, Icon: ListTree },
 ];
 

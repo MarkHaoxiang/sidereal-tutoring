@@ -6,13 +6,17 @@ ingestion, generation, generation jobs, typesetting and the admin's view of the 
 ## Configuration
 
 Reads `SIDEREAL_DIRECTUS_URL`, `SIDEREAL_DIRECTUS_TOKEN`, `SIDEREAL_TYPESET_URL`,
-`SIDEREAL_DATA_DIR`, `SIDEREAL_GENERATE_BACKEND`, `SIDEREAL_GENERATE_MODEL` and
-`ANTHROPIC_API_KEY`.
+`SIDEREAL_DATA_DIR`, `SIDEREAL_GENERATE_BACKEND`, `SIDEREAL_GENERATE_MODEL`,
+`ANTHROPIC_API_KEY` and, for the HTTP transport, `SIDEREAL_MCP_ADDR` (default
+`127.0.0.1:50053`).
 
-`SIDEREAL_DIRECTUS_TOKEN` decides what the agent can reach. A tutor's own static token acts as
-that tutor and sees their students only; an administrator's token sees the whole practice and is
-what the admin tools need. The bootstrap's `agent@` account is a Tutor with no students of its
-own, so on a licensed instance it sees nothing until students are assigned to it.
+Over stdio, `SIDEREAL_DIRECTUS_TOKEN` decides what the agent can reach. Over HTTP each
+request's own `Authorization: Bearer <token>` does, and the environment's token is never
+consulted. Either way: a tutor's own static token acts as that tutor and sees their students
+only; an administrator's token sees the whole practice and is what the admin tools need; a
+session access token from `POST /auth/login` works wherever a static one does. The bootstrap's
+`agent@` account is a Tutor with no students of its own, so on a licensed instance it sees
+nothing until students are assigned to it.
 
 ## Tools
 
@@ -31,14 +35,33 @@ own, so on a licensed instance it sees nothing until students are assigned to it
 ## Running
 
 ```sh
-uv run sidereal-mcp
+uv run sidereal-mcp          # stdio
+uv run sidereal-mcp --http   # Streamable HTTP, at /mcp on SIDEREAL_MCP_ADDR
 ```
 
-Client entry (stdio):
+Setting `SIDEREAL_MCP_ADDR` serves HTTP on its own, as `--http` does. Bind `0.0.0.0:50053` to
+be reachable from another machine.
 
-```json
-{"command": "uv", "args": ["run", "--project", "/path/to/sidereal-tutoring", "sidereal-mcp"]}
+## Connect Claude Code
+
+Local, over stdio:
+
+```sh
+claude mcp add sidereal -e SIDEREAL_DIRECTUS_TOKEN=<directus token> \
+  -- uv run --project /path/to/sidereal-tutoring sidereal-mcp
 ```
+
+Someone else's Claude Code, over the network:
+
+```sh
+claude mcp add --transport http sidereal http://<host>:50053/mcp \
+  --header "Authorization: Bearer <directus token>"
+```
+
+`claude mcp list` checks the connection, and `whoami` reports the role the token carries.
+Give a tutor their own static token and the server acts as that tutor; an admin token sees
+every tutor's work. Directus serves its own `/mcp` on port 8055 for raw collection access;
+this server is the tutoring operations, not the tables.
 
 ```sh
 uv run --package sidereal-mcp pytest packages/sidereal-mcp/tests

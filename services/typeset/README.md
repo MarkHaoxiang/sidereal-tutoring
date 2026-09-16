@@ -1,6 +1,7 @@
 # sidereal-typeset
 
-Compiles Typst to PDF or SVG. The compiler is linked in, the fonts are in the binary, and the
+Compiles Typst to PDF or SVG, and renders exam papers, mark schemes and worksheets from their
+structure into the house style. The compiler is linked in, the fonts are in the binary, and the
 world it compiles against has no files, no packages and no network.
 
 ```sh
@@ -30,12 +31,70 @@ POST /compile   {"source": "…", "output": "pdf" | "svg"}     output defaults t
 POST /template  {"kind": "homework", "title": "…", "student": "…"|null,
                  "due": "2026-09-25"|null, "body": "…"}
      200  {"source": "…"}  the body wrapped in the house template
+POST /render    {"kind": "paper" | "mark_scheme" | "worksheet", "document": {…},
+                 "output": "pdf" | "svg" | "source"}      output defaults to pdf
+     200  application/pdf bytes, {"pages": […]}, or {"source": "…"}
+     400  {"message": …}   the body is not JSON
+     413  {"message": …}   the rendered source is over 256 KiB
+     422  {"errors": [{"path": "questions[2].parts[0].marks", "message": …}, …]}
+     422  {"diagnostics": […]}   the rendered source did not compile
 ```
 
 `line` and `column` are 1-based positions in the submitted source; both are `null` for a
 diagnostic that points at no source. A source the compiler rejects is always a 422 — never a
 500. `#import "@preview/…"` and anything that reads a file (`read`, `include`, `image`) are
 refused the same way, with a diagnostic saying why.
+
+## Rendering a document
+
+`POST /render` takes the structure, not Typst: the renderer walks it and emits calls to the
+helpers in `template/`, so every document of a kind comes out in the same house style.
+
+```
+Paper       { title, source?, board?, year?, time_minutes?, total_marks?, instructions?,
+              questions: [Question] }
+Question    { number: "1", stem?, marks?, answer_lines?, parts: [Part] }
+Part        { label: "a", text, marks?, answer_lines?, parts: [Part] }
+MarkScheme  { title, questions: [{ number, answer?, notes?,
+                                   parts: [{ label, answer, marks?, notes? }] }] }
+Worksheet   { title, student?, due?, intro?, questions: [Question] }
+```
+
+`worksheet` is the structured successor to the `homework` body of `POST /template`; both the
+endpoint and `template/homework.typ` stay as they are. `Part.parts` nests one level only —
+`(a)` then `(i)` — and `answer_lines` is capped at 60. Every other field is optional, and a
+field the structure does not have is a 422 naming its path rather than a silently dropped
+value.
+
+`title`, `source`, `board`, `student`, `due`, `number` and `label` are plain text. `stem`,
+`text`, `instructions`, `intro`, `answer` and `notes` carry Typst markup — `$x^2$`, `*bold*`,
+`_emph_`, lists — but not Typst code: `\`, `#`, `[` and `]` are escaped before the text is
+placed in a helper's content block, and `/` is escaped where it would open a comment. So a
+stray `]` in a question prints as `]` and cannot close the block, and a field can never call a
+function. Markup that is merely wrong — an unclosed `$` — reaches the compiler and comes back
+as a 422 with diagnostics whose line and column point into the rendered source, which
+`"output": "source"` returns.
+
+```sh
+curl -sS localhost:50052/render -H 'content-type: application/json' -o paper.pdf -d '{
+  "kind": "paper",
+  "output": "pdf",
+  "document": {
+    "title": "Pure Mathematics 1", "board": "Edexcel", "year": 2025,
+    "time_minutes": 90, "total_marks": 75,
+    "instructions": "Answer *all* questions in the spaces provided.",
+    "questions": [{
+      "number": "1",
+      "stem": "The curve $C$ has equation $y = x^3 - 6x^2 + 9x + 1$.",
+      "parts": [
+        { "label": "a", "text": "Find $(d y) / (d x)$.", "marks": 2, "answer_lines": 3 },
+        { "label": "b", "text": "Hence find the stationary points of $C$.", "marks": 5,
+          "answer_lines": 6 }
+      ]
+    }]
+  }
+}'
+```
 
 ## Writing a homework body
 

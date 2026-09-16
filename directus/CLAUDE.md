@@ -62,6 +62,11 @@
   rows. `students` create presets `tutor` to the caller and validates it; update validates it
   too, so a student cannot be handed to another tutor. A `students` row with a null `tutor` —
   the example student included — is reachable by an admin only.
+- A `documents` or `questions` row with no student behind it is the agency library: every tutor
+  reads it and its file and topic tags, and only its creator may change or delete it. A rule
+  arm that tests a related row's student for null is guarded — `_null` across an m2o also
+  matches rows with no relation at all, and across an o2m alias it needs `_some` in an arm of
+  its own, since `_some` under a shared `_or` matches everything.
 - Presets are applied before validation, so a create that omits a preset field passes the
   validation on it.
 - Directus ignores a permission row's `permissions` on create and checks `validation` against

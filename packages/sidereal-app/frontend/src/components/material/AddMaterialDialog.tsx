@@ -23,11 +23,41 @@ const ACCEPT = ".pdf,.docx,.txt,.vtt,.srt";
 export interface AddMaterialDialogProps {
   open: boolean;
   onClose: () => void;
+  /** Left out for the library: material every tutor can use belongs to no student. */
+  studentId?: string;
+}
+
+/** Its own component so the student's lessons are only fetched when there is a student. */
+function SessionField({
+  studentId,
+  value,
+  onChange,
+}: {
   studentId: string;
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  const sessions = useSessions({ studentId });
+  return (
+    <Field label="From session" help="Optional — link this material to a lesson.">
+      <Select
+        value={value}
+        onChange={(event) => {
+          onChange(event.target.value);
+        }}
+      >
+        <option value="">Not from a session</option>
+        {(sessions.data ?? []).map((session) => (
+          <option key={session.id} value={session.id}>
+            {formatDateTime(session.scheduled_at)}
+          </option>
+        ))}
+      </Select>
+    </Field>
+  );
 }
 
 export function AddMaterialDialog({ open, onClose, studentId }: AddMaterialDialogProps) {
-  const sessions = useSessions({ studentId });
   const upload = useUploadMaterialFile();
   const create = useCreateDocument();
   const tag = useTagDocument();
@@ -93,7 +123,7 @@ export function AddMaterialDialog({ open, onClose, studentId }: AddMaterialDialo
         return;
       }
       const document = await create.mutateAsync({
-        student_id: studentId,
+        ...(studentId ? { student_id: studentId } : {}),
         ...(sessionId ? { session_id: sessionId } : {}),
         ...(title.trim() ? { title: title.trim() } : {}),
         source,
@@ -131,6 +161,10 @@ export function AddMaterialDialog({ open, onClose, studentId }: AddMaterialDialo
         </>
       }
     >
+      {studentId ? null : (
+        <p className={styles.note}>This goes in the library, where every tutor can use it.</p>
+      )}
+
       <div className={styles.ways}>
         {WAYS.map((option) => (
           <button
@@ -208,21 +242,9 @@ export function AddMaterialDialog({ open, onClose, studentId }: AddMaterialDialo
         <TopicPicker value={topics} onChange={setTopics} disabled={busy} />
       </Field>
 
-      <Field label="From session" help="Optional — link this material to a lesson.">
-        <Select
-          value={sessionId}
-          onChange={(event) => {
-            setSessionId(event.target.value);
-          }}
-        >
-          <option value="">Not from a session</option>
-          {(sessions.data ?? []).map((session) => (
-            <option key={session.id} value={session.id}>
-              {formatDateTime(session.scheduled_at)}
-            </option>
-          ))}
-        </Select>
-      </Field>
+      {studentId ? (
+        <SessionField studentId={studentId} value={sessionId} onChange={setSessionId} />
+      ) : null}
     </Dialog>
   );
 }

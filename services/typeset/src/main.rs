@@ -4,8 +4,8 @@
 //! | --- | --- | --- |
 //! | `SIDEREAL_TYPESET_ADDR` | `127.0.0.1:50052` | listen address |
 //!
-//! It serves `GET /healthz`, `POST /compile` and `POST /template`. It reaches nothing else: no
-//! Directus, no filesystem, no network.
+//! It serves `GET /healthz`, `POST /compile`, `POST /template` and `POST /render`. It reaches
+//! nothing else: no Directus, no filesystem, no network.
 
 use anyhow::{Context, Result};
 use sidereal_common::{bind_addr_from_env, init_tracing};

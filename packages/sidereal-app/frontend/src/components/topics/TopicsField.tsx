@@ -11,9 +11,11 @@ import styles from "./topics.module.css";
 export interface TopicsFieldProps {
   topics: { id: string; name: string }[];
   onSave: (topicIds: string[]) => Promise<void>;
+  /** False where the caller may read the tags but not change them. */
+  editable?: boolean;
 }
 
-export function TopicsField({ topics, onSave }: TopicsFieldProps) {
+export function TopicsField({ topics, onSave, editable = true }: TopicsFieldProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
@@ -35,7 +37,7 @@ export function TopicsField({ topics, onSave }: TopicsFieldProps) {
     <div className={styles.field}>
       <div className={styles.fieldHeader}>
         <h2 className={styles.fieldTitle}>Topics</h2>
-        {editing ? null : (
+        {editing || !editable ? null : (
           <Button
             size="sm"
             onClick={() => {

@@ -19,6 +19,8 @@ sidereal-common = { workspace = true }
 anyhow = { workspace = true }
 axum = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
+serde_path_to_error = { workspace = true }
 tokio = { workspace = true, features = ["net", "sync", "time"] }
 tracing = { workspace = true }
 typst = { workspace = true }
@@ -30,4 +32,3 @@ typst-svg = { workspace = true }
 
 [dev-dependencies]
 reqwest = { workspace = true }
-serde_json = { workspace = true }

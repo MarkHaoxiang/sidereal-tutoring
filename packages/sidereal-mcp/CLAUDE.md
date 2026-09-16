@@ -9,7 +9,11 @@ Sits beside sidereal-app. Imports core, ingest and generate; never sidereal-app.
 - Every tool takes and returns typed values — UUIDs, `StrEnum` statuses, pydantic models — so an agent
   never parses prose.
 - Tool bodies live in `tools.py` and take `Services` explicitly, so tests call them with no server.
-- `Services` is constructed once per server, never per call.
+- Over HTTP the request's `Authorization: Bearer` is the only identity: every tool builds its
+  `Services` from that token, and `SIDEREAL_DIRECTUS_TOKEN` is never consulted. Stdio is the
+  other way round — the environment's token is the one caller.
+- The connection pool, ingesters, generators and typeset client are per process; only the
+  `DirectusClient` carrying a caller's token is per request.
 - A generation tool runs the job to completion and returns the `GenerationJob`; `output_collection` and
   `output_id` say where the artefact landed.
 - `format` is on `generate_homework` alone: feedback and plans take no format, so `typst` cannot reach

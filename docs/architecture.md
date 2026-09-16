@@ -61,8 +61,8 @@ models, and the frontend's `src/lib/schema.ts`.
 | --- | --- | --- |
 | `students` | People being tutored | `status`: active, paused, archived |
 | `sessions` | Tutoring sessions | `status`: scheduled, completed, cancelled |
-| `documents` | Ingested source material, reduced to plain text | `kind`: transcript, web_page, question_bank, upload · `status`: pending, processing, ready, failed |
-| `questions` | Individual questions, extracted or written | — |
+| `documents` | Ingested source material, reduced to plain text; with no student it is the shared agency library | `kind`: transcript, web_page, question_bank, upload · `status`: pending, processing, ready, failed |
+| `questions` | Individual questions, extracted or written; shared like documents when no student is behind them | — |
 | `topics` | A free tree of topics the tutor builds | — |
 | `homework` | Homework assigned to a student | `status`: draft, assigned, submitted, marked · `format`: markdown, typst |
 | `feedback` | Written feedback for a student | `status`: draft, sent |

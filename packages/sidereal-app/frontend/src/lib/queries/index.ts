@@ -2,7 +2,9 @@
 // and let mutations invalidate for you — no manual cache writes.
 //   students  useStudents({status?}) · useStudent(id) · useCreateStudent · useUpdateStudent · useDeleteStudent
 //   sessions  useSessions({studentId?,status?,from?,to?,sort?,limit?}) · useSession(id) · useSessionLinks(studentId) · useCreateSession · useUpdateSession · useDeleteSession
-//   material  useDocuments({studentId?,status?,limit?}) · useDocument(id) · useCreateDocument · useUploadMaterialFile(file) · useRetryDocument · useDeleteDocument({id,fileId})
+//   material  useDocuments({studentId?,status?,limit?}) · useLibraryDocuments({status?,limit?})
+//             (the student-less rows every tutor shares) · useDocument(id) · useCreateDocument ·
+//             useUploadMaterialFile(file) · useRetryDocument · useDeleteDocument({id,fileId})
 //   homework  useHomeworkList({studentId?,status?,limit?}) · useHomework(id) · useGeneratedQuestions(ids) · useUpdateHomework · useDeleteHomework
 //   feedback  useFeedbackList({...}) · useFeedback(id) · useUpdateFeedback · useDeleteFeedback
 //   plans     usePlans({...}) · usePlan(id) · useUpdatePlan · useDeletePlan

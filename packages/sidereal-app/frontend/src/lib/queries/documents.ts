@@ -14,9 +14,15 @@ export interface DocumentListParams {
   limit?: number;
 }
 
+export interface LibraryListParams {
+  status?: DocumentStatus[];
+  limit?: number;
+}
+
 export const documentKeys = {
   all: ["documents"] as const,
   list: (params: DocumentListParams) => ["documents", "list", params] as const,
+  library: (params: LibraryListParams) => ["documents", "library", params] as const,
   detail: (id: string) => ["documents", "detail", id] as const,
 };
 
@@ -44,6 +50,35 @@ function fetchDocuments(params: DocumentListParams) {
   );
 }
 
+// The agency library: everything filed against no student, which every tutor reads and
+// only its author (or an admin) may change. `user_created` comes back null for a row a
+// colleague added, because a tutor reads no other tutor's login.
+function fetchLibraryDocuments(params: LibraryListParams) {
+  return directus.request(
+    readItems("documents", {
+      fields: [
+        "id",
+        "title",
+        "kind",
+        "status",
+        "error",
+        "source_url",
+        "date_created",
+        { student: ["id", "name"] },
+        { session: ["id", "scheduled_at"] },
+        { user_created: ["id", "first_name", "last_name"] },
+        { topics: ["id", "sort", { topic: ["id", "name"] }] },
+      ],
+      filter: {
+        student: { _null: true },
+        ...(params.status ? { status: { _in: params.status } } : {}),
+      },
+      sort: ["-date_created"],
+      limit: params.limit ?? -1,
+    })
+  );
+}
+
 function fetchDocument(id: string) {
   return directus.request(
     readItem("documents", id, {
@@ -60,6 +95,7 @@ function fetchDocument(id: string) {
         "file",
         { student: ["id", "name"] },
         { session: ["id", "scheduled_at"] },
+        { user_created: ["id", "first_name", "last_name"] },
         { topics: ["id", "sort", { topic: ["id", "name"] }] },
       ],
     })
@@ -67,6 +103,7 @@ function fetchDocument(id: string) {
 }
 
 export type DocumentListItem = Awaited<ReturnType<typeof fetchDocuments>>[number];
+export type LibraryDocument = Awaited<ReturnType<typeof fetchLibraryDocuments>>[number];
 export type DocumentDetail = Awaited<ReturnType<typeof fetchDocument>>;
 
 const isUnsettled = (status: DocumentStatus) => status === "pending" || status === "processing";
@@ -77,6 +114,14 @@ export function useDocuments(params: DocumentListParams = {}) {
     queryFn: () => fetchDocuments(params),
     // Processing happens in a FastAPI background task, so the list has to ask again.
     refetchInterval: pollWhile<DocumentListItem[]>((rows) => rows.some((row) => isUnsettled(row.status)), 2000),
+  });
+}
+
+export function useLibraryDocuments(params: LibraryListParams = {}) {
+  return useQuery({
+    queryKey: documentKeys.library(params),
+    queryFn: () => fetchLibraryDocuments(params),
+    refetchInterval: pollWhile<LibraryDocument[]>((rows) => rows.some((row) => isUnsettled(row.status)), 2000),
   });
 }
 

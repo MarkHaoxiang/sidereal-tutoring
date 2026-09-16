@@ -185,6 +185,8 @@ export interface HomeworkTopic extends AuditFields {
 }
 
 export interface Schema {
+  // Declared so the SDK can expand `user_created`; the snapshot does not own this collection.
+  directus_users: DirectusUser[];
   students: Student[];
   sessions: Session[];
   documents: Document[];

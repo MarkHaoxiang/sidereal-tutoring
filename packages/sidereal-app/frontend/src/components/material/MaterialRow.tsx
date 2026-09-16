@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 
+import { TopicChips } from "@/components/topics/TopicChips";
 import { Button, StatusChip } from "@/components/ui";
 import { apiError } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
@@ -9,7 +10,15 @@ import type { DocumentListItem } from "@/lib/queries";
 
 import styles from "./material.module.css";
 
-export function MaterialRow({ document, to }: { document: DocumentListItem; to: string }) {
+export interface MaterialRowProps {
+  document: DocumentListItem;
+  to: string;
+  /** Library rows carry what the material covers and who put it there. */
+  topics?: { id: string; name: string }[];
+  addedBy?: string;
+}
+
+export function MaterialRow({ document, to, topics, addedBy }: MaterialRowProps) {
   const retry = useRetryDocument();
 
   const tryAgain = async () => {
@@ -29,7 +38,11 @@ export function MaterialRow({ document, to }: { document: DocumentListItem; to: 
           <StatusChip status={document.kind} />
           <StatusChip status={document.status} />
         </span>
-        <span className={styles.meta}>Added {formatDateTime(document.date_created)}</span>
+        {topics && topics.length > 0 ? <TopicChips topics={topics} /> : null}
+        <span className={styles.meta}>
+          <span>Added {formatDateTime(document.date_created)}</span>
+          {addedBy ? <span>by {addedBy}</span> : null}
+        </span>
       </Link>
       {document.status === "failed" ? (
         <div className={styles.failure}>

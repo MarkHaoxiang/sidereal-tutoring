@@ -18,7 +18,24 @@
   timeout cannot cancel the compiler; Typst's own iteration cap is what bounds the task.
 - **It reaches no other service.** No Directus, so no `SIDEREAL_DIRECTUS_*`.
 - **Binds `SIDEREAL_TYPESET_ADDR` (default `127.0.0.1:50052`) and nothing else** — one port.
-- **The house template is data, not code**: `template/homework.typ`, included with
-  `include_str!` and returned verbatim by `/template`, so a wrapped source compiles on its own.
-  Its `#question` and `#answerlines` helpers are the body-side contract the LLM prompt mirrors —
-  renaming one means changing `README.md` and the generator prompt together.
+- **The house templates are data, not code**: every file in `template/` is `include_str!`d and
+  emitted verbatim, so a wrapped or rendered source compiles on its own.
+- **`template/homework.typ` and `/template` are frozen.** `#question` and `#answerlines` are
+  the body-side contract the LLM prompt mirrors — renaming one means changing `README.md` and
+  the generator prompt together. `worksheet` is the structured successor, not a replacement.
+- **The structure is the source of truth for `/render`.** A caller sends the document, never
+  Typst; layout lives in `template/`, and turning structure into markup lives in `render.rs`
+  and nowhere else. The helpers a rendered source may call are `paper-question`, `part`,
+  `subpart`, `answerlines`, `scheme-question`, `scheme-row` and `scheme-note`; adding a helper
+  means adding it to the `.typ` file, not to the Rust.
+- **`questions.typ` defines the question helpers once** and is concatenated before `paper.typ`
+  and `worksheet.typ`, so both kinds lay questions out identically.
+- **Deserialization is `deny_unknown_fields` everywhere**: a field the structure does not have
+  is a 422 naming its path, never a dropped value. Field names are snake_case and stable —
+  they are mirrored by the pydantic and TypeScript models.
+- **A text field is markup, never code.** `\`, `#`, `[` and `]` are escaped before the text
+  enters a helper's `[ ]` block, and `/` is escaped where it would open a comment, so the
+  emitted block is always balanced and nothing in a field executes. No input reaches the
+  compiler unbalanced; markup that is merely wrong is a 422 with diagnostics, never a panic.
+- **`Part.parts` nests one level and `answer_lines` is capped**; both are validation errors in
+  the same `{"errors": [{"path", "message"}]}` shape as a serde failure.

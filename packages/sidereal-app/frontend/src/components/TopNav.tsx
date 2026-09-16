@@ -13,6 +13,7 @@ import styles from "./TopNav.module.css";
 const LINKS = [
   { to: "/", label: "Home", end: true },
   { to: "/students", label: "Students", end: false },
+  { to: "/library", label: "Library", end: false },
   { to: "/topics", label: "Topics", end: false },
 ];
 
