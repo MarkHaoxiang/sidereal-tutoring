@@ -2,16 +2,15 @@ import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { Button, EmptyState } from "@/components/ui";
-import type { GenerationJobKind } from "@/lib/schema";
-
 import { GenerateDialog } from "./GenerateDialog";
 import { GenerationProgress } from "./GenerationProgress";
 import { ARTEFACT_KINDS } from "./kinds";
+import type { ArtefactKind } from "./kinds";
 import styles from "./artefacts.module.css";
 
 export interface GenerateSectionProps {
   studentId: string;
-  kind: GenerationJobKind;
+  kind: ArtefactKind;
   /** Nothing generated yet: the button moves into the empty state, so there is one. */
   empty: boolean;
   emptyMessage: string;

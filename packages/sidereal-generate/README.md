@@ -22,6 +22,18 @@ homework = await homework_generator().generate(
 )
 ```
 
+```python
+from sidereal_generate import paper_worksheet, rerender_paper
+
+job = await run_job(directus, generators, job_id, typeset=typeset)  # kind `paper_extract`
+paper = await rerender_paper(directus, typeset, paper_id)  # after a tutor's review edit
+worksheet = await paper_worksheet(directus, typeset, paper_id, ["1", "4"], student_id=student.id)
+```
+
+A `paper_extract` job takes one document id and no student: it writes a `papers` row from the
+document's text, renders the paper and its mark scheme, and files one `questions` row per
+question.
+
 `JobInput(format="typst")` makes a homework job produce a Typst source and a compiled PDF instead of
 markdown; `recompile_homework(directus, typeset, id)` compiles an existing row's `content` again.
 

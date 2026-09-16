@@ -8,16 +8,17 @@ import { apiError } from "@/lib/api";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { useCreateJob, useDocuments, useLibraryDocuments, useSessions } from "@/lib/queries";
 import type { DocumentListItem } from "@/lib/queries";
-import type { GenerationJobKind, HomeworkFormat } from "@/lib/schema";
+import type { HomeworkFormat } from "@/lib/schema";
 
 import { ARTEFACT_KINDS } from "./kinds";
+import type { ArtefactKind } from "./kinds";
 import styles from "./artefacts.module.css";
 
 export interface GenerateDialogProps {
   open: boolean;
   onClose: () => void;
   studentId: string;
-  kind: GenerationJobKind;
+  kind: ArtefactKind;
   /** Handed the queued job's id; the caller shows the progress. */
   onStarted: (jobId: string) => void;
 }

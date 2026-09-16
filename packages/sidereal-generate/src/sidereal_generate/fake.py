@@ -3,13 +3,22 @@
 from __future__ import annotations
 
 from pydantic import BaseModel
-from sidereal_core.models import HomeworkFormat
+from sidereal_core.canonical import (
+    CanonicalMarkScheme,
+    CanonicalMarkSchemePart,
+    CanonicalMarkSchemeQuestion,
+    CanonicalPaper,
+    CanonicalPart,
+    CanonicalQuestion,
+)
+from sidereal_core.models import Document, HomeworkFormat
 
 from sidereal_generate.models import (
     FeedbackOutput,
     GeneratedQuestion,
     GenerationRequest,
     HomeworkOutput,
+    PaperExtraction,
     PlanOutput,
 )
 
@@ -82,6 +91,63 @@ class FakePlanGenerator:
         return PlanOutput(
             title=f"{FAKE_PREFIX} Study plan for {request.student.name}",
             content=_content("Study plan", request),
+        )
+
+
+class FakePaperExtractor:
+    """The `fake` backend. A small paper that renders, and never claims to be the source's."""
+
+    model = FAKE_MODEL
+
+    async def extract(self, document: Document) -> PaperExtraction:
+        title = f"{FAKE_PREFIX} {document.title}"
+        return PaperExtraction(
+            paper=CanonicalPaper(
+                title=title,
+                source=document.title,
+                board="none",
+                year=None,
+                time_minutes=30,
+                total_marks=7,
+                instructions=(
+                    "No paper was read: the fake backend is in use. Nothing here is the "
+                    "source's own work."
+                ),
+                questions=(
+                    CanonicalQuestion(
+                        number="1",
+                        stem="The fake backend writes two questions. This is the first.",
+                        marks=4,
+                        parts=(
+                            CanonicalPart(
+                                label="a", text="Show that $1 + 1 = 2$.", marks=1, answer_lines=2
+                            ),
+                            CanonicalPart(
+                                label="b", text="Hence find $2 + 2$.", marks=3, answer_lines=4
+                            ),
+                        ),
+                    ),
+                    CanonicalQuestion(
+                        number="2",
+                        stem="Differentiate $y = x^2$ with respect to $x$.",
+                        marks=3,
+                        answer_lines=5,
+                    ),
+                ),
+            ),
+            mark_scheme=CanonicalMarkScheme(
+                title=f"{title}: mark scheme",
+                questions=(
+                    CanonicalMarkSchemeQuestion(
+                        number="1",
+                        parts=(
+                            CanonicalMarkSchemePart(label="a", answer="$1 + 1 = 2$", marks=1),
+                            CanonicalMarkSchemePart(label="b", answer="$2 + 2 = 4$", marks=3),
+                        ),
+                    ),
+                    CanonicalMarkSchemeQuestion(number="2", answer="$(d y) / (d x) = 2 x$"),
+                ),
+            ),
         )
 
 

@@ -18,6 +18,9 @@ EXPECTED = {
     "list_documents",
     "ingest_source",
     "generate_homework",
+    "extract_paper",
+    "render_paper",
+    "paper_worksheet",
     "preview_typst",
     "compile_homework",
     "generate_feedback",
@@ -78,6 +81,7 @@ async def test_every_tool_reaches_its_delegate() -> None:
         ("list_documents", {}),
         ("ingest_source", {"source": "https://example.test/indices"}),
         ("generate_homework", {"student_id": str(student_id), "document_ids": [str(document.id)]}),
+        ("extract_paper", {"document_id": str(document.id)}),
         ("preview_typst", {"source": "= Week 3\n$1 + 1 = 2$\n"}),
         ("compile_homework", {"homework_id": str(homework_id)}),
         ("generate_feedback", {"student_id": str(student_id)}),
@@ -103,6 +107,15 @@ async def test_every_tool_reaches_its_delegate() -> None:
     )
     assert isinstance(updated, CallToolResult)
     assert not updated.is_error
+
+    paper = fake.rows(Collection.PAPERS)[0]
+    for name, arguments in (
+        ("render_paper", {"paper_id": paper["id"]}),
+        ("paper_worksheet", {"paper_id": paper["id"], "question_numbers": ["1"]}),
+    ):
+        result = await server.call_tool(name, arguments)
+        assert isinstance(result, CallToolResult)
+        assert not result.is_error
 
     tutor = next(row for row in fake.rows(Collection.DIRECTUS_USERS) if row.get("email"))
     for name, arguments in (

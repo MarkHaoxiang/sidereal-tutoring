@@ -1,5 +1,8 @@
 import { feedbackKeys, homeworkKeys, planKeys } from "@/lib/queries";
-import type { GenerationJobKind } from "@/lib/schema";
+
+// The generation kinds that belong to one student. `paper_extract` is a library
+// operation, so it is a `GenerationJobKind` without being an artefact kind.
+export type ArtefactKind = "homework" | "feedback" | "plan";
 
 export interface ArtefactKindCopy {
   /** The button and dialog wording, in the tutor's words. */
@@ -14,7 +17,7 @@ export interface ArtefactKindCopy {
   listKey: readonly unknown[];
 }
 
-export const ARTEFACT_KINDS: Record<GenerationJobKind, ArtefactKindCopy> = {
+export const ARTEFACT_KINDS: Record<ArtefactKind, ArtefactKindCopy> = {
   homework: {
     generateLabel: "Generate homework",
     instructionsPlaceholder: "Six questions on quadratic equations, easiest first, with the answers.",

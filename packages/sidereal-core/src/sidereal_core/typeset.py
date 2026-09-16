@@ -5,10 +5,12 @@ from __future__ import annotations
 from collections.abc import Sequence
 from datetime import date
 from types import TracebackType
-from typing import Any, Self
+from typing import Any, Literal, Self, overload
 
 import httpx
 from pydantic import BaseModel, ConfigDict
+
+from sidereal_core.canonical import CanonicalDocument, RenderKind, RenderOutput
 
 # The service's own compile timeout is 10s; the client waits longer than the answer can take.
 DEFAULT_TIMEOUT = 30.0
@@ -97,10 +99,51 @@ class TypesetClient:
     async def render_svg(self, source: str) -> list[str]:
         """One SVG string per page."""
         body = self._json(await self._send("POST", "/compile", {"source": source, "output": "svg"}))
-        pages = body.get("pages")
-        if not isinstance(pages, list) or not all(isinstance(page, str) for page in pages):
-            raise TypesetError(200, message="/compile: no pages in the answer")
-        return [str(page) for page in pages]
+        return _pages(body, "/compile")
+
+    @overload
+    async def render(self, kind: RenderKind, document: CanonicalDocument) -> bytes: ...
+
+    @overload
+    async def render(
+        self, kind: RenderKind, document: CanonicalDocument, output: Literal[RenderOutput.PDF]
+    ) -> bytes: ...
+
+    @overload
+    async def render(
+        self, kind: RenderKind, document: CanonicalDocument, output: Literal[RenderOutput.SVG]
+    ) -> list[str]: ...
+
+    @overload
+    async def render(
+        self, kind: RenderKind, document: CanonicalDocument, output: Literal[RenderOutput.SOURCE]
+    ) -> str: ...
+
+    async def render(
+        self,
+        kind: RenderKind,
+        document: CanonicalDocument,
+        output: RenderOutput = RenderOutput.PDF,
+    ) -> bytes | list[str] | str:
+        """A canonical document in the house style: the structure goes over, never Typst."""
+        response = await self._send(
+            "POST",
+            "/render",
+            {
+                "kind": kind.value,
+                "document": document.model_dump(mode="json"),
+                "output": output.value,
+            },
+        )
+        if output is RenderOutput.PDF:
+            return response.content
+        body = self._json(response)
+        if output is RenderOutput.SVG:
+            return _pages(body, "/render")
+        source = body.get("source")
+        if not isinstance(source, str):
+            raise TypesetError(200, message="/render: no source in the answer")
+        return source
 
     async def wrap_homework(self, *, title: str, student: str, due: date | None, body: str) -> str:
         """The house template around a body, as the service alone knows how to write it."""
@@ -143,6 +186,13 @@ class TypesetClient:
         return response
 
 
+def _pages(body: dict[str, Any], path: str) -> list[str]:
+    pages = body.get("pages")
+    if not isinstance(pages, list) or not all(isinstance(page, str) for page in pages):
+        raise TypesetError(200, message=f"{path}: no pages in the answer")
+    return [str(page) for page in pages]
+
+
 def _failure(response: httpx.Response) -> tuple[tuple[Diagnostic, ...], str | None]:
     """The compiler's diagnostics when it gave any, else whatever sentence the service sent."""
     try:
@@ -154,5 +204,18 @@ def _failure(response: httpx.Response) -> tuple[tuple[Diagnostic, ...], str | No
     raw = body.get("diagnostics")
     if isinstance(raw, list):
         return tuple(Diagnostic.model_validate(item) for item in raw), None
+    errors = body.get("errors")
+    if isinstance(errors, list):
+        return (), _paths(errors)
     message = body.get("message") or body.get("error")
     return (), message if isinstance(message, str) else None
+
+
+def _paths(errors: list[Any]) -> str | None:
+    """`/render` refuses a structure by path, not by line: the path is what names the field."""
+    named = [
+        f"{error.get('path')}: {error.get('message')}"
+        for error in errors
+        if isinstance(error, dict)
+    ]
+    return "; ".join(named) or None

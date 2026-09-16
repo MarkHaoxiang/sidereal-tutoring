@@ -2,7 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 
 import { Button, Spinner } from "@/components/ui";
-import { useJob } from "@/lib/queries";
+import { paperKeys, useJob } from "@/lib/queries";
 import type { GenerationJobKind } from "@/lib/schema";
 
 import { ARTEFACT_KINDS } from "./kinds";
@@ -20,14 +20,15 @@ export function GenerationProgress({ jobId, kind, onDone, onTryAgain }: Generati
   const queryClient = useQueryClient();
   const { data: job, isError } = useJob(jobId);
   const artefactId = job?.status === "succeeded" ? (job.output_id ?? null) : null;
+  const listKey = kind === "paper_extract" ? paperKeys.all : ARTEFACT_KINDS[kind].listKey;
 
   useEffect(() => {
     if (!artefactId) {
       return;
     }
-    void queryClient.invalidateQueries({ queryKey: ARTEFACT_KINDS[kind].listKey });
+    void queryClient.invalidateQueries({ queryKey: listKey });
     onDone(artefactId);
-  }, [artefactId, kind, onDone, queryClient]);
+  }, [artefactId, listKey, onDone, queryClient]);
 
   const failure = isError
     ? "This generation could not be checked on. It may still be running."

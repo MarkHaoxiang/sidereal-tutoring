@@ -9,7 +9,8 @@ export type HomeworkStatus = "draft" | "assigned" | "submitted" | "marked";
 export type HomeworkFormat = "markdown" | "typst";
 export type FeedbackStatus = "draft" | "sent";
 export type PlanStatus = "draft" | "active" | "completed";
-export type GenerationJobKind = "homework" | "feedback" | "plan";
+export type PaperStatus = "draft" | "reviewed" | "archived";
+export type GenerationJobKind = "homework" | "feedback" | "plan" | "paper_extract";
 export type GenerationJobStatus = "queued" | "running" | "succeeded" | "failed";
 
 interface AuditFields {
@@ -81,6 +82,55 @@ export interface Topic extends AuditFields {
   homework: string[] | HomeworkTopic[];
 }
 
+// The canonical document structures, mirroring services/typeset/src/document.rs field for
+// field. `papers.structure` is a CanonicalPaper and `papers.mark_scheme` a CanonicalMarkScheme;
+// the typeset service's /render refuses any field not named here.
+export interface CanonicalPart {
+  label: string;
+  text: string;
+  marks?: number | null;
+  answer_lines?: number | null;
+  parts?: CanonicalPart[];
+}
+
+export interface CanonicalQuestion {
+  number: string;
+  stem?: string | null;
+  marks?: number | null;
+  parts?: CanonicalPart[];
+  answer_lines?: number | null;
+}
+
+export interface CanonicalPaper {
+  title: string;
+  source?: string | null;
+  board?: string | null;
+  year?: number | null;
+  time_minutes?: number | null;
+  total_marks?: number | null;
+  instructions?: string | null;
+  questions?: CanonicalQuestion[];
+}
+
+export interface CanonicalMarkSchemePart {
+  label: string;
+  answer: string;
+  marks?: number | null;
+  notes?: string | null;
+}
+
+export interface CanonicalMarkSchemeQuestion {
+  number: string;
+  parts?: CanonicalMarkSchemePart[];
+  answer?: string | null;
+  notes?: string | null;
+}
+
+export interface CanonicalMarkScheme {
+  title: string;
+  questions?: CanonicalMarkSchemeQuestion[];
+}
+
 export interface Question extends AuditFields {
   id: string;
   text: string;
@@ -89,6 +139,12 @@ export interface Question extends AuditFields {
   topic: string | null;
   difficulty: number | null;
   document: string | Document | null;
+  paper: string | Paper | null;
+  number: string | null;
+  marks: number | null;
+  parts: CanonicalPart[] | null;
+  answer_lines: number | null;
+  mark_scheme: CanonicalMarkSchemeQuestion | null;
   // Alias m2m field through the `homework_questions` junction.
   homework: string[] | HomeworkQuestion[];
   // Alias m2m field through the `question_topics` junction.
@@ -101,6 +157,26 @@ export interface GenerationProvenance {
   model: string;
   documents: string[];
   questions?: string[];
+  /** Written when the artefact was filed but something after it did not run. */
+  warning?: string;
+}
+
+export interface Paper extends AuditFields {
+  id: string;
+  title: string;
+  source: string | null;
+  board: string | null;
+  year: number | null;
+  time_minutes: number | null;
+  total_marks: number | null;
+  instructions: string | null;
+  status: PaperStatus;
+  document: string | Document | null;
+  rendered_pdf: string | DirectusFile | null;
+  mark_scheme_pdf: string | DirectusFile | null;
+  structure: CanonicalPaper | null;
+  mark_scheme: CanonicalMarkScheme | null;
+  generated_from: GenerationProvenance | null;
 }
 
 export interface Homework extends AuditFields {
@@ -190,6 +266,7 @@ export interface Schema {
   students: Student[];
   sessions: Session[];
   documents: Document[];
+  papers: Paper[];
   questions: Question[];
   homework: Homework[];
   feedback: Feedback[];

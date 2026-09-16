@@ -12,6 +12,8 @@ import { HomeworkDetailPage } from "./routes/HomeworkDetailPage";
 import { LibraryPage } from "./routes/LibraryPage";
 import { LoginPage } from "./routes/LoginPage";
 import { MaterialDetailPage } from "./routes/MaterialDetailPage";
+import { PaperDetailPage } from "./routes/PaperDetailPage";
+import { PapersPage } from "./routes/PapersPage";
 import { PlanDetailPage } from "./routes/PlanDetailPage";
 import { StudentDetailPage } from "./routes/StudentDetailPage";
 import { StudentsListPage } from "./routes/StudentsListPage";
@@ -67,6 +69,8 @@ export function App() {
         <Route path="students/:id/feedback/:artefactId" element={<FeedbackDetailPage />} />
         <Route path="students/:id/plans/:artefactId" element={<PlanDetailPage />} />
         <Route path="library" element={<LibraryPage />} />
+        <Route path="library/papers" element={<PapersPage />} />
+        <Route path="library/papers/:paperId" element={<PaperDetailPage />} />
         <Route path="library/:docId" element={<MaterialDetailPage />} />
         <Route path="topics" element={<TopicsPage />} />
         <Route path="account" element={<AccountPage />} />

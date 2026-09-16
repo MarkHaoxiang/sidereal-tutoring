@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import date
 
 from pydantic import BaseModel, ConfigDict, Field
+from sidereal_core.canonical import CanonicalMarkScheme, CanonicalPaper
 from sidereal_core.models import Document, HomeworkFormat, Student
 
 # Every output field is required, optional ones nullable: a strict tool schema has no
@@ -39,6 +40,15 @@ class HomeworkOutput(BaseModel):
     title: str
     content: str
     questions: tuple[GeneratedQuestion, ...]
+
+
+class PaperExtraction(BaseModel):
+    """One ingested paper, read into the canonical structures. No mark scheme is null."""
+
+    model_config = _OUTPUT
+
+    paper: CanonicalPaper
+    mark_scheme: CanonicalMarkScheme | None
 
 
 class FeedbackOutput(BaseModel):

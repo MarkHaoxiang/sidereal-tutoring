@@ -719,6 +719,108 @@
         }
       }
     },
+    "/api/papers/{paper_id}/render": {
+      "post": {
+        "summary": "Render Paper",
+        "description": "Render the stored structure again \u2014 what a tutor runs after reviewing an extraction.",
+        "operationId": "render_paper_api_papers__paper_id__render_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "paper_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Paper Id"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Paper"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/papers/{paper_id}/worksheet": {
+      "post": {
+        "summary": "Paper Worksheet Pdf",
+        "description": "Some of a paper's questions as a worksheet: the tutor's remix, filed as a PDF.",
+        "operationId": "paper_worksheet_pdf_api_papers__paper_id__worksheet_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "paper_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Paper Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorksheetRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorksheetResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/jobs/{job_id}": {
       "get": {
         "summary": "Read Job",
@@ -1334,7 +1436,8 @@
         "enum": [
           "homework",
           "feedback",
-          "plan"
+          "plan",
+          "paper_extract"
         ],
         "title": "GenerationKind"
       },
@@ -1656,8 +1759,15 @@
       "JobRequest": {
         "properties": {
           "student_id": {
-            "type": "string",
-            "format": "uuid",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Student Id"
           },
           "document_ids": {
@@ -1711,9 +1821,6 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "student_id"
-        ],
         "title": "JobRequest"
       },
       "JobStatus": {
@@ -1744,6 +1851,224 @@
           "password"
         ],
         "title": "LoginRequest"
+      },
+      "Paper": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "board": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Board"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year"
+          },
+          "time_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time Minutes"
+          },
+          "total_marks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Marks"
+          },
+          "instructions": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instructions"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PaperStatus",
+            "default": "draft"
+          },
+          "document": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document"
+          },
+          "rendered_pdf": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rendered Pdf"
+          },
+          "mark_scheme_pdf": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mark Scheme Pdf"
+          },
+          "structure": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Structure"
+          },
+          "mark_scheme": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mark Scheme"
+          },
+          "generated_from": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generated From"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "date_created": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Created"
+          },
+          "date_updated": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Updated"
+          },
+          "user_created": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Created"
+          },
+          "user_updated": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Updated"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "id"
+        ],
+        "title": "Paper"
+      },
+      "PaperStatus": {
+        "type": "string",
+        "enum": [
+          "draft",
+          "reviewed",
+          "archived"
+        ],
+        "title": "PaperStatus"
       },
       "PasswordRequest": {
         "properties": {
@@ -2043,6 +2368,80 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "WorksheetRequest": {
+        "properties": {
+          "question_numbers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Question Numbers"
+          },
+          "student_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Student Id"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "due": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "question_numbers"
+        ],
+        "title": "WorksheetRequest"
+      },
+      "WorksheetResult": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "pdf_file_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Pdf File Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "source",
+          "pdf_file_id"
+        ],
+        "title": "WorksheetResult",
+        "description": "A worksheet as it was rendered: the Typst it compiled from, and the filed PDF."
       }
     },
     "securitySchemes": {

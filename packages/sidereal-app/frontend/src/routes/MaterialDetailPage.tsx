@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
+import { GenerationProgress } from "@/components/artefacts/GenerationProgress";
 import { addedByName } from "@/components/material/authors";
 import { TopicsField } from "@/components/topics/TopicsField";
 import { taggedTopics } from "@/components/topics/tree";
@@ -9,7 +10,14 @@ import { Button, ConfirmDialog, PageHeader, Spinner, StatusChip } from "@/compon
 import { apiError } from "@/lib/api";
 import { callerRole, useAuth } from "@/lib/auth-context";
 import { formatDateTime } from "@/lib/format";
-import { relationId, useDeleteDocument, useDocument, useRetryDocument, useTagDocument } from "@/lib/queries";
+import {
+  relationId,
+  useCreateJob,
+  useDeleteDocument,
+  useDocument,
+  useRetryDocument,
+  useTagDocument,
+} from "@/lib/queries";
 
 import pageStyles from "./page.module.css";
 import styles from "./MaterialDetailPage.module.css";
@@ -23,7 +31,9 @@ export function MaterialDetailPage() {
   const retry = useRetryDocument();
   const remove = useDeleteDocument();
   const tag = useTagDocument();
+  const extract = useCreateJob();
   const [confirming, setConfirming] = useState(false);
+  const [jobId, setJobId] = useState<string | null>(null);
 
   const back = id ? { to: `/students/${id}/material`, label: "Material" } : { to: "/library", label: "Library" };
   const fileId = typeof document?.file === "string" ? document.file : (document?.file?.id ?? null);
@@ -32,6 +42,27 @@ export function MaterialDetailPage() {
   const authorId = relationId(document?.user_created);
   const inLibrary = Boolean(document) && relationId(document?.student) === null;
   const canEdit = !inLibrary || callerRole(me) === "admin" || (user !== null && authorId === user.id);
+
+  // A paper is library material, so the extraction is offered here and nowhere else.
+  const extractPaper = async () => {
+    if (!docId) {
+      return;
+    }
+    try {
+      const job = await extract.mutateAsync({ kind: "paper_extract", document_ids: [docId] });
+      setJobId(job.id);
+    } catch (error) {
+      toast.error(apiError(error));
+    }
+  };
+
+  const paperReady = useCallback(
+    (paperId: string) => {
+      setJobId(null);
+      void navigate(`/library/papers/${paperId}`);
+    },
+    [navigate]
+  );
 
   const tryAgain = async () => {
     if (!docId) {
@@ -85,6 +116,17 @@ export function MaterialDetailPage() {
                 >
                   Retry
                 </Button>
+              ) : inLibrary && document.status === "ready" ? (
+                <Button
+                  variant="primary"
+                  loading={extract.isPending}
+                  disabled={jobId !== null}
+                  onClick={() => {
+                    void extractPaper();
+                  }}
+                >
+                  Extract as paper
+                </Button>
               ) : null
             }
             meta={
@@ -101,6 +143,18 @@ export function MaterialDetailPage() {
               </>
             }
           />
+
+          {jobId ? (
+            <GenerationProgress
+              jobId={jobId}
+              kind="paper_extract"
+              onDone={paperReady}
+              onTryAgain={() => {
+                setJobId(null);
+                void extractPaper();
+              }}
+            />
+          ) : null}
 
           {document.status === "failed" ? (
             <p className={styles.error}>{document.error ?? "This material could not be read."}</p>

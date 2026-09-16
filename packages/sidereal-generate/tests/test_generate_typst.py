@@ -6,7 +6,12 @@ from uuid import UUID
 import pytest
 from sidereal_core.models import Collection, GenerationKind, HomeworkFormat, JobStatus, Student
 from sidereal_core.testing import FAIL_MARKER, FakeDirectus, FakeTypeset
-from sidereal_generate.fake import FakeFeedbackGenerator, FakeHomeworkGenerator, FakePlanGenerator
+from sidereal_generate.fake import (
+    FakeFeedbackGenerator,
+    FakeHomeworkGenerator,
+    FakePaperExtractor,
+    FakePlanGenerator,
+)
 from sidereal_generate.jobs import Generators, JobInput, run_job, start_job
 from sidereal_generate.models import GeneratedQuestion, GenerationRequest, HomeworkOutput
 from sidereal_generate.typst import NotTypstError, recompile_homework, slug
@@ -47,6 +52,7 @@ def generators(homework_generator: SequenceGenerator) -> Generators:
         homework=homework_generator,
         feedback=FakeFeedbackGenerator(),
         plan=FakePlanGenerator(),
+        paper=FakePaperExtractor(),
     )
 
 

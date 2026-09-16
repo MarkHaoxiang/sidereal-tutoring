@@ -3,11 +3,13 @@ from __future__ import annotations
 from typing import Protocol, runtime_checkable
 
 from pydantic import BaseModel
+from sidereal_core.models import Document
 
 from sidereal_generate.models import (
     FeedbackOutput,
     GenerationRequest,
     HomeworkOutput,
+    PaperExtraction,
     PlanOutput,
 )
 
@@ -33,3 +35,13 @@ class FeedbackGenerator(Generator[FeedbackOutput], Protocol): ...
 
 
 class PlanGenerator(Generator[PlanOutput], Protocol): ...
+
+
+@runtime_checkable
+class PaperExtractor(Protocol):
+    """A document's text read into a paper. It is transcription, not generation."""
+
+    @property
+    def model(self) -> str: ...
+
+    async def extract(self, document: Document) -> PaperExtraction: ...

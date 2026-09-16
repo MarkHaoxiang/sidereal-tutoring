@@ -34,3 +34,16 @@ Sits above sidereal-ingest. Imports core and ingest only.
   `warning` in `generated_from`, and the job succeeds. A generated artefact is never discarded.
 - `recompile_homework` keeps the PDF that is already on the row when the new source fails, so a tutor
   never loses a working handout to a bad edit.
+- A paper's `structure` is the source of truth. Its PDFs are renderings of it and can be made again;
+  nothing is read back out of a PDF.
+- A paper's `questions` rows are derived from the same structure: an extract writes them, and they
+  are never merged into by hand. Re-extracting a document writes a new paper with its own rows.
+- Extraction is transcription, not generation: one strict tool call whose schema is
+  `PaperExtraction`. A payload the canonical models refuse is asked for once more with the errors
+  appended; a second refusal is a `GenerationError` and no paper is written.
+- A render that fails leaves the row, a `generated_from.warning` and a succeeded job — the structure
+  is the work. A `rerender_paper` failure is the tutor's to see, so it raises.
+- `paper_extract` carries exactly one document and no student; every other kind carries a student.
+  Either mismatch is a `JobInputError` whose sentence the tutor reads.
+- `strict_schema` is what makes every property required: the canonical models carry defaults so a
+  hand-edited structure still reads, and a strict schema has no optional properties.

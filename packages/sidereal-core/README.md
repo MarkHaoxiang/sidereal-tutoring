@@ -34,6 +34,16 @@ async with TypesetClient(typeset_settings().url) as typeset:
 ```
 
 ```python
+from sidereal_core import CanonicalPaper, CanonicalQuestion, RenderKind
+
+async with TypesetClient(typeset_settings().url) as typeset:
+    pdf = await typeset.render(
+        RenderKind.PAPER,
+        CanonicalPaper(title="Pure Mathematics 1", questions=(CanonicalQuestion(number="1"),)),
+    )
+```
+
+```python
 from sidereal_core.tutors import admin_health, list_tutors
 
 async with DirectusClient(settings.url, settings.token) as client:

@@ -20,12 +20,14 @@ from sidereal_core.models import (
     Homework,
     HomeworkFormat,
     JobStatus,
+    Paper,
     Student,
     StudentStatus,
 )
 from sidereal_core.students import visible_student
 from sidereal_core.tutors import AdminHealth, AdminJob, TutorAccount, TutorStatus
 from sidereal_generate.jobs import JobInput, run_job, start_job
+from sidereal_generate.papers import WorksheetResult, paper_worksheet, rerender_paper
 from sidereal_generate.settings import generate_settings
 from sidereal_generate.typst import recompile_homework
 from sidereal_ingest.documents import PathSource, UrlSource, create_document, process_document
@@ -124,6 +126,36 @@ async def generate_homework(
             instructions=instructions,
             format=format,
         ),
+    )
+
+
+async def extract_paper(services: Services, document_id: UUID) -> GenerationJob:
+    """Read one ready document into a `papers` row, its PDFs and its `questions` rows."""
+    return await _generate(
+        services, GenerationKind.PAPER_EXTRACT, JobInput(documents=(document_id,))
+    )
+
+
+async def render_paper(services: Services, paper_id: UUID) -> Paper:
+    return await rerender_paper(services.directus, services.typeset, paper_id)
+
+
+async def paper_worksheet_pdf(
+    services: Services,
+    paper_id: UUID,
+    question_numbers: Sequence[str],
+    student_id: UUID | None = None,
+    title: str | None = None,
+    due: date | None = None,
+) -> WorksheetResult:
+    return await paper_worksheet(
+        services.directus,
+        services.typeset,
+        paper_id,
+        question_numbers,
+        student_id=student_id,
+        title=title,
+        due=due,
     )
 
 
@@ -238,7 +270,8 @@ async def admin_health(services: Services) -> AdminHealth:
 
 async def _generate(services: Services, kind: GenerationKind, job_input: JobInput) -> GenerationJob:
     # Directus cannot check a create through a relation, so the student is read first.
-    await visible_student(services.directus, job_input.student)
+    if job_input.student is not None:
+        await visible_student(services.directus, job_input.student)
     job = await start_job(
         services.directus, kind, job_input, model=services.generators.for_kind(kind)
     )

@@ -17,7 +17,7 @@ from sidereal_core.directus import DirectusError, DirectusUnavailableError
 from sidereal_core.models import Collection, GenerationKind, JobStatus
 from sidereal_core.testing import FakeDirectus, FakeTypeset
 from sidereal_generate.base import GenerationError
-from sidereal_generate.fake import FailingGenerator, FakeGenerator
+from sidereal_generate.fake import FailingGenerator, FakeGenerator, FakePaperExtractor
 from sidereal_generate.jobs import Generators, JobInput, run_job, start_job
 from sidereal_generate.models import (
     FeedbackOutput,
@@ -51,6 +51,7 @@ def generators() -> Generators:
         homework=FakeGenerator(HOMEWORK, model="fake-homework"),
         feedback=FakeGenerator(FEEDBACK),
         plan=FakeGenerator(PLAN),
+        paper=FakePaperExtractor(),
     )
 
 
@@ -117,6 +118,7 @@ async def test_every_generated_question_is_linked_to_the_homework_in_order() -> 
         homework=FakeGenerator(three, model="fake-homework"),
         feedback=FakeGenerator(FEEDBACK),
         plan=FakeGenerator(PLAN),
+        paper=FakePaperExtractor(),
     )
 
     typeset = FakeTypeset().client()
@@ -187,7 +189,7 @@ async def test_a_job_whose_input_is_unusable_fails_rather_than_raising() -> None
         finished = await run_job(client, generators(), UUID(row["id"]), typeset=typeset)
 
     assert finished.status is JobStatus.FAILED
-    assert finished.error == "Generation failed unexpectedly."
+    assert finished.error == "That job does not say which student it is for."
 
 
 @pytest.mark.parametrize(
@@ -220,6 +222,7 @@ async def test_a_failure_reaches_the_tutor_as_a_sentence_not_a_traceback(
         homework=FailingGenerator(error),
         feedback=FakeGenerator(FEEDBACK),
         plan=FakeGenerator(PLAN),
+        paper=FakePaperExtractor(),
     )
 
     typeset = FakeTypeset().client()

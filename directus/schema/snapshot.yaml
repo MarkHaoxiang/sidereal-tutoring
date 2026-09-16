@@ -232,6 +232,34 @@ collections:
       translations: null
       unarchive_value: null
       versioning: false
+  - collection: papers
+    meta:
+      accountability: all
+      archive_app_filter: true
+      archive_field: null
+      archive_value: null
+      autosave_revision_interval: null
+      collapse: open
+      collection: papers
+      color: null
+      display_template: '{{title}}'
+      group: library
+      hidden: false
+      icon: quiz
+      item_duplication_fields: null
+      note: >-
+        Exam papers normalised into the canonical structure the typeset service
+        renders.
+      preview_url: null
+      singleton: false
+      sort: null
+      sort_field: null
+      status: active
+      translations: null
+      unarchive_value: null
+      versioning: false
+    schema:
+      name: papers
   - collection: plans
     meta:
       accountability: all
@@ -484,6 +512,56 @@ fields:
       required: false
       searchable: true
       sort: 3
+      special:
+        - o2m
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+  - collection: directus_files
+    field: paper_rendered_pdf
+    type: alias
+    meta:
+      collection: directus_files
+      conditions: null
+      display: null
+      display_options: null
+      field: paper_rendered_pdf
+      group: null
+      hidden: true
+      interface: list-o2m
+      note: null
+      options:
+        template: '{{title}}'
+      readonly: false
+      required: false
+      searchable: true
+      sort: 4
+      special:
+        - o2m
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+  - collection: directus_files
+    field: paper_mark_scheme_pdf
+    type: alias
+    meta:
+      collection: directus_files
+      conditions: null
+      display: null
+      display_options: null
+      field: paper_mark_scheme_pdf
+      group: null
+      hidden: true
+      interface: list-o2m
+      note: null
+      options:
+        template: '{{title}}'
+      readonly: false
+      required: false
+      searchable: true
+      sort: 5
       special:
         - o2m
       translations: null
@@ -1999,6 +2077,8 @@ fields:
             value: feedback
           - text: Plan
             value: plan
+          - text: Paper Extract
+            value: paper_extract
       readonly: false
       required: false
       searchable: true
@@ -3963,6 +4043,794 @@ fields:
       has_auto_increment: false
       foreign_key_table: null
       foreign_key_column: null
+  - collection: papers
+    field: id
+    type: uuid
+    meta:
+      collection: papers
+      conditions: null
+      display: null
+      display_options: null
+      field: id
+      group: null
+      hidden: true
+      interface: input
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 1
+      special:
+        - uuid
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: id
+      table: papers
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: true
+      is_indexed: false
+      is_primary_key: true
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: papers
+    field: title
+    type: string
+    meta:
+      collection: papers
+      conditions: null
+      display: null
+      display_options: null
+      field: title
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 2
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: title
+      table: papers
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: papers
+    field: source
+    type: string
+    meta:
+      collection: papers
+      conditions: null
+      display: null
+      display_options: null
+      field: source
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 3
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: source
+      table: papers
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: papers
+    field: board
+    type: string
+    meta:
+      collection: papers
+      conditions: null
+      display: null
+      display_options: null
+      field: board
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 4
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: board
+      table: papers
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: papers
+    field: year
+    type: integer
+    meta:
+      collection: papers
+      conditions: null
+      display: null
+      display_options: null
+      field: year
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 5
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: year
+      table: papers
+      data_type: integer
+      default_value: null
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: papers
+    field: time_minutes
+    type: integer
+    meta:
+      collection: papers
+      conditions: null
+      display: null
+      display_options: null
+      field: time_minutes
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 6
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: time_minutes
+      table: papers
+      data_type: integer
+      default_value: null
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: papers
+    field: total_marks
+    type: integer
+    meta:
+      collection: papers
+      conditions: null
+      display: null
+      display_options: null
+      field: total_marks
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 7
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: total_marks
+      table: papers
+      data_type: integer
+      default_value: null
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: papers
+    field: instructions
+    type: text
+    meta:
+      collection: papers
+      conditions: null
+      display: null
+      display_options: null
+      field: instructions
+      group: null
+      hidden: false
+      interface: input-multiline
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 8
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: instructions
+      table: papers
+      data_type: text
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: papers
+    field: status
+    type: string
+    meta:
+      collection: papers
+      conditions: null
+      display: labels
+      display_options:
+        showAsDot: true
+      field: status
+      group: null
+      hidden: false
+      interface: select-dropdown
+      note: null
+      options:
+        choices:
+          - text: Draft
+            value: draft
+          - text: Reviewed
+            value: reviewed
+          - text: Archived
+            value: archived
+      readonly: false
+      required: false
+      searchable: true
+      sort: 9
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: status
+      table: papers
+      data_type: character varying
+      default_value: draft
+      max_length: 32
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: papers
+    field: document
+    type: uuid
+    meta:
+      collection: papers
+      conditions: null
+      display: related-values
+      display_options:
+        template: '{{title}}'
+      field: document
+      group: null
+      hidden: false
+      interface: select-dropdown-m2o
+      note: null
+      options:
+        template: '{{title}}'
+      readonly: false
+      required: false
+      searchable: true
+      sort: 10
+      special:
+        - m2o
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: document
+      table: papers
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: documents
+      foreign_key_column: id
+  - collection: papers
+    field: rendered_pdf
+    type: uuid
+    meta:
+      collection: papers
+      conditions: null
+      display: file
+      display_options: null
+      field: rendered_pdf
+      group: null
+      hidden: false
+      interface: file
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 11
+      special:
+        - file
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: rendered_pdf
+      table: papers
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: directus_files
+      foreign_key_column: id
+  - collection: papers
+    field: mark_scheme_pdf
+    type: uuid
+    meta:
+      collection: papers
+      conditions: null
+      display: file
+      display_options: null
+      field: mark_scheme_pdf
+      group: null
+      hidden: false
+      interface: file
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 12
+      special:
+        - file
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: mark_scheme_pdf
+      table: papers
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: directus_files
+      foreign_key_column: id
+  - collection: papers
+    field: structure
+    type: json
+    meta:
+      collection: papers
+      conditions: null
+      display: null
+      display_options: null
+      field: structure
+      group: null
+      hidden: false
+      interface: input-code
+      note: The canonical Paper the typeset service renders.
+      options:
+        language: json
+      readonly: false
+      required: false
+      searchable: true
+      sort: 13
+      special:
+        - cast-json
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: structure
+      table: papers
+      data_type: json
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: papers
+    field: mark_scheme
+    type: json
+    meta:
+      collection: papers
+      conditions: null
+      display: null
+      display_options: null
+      field: mark_scheme
+      group: null
+      hidden: false
+      interface: input-code
+      note: The canonical MarkScheme.
+      options:
+        language: json
+      readonly: false
+      required: false
+      searchable: true
+      sort: 14
+      special:
+        - cast-json
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: mark_scheme
+      table: papers
+      data_type: json
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: papers
+    field: generated_from
+    type: json
+    meta:
+      collection: papers
+      conditions: null
+      display: null
+      display_options: null
+      field: generated_from
+      group: null
+      hidden: false
+      interface: input-code
+      note: 'Provenance: job id, model, document ids.'
+      options:
+        language: json
+      readonly: false
+      required: false
+      searchable: true
+      sort: 15
+      special:
+        - cast-json
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: generated_from
+      table: papers
+      data_type: json
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: papers
+    field: user_created
+    type: uuid
+    meta:
+      collection: papers
+      conditions: null
+      display: user
+      display_options: null
+      field: user_created
+      group: null
+      hidden: true
+      interface: select-dropdown-m2o
+      note: null
+      options:
+        template: '{{avatar.$thumbnail}} {{first_name}} {{last_name}}'
+      readonly: true
+      required: false
+      searchable: true
+      sort: 16
+      special:
+        - user-created
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: user_created
+      table: papers
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: directus_users
+      foreign_key_column: id
+  - collection: papers
+    field: date_created
+    type: timestamp
+    meta:
+      collection: papers
+      conditions: null
+      display: datetime
+      display_options:
+        relative: true
+      field: date_created
+      group: null
+      hidden: true
+      interface: datetime
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 17
+      special:
+        - date-created
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: date_created
+      table: papers
+      data_type: timestamp with time zone
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: papers
+    field: user_updated
+    type: uuid
+    meta:
+      collection: papers
+      conditions: null
+      display: user
+      display_options: null
+      field: user_updated
+      group: null
+      hidden: true
+      interface: select-dropdown-m2o
+      note: null
+      options:
+        template: '{{avatar.$thumbnail}} {{first_name}} {{last_name}}'
+      readonly: true
+      required: false
+      searchable: true
+      sort: 18
+      special:
+        - user-updated
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: user_updated
+      table: papers
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: directus_users
+      foreign_key_column: id
+  - collection: papers
+    field: date_updated
+    type: timestamp
+    meta:
+      collection: papers
+      conditions: null
+      display: datetime
+      display_options:
+        relative: true
+      field: date_updated
+      group: null
+      hidden: true
+      interface: datetime
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 19
+      special:
+        - date-updated
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: date_updated
+      table: papers
+      data_type: timestamp with time zone
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
   - collection: plans
     field: id
     type: uuid
@@ -5309,6 +6177,253 @@ fields:
       validation: null
       validation_message: null
       width: full
+  - collection: questions
+    field: paper
+    type: uuid
+    meta:
+      collection: questions
+      conditions: null
+      display: related-values
+      display_options:
+        template: '{{title}}'
+      field: paper
+      group: null
+      hidden: false
+      interface: select-dropdown-m2o
+      note: null
+      options:
+        template: '{{title}}'
+      readonly: false
+      required: false
+      searchable: true
+      sort: 12
+      special:
+        - m2o
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: paper
+      table: questions
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: papers
+      foreign_key_column: id
+  - collection: questions
+    field: number
+    type: string
+    meta:
+      collection: questions
+      conditions: null
+      display: null
+      display_options: null
+      field: number
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 13
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: number
+      table: questions
+      data_type: character varying
+      default_value: null
+      max_length: 32
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: questions
+    field: marks
+    type: integer
+    meta:
+      collection: questions
+      conditions: null
+      display: null
+      display_options: null
+      field: marks
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 14
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: marks
+      table: questions
+      data_type: integer
+      default_value: null
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: questions
+    field: answer_lines
+    type: integer
+    meta:
+      collection: questions
+      conditions: null
+      display: null
+      display_options: null
+      field: answer_lines
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 16
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: answer_lines
+      table: questions
+      data_type: integer
+      default_value: null
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: questions
+    field: parts
+    type: json
+    meta:
+      collection: questions
+      conditions: null
+      display: null
+      display_options: null
+      field: parts
+      group: null
+      hidden: false
+      interface: input-code
+      note: The canonical parts array.
+      options:
+        language: json
+      readonly: false
+      required: false
+      searchable: true
+      sort: 15
+      special:
+        - cast-json
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: parts
+      table: questions
+      data_type: json
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: questions
+    field: mark_scheme
+    type: json
+    meta:
+      collection: questions
+      conditions: null
+      display: null
+      display_options: null
+      field: mark_scheme
+      group: null
+      hidden: false
+      interface: input-code
+      note: The canonical mark scheme for this question.
+      options:
+        language: json
+      readonly: false
+      required: false
+      searchable: true
+      sort: 17
+      special:
+        - cast-json
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: mark_scheme
+      table: questions
+      data_type: json
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
   - collection: sessions
     field: id
     type: uuid
@@ -7367,6 +8482,111 @@ relations:
       constraint_name: homework_topics_user_updated_foreign
       on_update: NO ACTION
       on_delete: SET NULL
+  - collection: papers
+    field: document
+    related_collection: documents
+    meta:
+      junction_field: null
+      many_collection: papers
+      many_field: document
+      one_allowed_collections: null
+      one_collection: documents
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: null
+      sort_field: null
+    schema:
+      table: papers
+      column: document
+      foreign_key_table: documents
+      foreign_key_column: id
+      constraint_name: papers_document_foreign
+      on_update: NO ACTION
+      on_delete: SET NULL
+  - collection: papers
+    field: rendered_pdf
+    related_collection: directus_files
+    meta:
+      junction_field: null
+      many_collection: papers
+      many_field: rendered_pdf
+      one_allowed_collections: null
+      one_collection: directus_files
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: paper_rendered_pdf
+      sort_field: null
+    schema:
+      table: papers
+      column: rendered_pdf
+      foreign_key_table: directus_files
+      foreign_key_column: id
+      constraint_name: papers_rendered_pdf_foreign
+      on_update: NO ACTION
+      on_delete: SET NULL
+  - collection: papers
+    field: mark_scheme_pdf
+    related_collection: directus_files
+    meta:
+      junction_field: null
+      many_collection: papers
+      many_field: mark_scheme_pdf
+      one_allowed_collections: null
+      one_collection: directus_files
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: paper_mark_scheme_pdf
+      sort_field: null
+    schema:
+      table: papers
+      column: mark_scheme_pdf
+      foreign_key_table: directus_files
+      foreign_key_column: id
+      constraint_name: papers_mark_scheme_pdf_foreign
+      on_update: NO ACTION
+      on_delete: SET NULL
+  - collection: papers
+    field: user_created
+    related_collection: directus_users
+    meta:
+      junction_field: null
+      many_collection: papers
+      many_field: user_created
+      one_allowed_collections: null
+      one_collection: directus_users
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: null
+      sort_field: null
+    schema:
+      table: papers
+      column: user_created
+      foreign_key_table: directus_users
+      foreign_key_column: id
+      constraint_name: papers_user_created_foreign
+      on_update: NO ACTION
+      on_delete: SET NULL
+  - collection: papers
+    field: user_updated
+    related_collection: directus_users
+    meta:
+      junction_field: null
+      many_collection: papers
+      many_field: user_updated
+      one_allowed_collections: null
+      one_collection: directus_users
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: null
+      sort_field: null
+    schema:
+      table: papers
+      column: user_updated
+      foreign_key_table: directus_users
+      foreign_key_column: id
+      constraint_name: papers_user_updated_foreign
+      on_update: NO ACTION
+      on_delete: SET NULL
   - collection: plans
     field: student
     related_collection: students
@@ -7575,6 +8795,27 @@ relations:
       foreign_key_table: directus_users
       foreign_key_column: id
       constraint_name: questions_user_updated_foreign
+      on_update: NO ACTION
+      on_delete: SET NULL
+  - collection: questions
+    field: paper
+    related_collection: papers
+    meta:
+      junction_field: null
+      many_collection: questions
+      many_field: paper
+      one_allowed_collections: null
+      one_collection: papers
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: null
+      sort_field: null
+    schema:
+      table: questions
+      column: paper
+      foreign_key_table: papers
+      foreign_key_column: id
+      constraint_name: questions_paper_foreign
       on_update: NO ACTION
       on_delete: SET NULL
   - collection: sessions

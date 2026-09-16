@@ -20,6 +20,7 @@ from sidereal_core.models import (
     Homework,
     HomeworkFormat,
     JobStatus,
+    Paper,
 )
 from sidereal_core.students import visible_student
 from sidereal_core.tutors import (
@@ -36,11 +37,17 @@ from sidereal_core.tutors import (
     set_tutor_status,
 )
 from sidereal_generate.jobs import JobInput, run_job, start_job
+from sidereal_generate.papers import WorksheetResult, paper_worksheet, rerender_paper
 from sidereal_generate.settings import generate_settings
 from sidereal_generate.typst import recompile_homework
 from sidereal_ingest.documents import create_document, process_document
 
-from sidereal_app.api.errors import FORMAT_UNSUPPORTED, detail
+from sidereal_app.api.errors import (
+    DOCUMENT_REQUIRED,
+    FORMAT_UNSUPPORTED,
+    STUDENT_REQUIRED,
+    detail,
+)
 from sidereal_app.api.models import (
     DocumentRequest,
     Health,
@@ -51,6 +58,7 @@ from sidereal_app.api.models import (
     TutorStatusRequest,
     TypstPreview,
     TypstRequest,
+    WorksheetRequest,
 )
 from sidereal_app.deps import (
     Admin,
@@ -203,12 +211,9 @@ async def create_job(
     background: BackgroundTasks,
 ) -> GenerationJob:
     """Queue a generation and answer immediately; the job row carries the outcome."""
-    await visible_student(client, body.student_id)
-    if body.format is HomeworkFormat.TYPST and kind is not GenerationKind.HOMEWORK:
-        raise HTTPException(
-            status_code=422,
-            detail=detail(FORMAT_UNSUPPORTED, "Only homework can be written in Typst."),
-        )
+    _check_input(kind, body)
+    if body.student_id is not None:
+        await visible_student(client, body.student_id)
     job = await start_job(
         client,
         kind,
@@ -226,6 +231,26 @@ async def create_job(
     return job
 
 
+def _check_input(kind: GenerationKind, body: JobRequest) -> None:
+    """What each kind is asked for, refused before a job row exists."""
+    if body.format is HomeworkFormat.TYPST and kind is not GenerationKind.HOMEWORK:
+        raise HTTPException(
+            status_code=422,
+            detail=detail(FORMAT_UNSUPPORTED, "Only homework can be written in Typst."),
+        )
+    if kind is GenerationKind.PAPER_EXTRACT:
+        if len(body.document_ids) != 1:
+            raise HTTPException(
+                status_code=422,
+                detail=detail(DOCUMENT_REQUIRED, "A paper is read from exactly one document."),
+            )
+    elif body.student_id is None:
+        raise HTTPException(
+            status_code=422,
+            detail=detail(STUDENT_REQUIRED, "Say which student this is for."),
+        )
+
+
 @router.post("/typeset/preview")
 async def preview_typst(body: TypstRequest, tutor: Tutor, typeset: Typeset) -> TypstPreview:
     """A live preview while a tutor writes. Source that will not compile is a 422."""
@@ -238,6 +263,30 @@ async def compile_homework(
 ) -> Homework:
     """Compile the row's `content` again. A failure sets `compile_error` and keeps the old PDF."""
     return await recompile_homework(client, typeset, homework_id)
+
+
+@router.post("/papers/{paper_id}/render", status_code=202)
+async def render_paper(paper_id: UUID, tutor: Tutor, client: Directus, typeset: Typeset) -> Paper:
+    """Render the stored structure again — what a tutor runs after reviewing an extraction."""
+    await client.get_item(Collection.PAPERS, Paper, paper_id)
+    return await rerender_paper(client, typeset, paper_id)
+
+
+@router.post("/papers/{paper_id}/worksheet")
+async def paper_worksheet_pdf(
+    paper_id: UUID, body: WorksheetRequest, tutor: Tutor, client: Directus, typeset: Typeset
+) -> WorksheetResult:
+    """Some of a paper's questions as a worksheet: the tutor's remix, filed as a PDF."""
+    await client.get_item(Collection.PAPERS, Paper, paper_id)
+    return await paper_worksheet(
+        client,
+        typeset,
+        paper_id,
+        body.question_numbers,
+        student_id=body.student_id,
+        title=body.title,
+        due=body.due,
+    )
 
 
 @router.get("/jobs/{job_id}")

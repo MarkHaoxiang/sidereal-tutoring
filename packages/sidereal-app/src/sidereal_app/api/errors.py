@@ -23,6 +23,9 @@ TUTOR_NOT_FOUND = "tutor_not_found"
 TUTOR_HAS_STUDENTS = "tutor_has_students"
 TUTOR_REFUSED = "tutor_refused"
 FORMAT_UNSUPPORTED = "format_unsupported"
+STUDENT_REQUIRED = "student_required"
+DOCUMENT_REQUIRED = "document_required"
+PAPER_UNUSABLE = "paper_unusable"
 
 
 def detail(code: str, message: str, **extra: Any) -> dict[str, Any]:

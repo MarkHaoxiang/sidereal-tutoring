@@ -45,7 +45,15 @@ Bottom layer. Imports no other workspace package.
   be reached, `TypesetError` (status + the compiler's `diagnostics`) when it refuses the source. A
   source that will not compile is never a 500 and never an empty PDF.
 - The house template lives in the typeset service, never here: `wrap_homework` asks for it.
+- The canonical structures mirror `services/typeset/src/document.rs` — same field names, same
+  nesting, unknown fields forbidden on both sides. A name that drifts is a 422 on the first
+  render, never a dropped value.
+- Parts nest one level, so `CanonicalSubPart` is its own model and no canonical schema is
+  recursive: a strict tool schema cannot be.
+- Optional canonical fields carry defaults, so a structure a tutor edited by hand still reads.
+  `answer_lines` is capped at the renderer's own limit.
+- `render` sends the structure and never Typst: the markup is the service's to write.
 - `FakeDirectus.admin` decides what `/users/me` says about the caller's policies; it serves
   `/server/info`, `/license` and `aggregate[count]` the way Directus does.
-- `FakeTypeset` compiles nothing. Source carrying `FAIL_MARKER` is its 422; everything else is
-  `FAKE_PDF` or `FAKE_SVG` pages.
+- `FakeTypeset` compiles nothing. Source — or a rendered document — carrying `FAIL_MARKER` is its
+  422; everything else is `FAKE_PDF` or `FAKE_SVG` pages.

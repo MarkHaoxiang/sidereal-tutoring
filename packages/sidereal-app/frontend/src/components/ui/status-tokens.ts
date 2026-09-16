@@ -5,6 +5,7 @@ import type {
   GenerationJobKind,
   GenerationJobStatus,
   HomeworkStatus,
+  PaperStatus,
   PlanStatus,
   SessionStatus,
   StudentStatus,
@@ -20,6 +21,7 @@ export type StatusToken =
   | HomeworkStatus
   | FeedbackStatus
   | PlanStatus
+  | PaperStatus
   | GenerationJobKind
   | GenerationJobStatus;
 
@@ -51,4 +53,6 @@ export const STATUS_TOKENS: Record<StatusToken, { label: string; tone: StatusTon
   homework: { label: "Homework", tone: "muted" },
   feedback: { label: "Feedback", tone: "muted" },
   plan: { label: "Study plan", tone: "muted" },
+  paper_extract: { label: "Paper extract", tone: "muted" },
+  reviewed: { label: "Reviewed", tone: "success" },
 };

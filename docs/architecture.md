@@ -62,16 +62,22 @@ models, and the frontend's `src/lib/schema.ts`.
 | `students` | People being tutored | `status`: active, paused, archived |
 | `sessions` | Tutoring sessions | `status`: scheduled, completed, cancelled |
 | `documents` | Ingested source material, reduced to plain text; with no student it is the shared agency library | `kind`: transcript, web_page, question_bank, upload · `status`: pending, processing, ready, failed |
+| `papers` | Exam papers from any source, normalised into one canonical structure that Typst templates render | `status`: draft, reviewed, archived |
 | `questions` | Individual questions, extracted or written; shared like documents when no student is behind them | — |
 | `topics` | A free tree of topics the tutor builds | — |
 | `homework` | Homework assigned to a student | `status`: draft, assigned, submitted, marked · `format`: markdown, typst |
 | `feedback` | Written feedback for a student | `status`: draft, sent |
 | `plans` | Teaching plans covering a period | `status`: draft, active, completed |
-| `generation_jobs` | LLM generation runs and their outcome | `kind`: homework, feedback, plan · `status`: queued, running, succeeded, failed |
+| `generation_jobs` | LLM generation runs and their outcome | `kind`: homework, feedback, plan, paper_extract · `status`: queued, running, succeeded, failed |
 | `homework_questions` | Junction, `homework` ↔ `questions` | — |
 | `document_topics` | Junction, `documents` ↔ `topics` | — |
 | `question_topics` | Junction, `questions` ↔ `topics` | — |
 | `homework_topics` | Junction, `homework` ↔ `topics` | — |
+
+`papers.structure` and `papers.mark_scheme` hold the canonical `Paper` and `MarkScheme` the
+typeset service defines in `services/typeset/src/document.rs`; the structure is the source of
+truth and a template renders it. A `papers` row with no `document` behind it, or one whose
+document has no student, is the shared agency library exactly as `documents` is.
 
 `tutoring`, `library` and `artefacts` are collection groups — folders in the admin app with no
 table behind them — so a tutor sees students, material and generated work as three areas.

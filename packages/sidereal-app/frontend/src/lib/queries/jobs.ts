@@ -18,7 +18,8 @@ export type Job = Awaited<ReturnType<typeof fetchJob>>;
 
 export interface CreateJobInput {
   kind: GenerationJobKind;
-  student_id: string;
+  /** Every kind but `paper_extract`, which is filed against the library rather than a student. */
+  student_id?: string | null;
   document_ids: string[];
   instructions?: string | null;
   period_start?: string | null;

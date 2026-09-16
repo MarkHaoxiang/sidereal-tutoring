@@ -38,3 +38,8 @@ Top layer. Imports core, ingest and generate; never sidereal-mcp.
 - `POST /api/homework/{id}/compile` compiles before it answers — the 202 body is the recompiled row,
   not a queued one. A failure sets `compile_error` and leaves the existing `pdf` in place.
 - One `TypesetClient` for the process, built by the lifespan over its own pool.
+- `POST /api/jobs/paper_extract` takes exactly one document and no student; every other kind takes a
+  student. Both are 422 with a `code` before a job row exists.
+- Papers are the tutor's: render and worksheet are `require_tutor`, and each reads the paper with the
+  caller's own token first, so a paper they cannot see is Directus's own answer.
+- A `PaperError` is 422 `paper_unusable`, carrying the sentence generate wrote.

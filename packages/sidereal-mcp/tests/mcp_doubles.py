@@ -8,7 +8,7 @@ from uuid import UUID
 
 from sidereal_core.models import Collection
 from sidereal_core.testing import DEFAULT_TOKEN, FakeDirectus, FakeTypeset
-from sidereal_generate.fake import FakeGenerator
+from sidereal_generate.fake import FakeGenerator, FakePaperExtractor
 from sidereal_generate.jobs import Generators
 from sidereal_generate.models import (
     FeedbackOutput,
@@ -54,6 +54,7 @@ def build_services(
             homework=FakeGenerator(HOMEWORK, model="fake-homework"),
             feedback=FakeGenerator(FEEDBACK),
             plan=FakeGenerator(PLAN),
+            paper=FakePaperExtractor(),
         ),
     )
 

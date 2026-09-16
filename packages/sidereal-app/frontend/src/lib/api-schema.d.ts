@@ -275,6 +275,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/papers/{paper_id}/render": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Render Paper
+         * @description Render the stored structure again — what a tutor runs after reviewing an extraction.
+         */
+        post: operations["render_paper_api_papers__paper_id__render_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/papers/{paper_id}/worksheet": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Paper Worksheet Pdf
+         * @description Some of a paper's questions as a worksheet: the tutor's remix, filed as a PDF.
+         */
+        post: operations["paper_worksheet_pdf_api_papers__paper_id__worksheet_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/jobs/{job_id}": {
         parameters: {
             query?: never;
@@ -463,7 +503,7 @@ export interface components {
          * GenerationKind
          * @enum {string}
          */
-        GenerationKind: "homework" | "feedback" | "plan";
+        GenerationKind: "homework" | "feedback" | "plan" | "paper_extract";
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -579,11 +619,8 @@ export interface components {
         };
         /** JobRequest */
         JobRequest: {
-            /**
-             * Student Id
-             * Format: uuid
-             */
-            student_id: string;
+            /** Student Id */
+            student_id?: string | null;
             /**
              * Document Ids
              * @default []
@@ -610,6 +647,61 @@ export interface components {
             /** Password */
             password: string;
         };
+        /** Paper */
+        Paper: {
+            /** Title */
+            title: string;
+            /** Source */
+            source?: string | null;
+            /** Board */
+            board?: string | null;
+            /** Year */
+            year?: number | null;
+            /** Time Minutes */
+            time_minutes?: number | null;
+            /** Total Marks */
+            total_marks?: number | null;
+            /** Instructions */
+            instructions?: string | null;
+            /** @default draft */
+            status?: components["schemas"]["PaperStatus"];
+            /** Document */
+            document?: string | null;
+            /** Rendered Pdf */
+            rendered_pdf?: string | null;
+            /** Mark Scheme Pdf */
+            mark_scheme_pdf?: string | null;
+            /** Structure */
+            structure?: {
+                [key: string]: unknown;
+            } | null;
+            /** Mark Scheme */
+            mark_scheme?: {
+                [key: string]: unknown;
+            } | null;
+            /** Generated From */
+            generated_from?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Date Created */
+            date_created?: string | null;
+            /** Date Updated */
+            date_updated?: string | null;
+            /** User Created */
+            user_created?: string | null;
+            /** User Updated */
+            user_updated?: string | null;
+        };
+        /**
+         * PaperStatus
+         * @enum {string}
+         */
+        PaperStatus: "draft" | "reviewed" | "archived";
         /** PasswordRequest */
         PasswordRequest: {
             /** Password */
@@ -720,6 +812,30 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** WorksheetRequest */
+        WorksheetRequest: {
+            /** Question Numbers */
+            question_numbers: string[];
+            /** Student Id */
+            student_id?: string | null;
+            /** Title */
+            title?: string | null;
+            /** Due */
+            due?: string | null;
+        };
+        /**
+         * WorksheetResult
+         * @description A worksheet as it was rendered: the Typst it compiled from, and the filed PDF.
+         */
+        WorksheetResult: {
+            /** Source */
+            source: string;
+            /**
+             * Pdf File Id
+             * Format: uuid
+             */
+            pdf_file_id: string;
         };
     };
     responses: never;
@@ -1219,6 +1335,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Homework"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    render_paper_api_papers__paper_id__render_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                paper_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Paper"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    paper_worksheet_pdf_api_papers__paper_id__worksheet_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                paper_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorksheetRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorksheetResult"];
                 };
             };
             /** @description Validation Error */

@@ -33,6 +33,7 @@ from sidereal_core.typeset import (
     TypesetError,
     TypesetUnavailableError,
 )
+from sidereal_generate.papers import PaperError
 from sidereal_generate.typst import NotTypstError
 from sidereal_ingest import HttpxFetcher, default_ingesters
 
@@ -45,6 +46,7 @@ from sidereal_app.api.errors import (
     LOGIN_FAILED,
     LOGIN_MISSING,
     LOGIN_REFUSED,
+    PAPER_UNUSABLE,
     STUDENT_NOT_FOUND,
     STUDENT_ROLE_MISSING,
     TUTOR_HAS_STUDENTS,
@@ -100,6 +102,7 @@ def create_app() -> FastAPI:
     app.add_exception_handler(TypesetUnavailableError, _typeset_unavailable)
     app.add_exception_handler(TypesetError, _typeset_failed)
     app.add_exception_handler(NotTypstError, _not_typst)
+    app.add_exception_handler(PaperError, _paper_unusable)
     return app
 
 
@@ -144,6 +147,11 @@ def _typeset_failed(request: Request, exc: Exception) -> JSONResponse:
 
 def _not_typst(request: Request, exc: Exception) -> JSONResponse:
     return JSONResponse(status_code=422, content=error_body(FORMAT_UNSUPPORTED, str(exc)))
+
+
+def _paper_unusable(request: Request, exc: Exception) -> JSONResponse:
+    """A paper whose structure cannot be rendered. The sentence is the one generate wrote."""
+    return JSONResponse(status_code=422, content=error_body(PAPER_UNUSABLE, str(exc)))
 
 
 def _login_refused(request: Request, exc: Exception) -> JSONResponse:

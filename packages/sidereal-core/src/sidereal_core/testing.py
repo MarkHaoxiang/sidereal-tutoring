@@ -216,6 +216,7 @@ class FakeTypeset:
         self.pages = pages
         self.compiled: list[str] = []
         self.wrapped: list[dict[str, Any]] = []
+        self.rendered: list[dict[str, Any]] = []
         self.unavailable = False
 
     def transport(self) -> httpx.MockTransport:
@@ -234,6 +235,8 @@ class FakeTypeset:
             return self._template(_payload(request))
         if path == "/compile":
             return self._compile(_payload(request))
+        if path == "/render":
+            return self._render(_payload(request))
         return httpx.Response(404, json={"message": f"no route {path}"})
 
     def _template(self, body: dict[str, Any]) -> httpx.Response:
@@ -246,6 +249,27 @@ class FakeTypeset:
             f"{body.get('body', '')}\n"
         )
         return httpx.Response(200, json={"source": source})
+
+    def _render(self, body: dict[str, Any]) -> httpx.Response:
+        """A canonical document, rendered by nobody. A `FAIL_MARKER` anywhere in it is the 422."""
+        self.rendered.append(body)
+        document = json.dumps(body.get("document", {}))
+        if FAIL_MARKER in document:
+            return httpx.Response(
+                422,
+                json={
+                    "diagnostics": [
+                        {"message": "unknown function `does-not-compile`", "line": 1, "column": 1}
+                    ]
+                },
+            )
+        source = f"// FakeTypeset render: {body.get('kind')}\n{document}\n"
+        if body.get("output") == "source":
+            return httpx.Response(200, json={"source": source})
+        if body.get("output") == "svg":
+            pages = [FAKE_SVG.format(page=n) for n in range(1, self.pages + 1)]
+            return httpx.Response(200, json={"pages": pages})
+        return httpx.Response(200, content=self.pdf, headers={"Content-Type": "application/pdf"})
 
     def _compile(self, body: dict[str, Any]) -> httpx.Response:
         source = str(body.get("source", ""))

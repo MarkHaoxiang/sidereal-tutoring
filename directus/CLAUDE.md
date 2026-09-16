@@ -16,8 +16,9 @@
   (`active`/`paused`/`archived`, `scheduled`/`completed`/`cancelled`,
   `transcript`/`web_page`/`question_bank`/`upload`, `pending`/`processing`/`ready`/`failed`,
   `draft`/`assigned`/`submitted`/`marked`, `draft`/`sent`, `draft`/`active`/`completed`,
-  `homework`/`feedback`/`plan`, `queued`/`running`/`succeeded`/`failed`). The Python `StrEnum`s
-  and the TypeScript unions mirror them exactly; changing one means changing all three.
+  `draft`/`reviewed`/`archived`, `homework`/`feedback`/`plan`/`paper_extract`,
+  `queued`/`running`/`succeeded`/`failed`). The Python `StrEnum`s and the TypeScript unions
+  mirror them exactly; changing one means changing all three.
 - Every collection has a `uuid` primary key and the four audit fields
   (`date_created`, `date_updated`, `user_created`, `user_updated`).
 - `homework` ↔ `questions` is m2m through `homework_questions`; nothing writes that junction's
@@ -28,11 +29,11 @@
 - A topic junction is named `<owning collection>_topics`, carries `sort`, cascades on both
   sides, and exposes `topics` on the owning collection and the owner's plural name on `topics`.
   A new collection that wants topics gets its own junction; none is ever reused.
-- `directus_files` carries two o2m alias fields, `homework_pdf` and `homework_submission_file`,
-  purely so a permission rule can filter a file by the homework that references it. Without the
-  alias field Directus stores such a rule and then fails every read with a Postgres error, so
-  the aliases are load-bearing, not decoration. They are in the snapshot and `schema apply`
-  creates them.
+- `directus_files` carries five o2m alias fields — `homework_pdf`, `homework_submission_file`,
+  `document_file`, `paper_rendered_pdf` and `paper_mark_scheme_pdf` — purely so a permission
+  rule can filter a file by the row that references it. Without the alias field Directus stores
+  such a rule and then fails every read with a Postgres error, so the aliases are load-bearing,
+  not decoration. They are in the snapshot and `schema apply` creates them.
 - A student reads a file only if it is their own homework's `pdf` or `submission_file`, or they
   uploaded it; the third arm is what lets them read back an upload not yet linked to a row.
   `/assets/<id>` honours the same rule, so the PDF is served by Directus, not by the app.
@@ -67,6 +68,20 @@
   arm that tests a related row's student for null is guarded — `_null` across an m2o also
   matches rows with no relation at all, and across an o2m alias it needs `_some` in an arm of
   its own, since `_some` under a shared `_or` matches everything.
+- `papers` is the canonical form of an exam paper from any source. `structure` is one JSON
+  column holding the whole `Paper` that `services/typeset/src/document.rs` defines, and
+  `mark_scheme` the whole `MarkScheme`, so a review edit is one write and rendering one read.
+  Field names and nesting mirror that file exactly; the typeset service refuses anything else.
+- A `papers` row reaches its student through `document` alone. A tutor reads it when the
+  document's student is theirs, when the document has no student, or when the paper has no
+  document; only its creator may change or delete it. Both `document` arms carry the `_nnull`
+  guard the questions rules need, and the no-document arm is separate.
+- `papers.document`, `papers.rendered_pdf` and `papers.mark_scheme_pdf` are all `SET NULL`:
+  deleting the source document or either PDF leaves the structure, which is the source of truth.
+- `questions` carries the paper-lifted fields `paper`, `number`, `marks`, `parts`,
+  `answer_lines` and `mark_scheme`; `parts` and `mark_scheme` are the same canonical shapes.
+- A student reaches no `papers` row and no file behind one. There is no Student grant on the
+  collection at all.
 - Presets are applied before validation, so a create that omits a preset field passes the
   validation on it.
 - Directus ignores a permission row's `permissions` on create and checks `validation` against
@@ -81,9 +96,11 @@
 - A tutor creating a `directus_users` row gets `204` and an empty body: the new login matches
   no read rule until a student links to it, and it cannot be found afterwards either. A
   readable id comes from a nested create on a student's own `user` field.
-- A tutor reads a file only through `uploaded_by` or their own students' homework aliases. A
-  file uploaded by another account and referenced only by `documents.file` has no reverse
-  alias and is not readable by the tutor who owns the document.
+- A tutor reads a file through `uploaded_by`, their own students' homework aliases, or the
+  `document_file`, `paper_rendered_pdf` and `paper_mark_scheme_pdf` aliases. Each of those three
+  needs `_some` in an `_or` arm of its own — `_some` under a shared `_or` matches everything —
+  and a paper's arm rides the m2o to `document`, so one null test covers both the student-less
+  document and the paper that has none. Writing is not widened by the library.
 - A `questions` row unlinked from both its document and its homework is reachable by its
   creator alone.
 - `directus_roles` has no `admin_access` in Directus 12 — it lives on the policy — and a tutor

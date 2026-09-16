@@ -20,10 +20,12 @@ from sidereal_core.models import (
     Homework,
     HomeworkFormat,
     JobStatus,
+    Paper,
     Student,
     StudentStatus,
 )
 from sidereal_core.tutors import AdminHealth, AdminJob, TutorAccount, TutorStatus
+from sidereal_generate.papers import WorksheetResult
 
 from sidereal_mcp import tools
 from sidereal_mcp.services import (
@@ -145,6 +147,33 @@ def _register(resolve: Resolve) -> MCPServer:
         async with caller(ctx) as services:
             return await tools.generate_homework(
                 services, student_id, document_ids, instructions, format
+            )
+
+    @server.tool()
+    async def extract_paper(ctx: Context, document_id: UUID) -> GenerationJob:
+        """Read a ready document into a paper: its structure, its PDFs and its question rows."""
+        async with caller(ctx) as services:
+            return await tools.extract_paper(services, document_id)
+
+    @server.tool()
+    async def render_paper(ctx: Context, paper_id: UUID) -> Paper:
+        """Render a paper's stored structure again, replacing both of its PDFs."""
+        async with caller(ctx) as services:
+            return await tools.render_paper(services, paper_id)
+
+    @server.tool()
+    async def paper_worksheet(
+        ctx: Context,
+        paper_id: UUID,
+        question_numbers: Sequence[str],
+        student_id: UUID | None = None,
+        title: str | None = None,
+        due: date | None = None,
+    ) -> WorksheetResult:
+        """Some of a paper's questions, in the order given, as one worksheet PDF."""
+        async with caller(ctx) as services:
+            return await tools.paper_worksheet_pdf(
+                services, paper_id, question_numbers, student_id, title, due
             )
 
     @server.tool()

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from sidereal_core.models import Document
+
 from sidereal_generate.models import GenerationRequest
 
 _AUDIENCE = (
@@ -45,9 +47,44 @@ PLAN_PROMPT = (
     "should cover in each session rather than listing topics without a schedule."
 )
 
+PAPER_PROMPT = (
+    "You read one exam paper and return it as structure. You are transcribing, not writing: "
+    "copy every question as it stands, in the order it stands in, and never answer, correct, "
+    "improve or invent one. Material that is not part of a question — a cover page, a formula "
+    "sheet, page furniture — is left out. If the source carries no mark scheme, return null for "
+    "it rather than writing one.\n"
+    "Numbering: `number` is the question's own label and nothing else — `1`, `2`, `12`. A part's "
+    "`label` is its letter alone — `a`, `b` — and a part of a part is its roman numeral alone — "
+    "`i`, `ii`. Never `(a)`, never `1.`: the template draws the brackets. Parts nest one level "
+    "only, so a part of a part has no parts of its own; fold a third level into the text above "
+    "it. Wording a question's parts share is its `stem`; each thing the student must do is a "
+    "part. `marks` is the figure in the margin, for the question when it carries one and for "
+    "each part when they do. `answer_lines` is how many ruled lines the student's working needs, "
+    "at most 60, and is left null where the paper gives no answer space.\n"
+    "Maths is Typst, not LaTeX: `$x^2 - 5x + 6$` inline, `$ ... $` with spaces inside the "
+    "delimiters for a display line, `frac(a, b)`, `sqrt(x)`, `integral`, `alpha`, `<=`. A "
+    "backslash command such as `\\frac` is a compile error. Prose is written plainly, with "
+    "`*bold*` and `_italic_` the only markup you need; a field is text, never Typst code.\n"
+    "A mark scheme answers the paper by the same numbers and labels, and its `marks` say how "
+    "the marks for a part are earned."
+)
+
 HOMEWORK_TOOL = "emit_homework"
 FEEDBACK_TOOL = "emit_feedback"
 PLAN_TOOL = "emit_plan"
+PAPER_TOOL = "emit_paper"
+PAPER_RETRY = (
+    "Your previous answer did not fit the structure. Return the whole paper again, corrected. "
+    "The validator reported:"
+)
+
+
+def render_document(document: Document) -> str:
+    """The one document a paper is read out of."""
+    return (
+        f'<document id="{document.id}" kind="{document.kind.value}" title="{document.title}">\n'
+        f"{document.text or ''}\n</document>"
+    )
 
 
 def render(request: GenerationRequest) -> str:

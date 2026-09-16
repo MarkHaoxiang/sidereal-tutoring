@@ -34,8 +34,10 @@ uv run --package sidereal-app pytest packages/sidereal-app/tests
 | `DELETE` | `/api/students/{id}/login` | 204. The work stays; only the login goes. |
 | `POST` | `/api/documents` | `source` is `{type: file, file_id}`, `{type: url, url}` or `{type: text, text}`. Returns 202 and the pending row. |
 | `POST` | `/api/documents/{id}/process` | Reads the material again. Returns 202 and the row. |
-| `POST` | `/api/jobs/{kind}` | `kind` is `homework`, `feedback` or `plan`. `format` is `markdown` or `typst` and only homework takes `typst`. Returns 202 and the queued job. |
+| `POST` | `/api/jobs/{kind}` | `kind` is `homework`, `feedback`, `plan` or `paper_extract`. `format` is `markdown` or `typst` and only homework takes `typst`. `paper_extract` takes one `document_ids` entry and no student. Returns 202 and the queued job. |
 | `GET` | `/api/jobs/{id}` | The job, including `output_collection` and `output_id` once it succeeds. |
+| `POST` | `/api/papers/{id}/render` | Tutors only. Renders the stored structure again and returns 202 and the row. |
+| `POST` | `/api/papers/{id}/worksheet` | Tutors only. `{question_numbers, student_id?, title?, due?}`. 200 and `{source, pdf_file_id}`. |
 | `POST` | `/api/typeset/preview` | `{source}`. Tutors only. 200 and `{pages: [svg]}`, or 422 with `diagnostics`. |
 | `POST` | `/api/homework/{id}/compile` | Tutors only. Compiles the row's `content` and returns 202 and the row; a failure sets `compile_error` and keeps the old `pdf`. |
 

@@ -5,6 +5,9 @@
 //   material  useDocuments({studentId?,status?,limit?}) · useLibraryDocuments({status?,limit?})
 //             (the student-less rows every tutor shares) · useDocument(id) · useCreateDocument ·
 //             useUploadMaterialFile(file) · useRetryDocument · useDeleteDocument({id,fileId})
+//   papers    usePapers() (the library's papers) · usePaper(id) · useSavePaper({id,patch}) ·
+//             useSetPaperStatus · useRenderPaper(id) · useWorksheet · useDeletePaper(id)
+//             (it clears the paper's questions rows first)
 //   homework  useHomeworkList({studentId?,status?,limit?}) · useHomework(id) · useGeneratedQuestions(ids) · useUpdateHomework · useDeleteHomework
 //   feedback  useFeedbackList({...}) · useFeedback(id) · useUpdateFeedback · useDeleteFeedback
 //   plans     usePlans({...}) · usePlan(id) · useUpdatePlan · useDeletePlan
@@ -34,6 +37,7 @@ export * from "./homework";
 export * from "./jobs";
 export * from "./logins";
 export * from "./me";
+export * from "./papers";
 export * from "./plans";
 export * from "./poll";
 export * from "./sessions";

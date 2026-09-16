@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { AddMaterialDialog } from "@/components/material/AddMaterialDialog";
 import { addedByName } from "@/components/material/authors";
 import { libraryTopics, libraryTopicsOf, matchesLibraryFilter } from "@/components/material/library";
+import { LibraryTabs } from "@/components/material/LibraryTabs";
 import { MaterialRow } from "@/components/material/MaterialRow";
 import { TopicFilter } from "@/components/topics/TopicFilter";
 import { Button, EmptyState, Input, PageHeader, SkeletonRows } from "@/components/ui";
@@ -41,6 +42,8 @@ export function LibraryPage() {
         subtitle="Material every tutor can use. Anything not tied to one student lives here."
         actions={add}
       />
+
+      <LibraryTabs />
 
       <div className={styles.toolbar}>
         <Input

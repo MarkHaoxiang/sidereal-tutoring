@@ -11,7 +11,7 @@ from sidereal_app.deps import get_generators, get_http_client, get_ingesters, ge
 from sidereal_app.main import create_app
 from sidereal_core.models import Collection
 from sidereal_core.testing import DEFAULT_TOKEN, FakeDirectus, FakeTypeset
-from sidereal_generate.fake import FakeGenerator
+from sidereal_generate.fake import FakeGenerator, FakePaperExtractor
 from sidereal_generate.jobs import Generators
 from sidereal_generate.models import (
     FeedbackOutput,
@@ -84,6 +84,7 @@ def generators() -> Generators:
         homework=FakeGenerator(HOMEWORK, model="fake-homework"),
         feedback=FakeGenerator(FEEDBACK),
         plan=FakeGenerator(PLAN),
+        paper=FakePaperExtractor(),
     )
 
 

@@ -43,6 +43,7 @@ app_collections=(
   students
   sessions
   documents
+  papers
   questions
   homework
   feedback
@@ -276,6 +277,20 @@ questions_write="$(jq -nc --arg u "$current_user" \
   {_and: [$o, {user_created: {_eq: $u}}]}
 ]}')"
 via_tutor_homework="$(jq -nc --arg u "$current_user" '{homework: {student: {tutor: {_eq: $u}}}}')"
+# A paper is reached through the document it was extracted from, so the library rule is the
+# document's: student-less, or the tutor's student's, or no document at all. The `_nnull` guard
+# is the same one the questions rules need — `_null` across an m2o also matches a row with no
+# relation — and the no-document arm is separate because such a paper is nobody's student's.
+# Writing is the creator's alone: a tutor reads another tutor's paper and changes nothing on it.
+library_paper='{"_and": [{"document": {"_nnull": true}}, {"document": {"student": {"_null": true}}}]}'
+loose_paper='{"document": {"_null": true}}'
+papers_read="$(jq -nc --arg u "$current_user" \
+  --argjson l "$library_paper" --argjson o "$loose_paper" '{_or: [
+  {document: {student: {tutor: {_eq: $u}}}},
+  $l,
+  $o
+]}')"
+papers_write="$(jq -nc --arg u "$current_user" '{user_created: {_eq: $u}}')"
 
 ensure_scoped() {
   # ensure_scoped <collection> <read-filter> [<write-filter>]. Read, update and delete carry a
@@ -317,6 +332,7 @@ if [ "$custom_rules" = true ]; then
   ensure_scoped documents "$documents_read" "$documents_write"
   ensure_scoped generation_jobs "$via_tutor_or_own"
   ensure_scoped questions "$questions_read" "$questions_write"
+  ensure_scoped papers "$papers_read" "$papers_write"
   ensure_scoped homework_questions "$via_tutor_homework"
   ensure_scoped homework_topics "$via_tutor_homework"
   # A topic junction is reachable exactly as far as the row it tags.
@@ -337,8 +353,11 @@ if [ "$custom_rules" = true ]; then
   # first arm true, and delete is needed or deleting the material that owns a file orphans it
   # in storage. Writing is not widened by the library: a tutor reads another tutor's library
   # file and changes neither it nor the document behind it.
-  # The `document_file` arms use `_some` and stay separate. Under one `_or` — or without
-  # `_some` at all — the null test matches a file with no document at all, which is every file.
+  # The `document_file`, `paper_rendered_pdf` and `paper_mark_scheme_pdf` arms use `_some` and
+  # each stays in an `_or` arm of its own. Under one `_or` — or without `_some` at all — the
+  # null test matches a file with no document at all, which is every file. A paper's own null
+  # test rides the m2o to `document`, so one arm covers both the student-less document and the
+  # paper that has none.
   tutor_files_write="$(jq -nc --arg u "$current_user" '{_or: [
     {uploaded_by: {_eq: $u}},
     {homework_pdf: {student: {tutor: {_eq: $u}}}},
@@ -347,7 +366,11 @@ if [ "$custom_rules" = true ]; then
   tutor_files_read="$(jq -nc --arg u "$current_user" --argjson w "$tutor_files_write" '{_or: [
     $w._or[],
     {document_file: {_some: {student: {tutor: {_eq: $u}}}}},
-    {document_file: {_some: {student: {_null: true}}}}
+    {document_file: {_some: {student: {_null: true}}}},
+    {paper_rendered_pdf: {_some: {document: {student: {tutor: {_eq: $u}}}}}},
+    {paper_rendered_pdf: {_some: {document: {student: {_null: true}}}}},
+    {paper_mark_scheme_pdf: {_some: {document: {student: {tutor: {_eq: $u}}}}}},
+    {paper_mark_scheme_pdf: {_some: {document: {student: {_null: true}}}}}
   ]}')"
   ensure_permission "$policy_id" directus_files read '["*"]' "$tutor_files_read"
   for action in update delete; do

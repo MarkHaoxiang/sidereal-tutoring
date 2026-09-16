@@ -18,12 +18,22 @@ class Health(BaseModel):
 class JobRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    student_id: UUID
+    # `paper_extract` is the one kind with no student: a paper is library material.
+    student_id: UUID | None = None
     document_ids: list[UUID] = []
     instructions: str | None = None
     period_start: date | None = None
     period_end: date | None = None
     format: HomeworkFormat = HomeworkFormat.MARKDOWN
+
+
+class WorksheetRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    question_numbers: list[str] = Field(min_length=1)
+    student_id: UUID | None = None
+    title: str | None = None
+    due: date | None = None
 
 
 class TypstRequest(BaseModel):

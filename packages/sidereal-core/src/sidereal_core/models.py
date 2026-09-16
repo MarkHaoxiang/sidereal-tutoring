@@ -15,6 +15,7 @@ class Collection(StrEnum):
     SESSIONS = "sessions"
     DOCUMENTS = "documents"
     QUESTIONS = "questions"
+    PAPERS = "papers"
     HOMEWORK = "homework"
     FEEDBACK = "feedback"
     PLANS = "plans"
@@ -77,10 +78,17 @@ class PlanStatus(StrEnum):
     COMPLETED = "completed"
 
 
+class PaperStatus(StrEnum):
+    DRAFT = "draft"
+    REVIEWED = "reviewed"
+    ARCHIVED = "archived"
+
+
 class GenerationKind(StrEnum):
     HOMEWORK = "homework"
     FEEDBACK = "feedback"
     PLAN = "plan"
+    PAPER_EXTRACT = "paper_extract"
 
 
 class JobStatus(StrEnum):
@@ -213,9 +221,38 @@ class QuestionDraft(Draft):
     topic: str | None = None
     difficulty: int | None = Field(default=None, ge=1, le=5)
     document: UUID | None = None
+    # A question taken from a paper: `parts` and `mark_scheme` are its slice of the
+    # paper's `structure`, which stays the source of truth.
+    paper: UUID | None = None
+    number: str | None = None
+    marks: int | None = None
+    answer_lines: int | None = None
+    parts: list[dict[str, Any]] | None = None
+    mark_scheme: dict[str, Any] | None = None
 
 
 class Question(Record, QuestionDraft):
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+
+class PaperDraft(Draft):
+    title: str
+    source: str | None = None
+    board: str | None = None
+    year: int | None = None
+    time_minutes: int | None = None
+    total_marks: int | None = None
+    instructions: str | None = None
+    status: PaperStatus = PaperStatus.DRAFT
+    document: UUID | None = None
+    rendered_pdf: UUID | None = None
+    mark_scheme_pdf: UUID | None = None
+    structure: dict[str, Any] | None = None
+    mark_scheme: dict[str, Any] | None = None
+    generated_from: dict[str, Any] | None = None
+
+
+class Paper(Record, PaperDraft):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
 
