@@ -48,6 +48,8 @@ RR NN ZZ QQ CC
 FUNCTIONS = frozenset(_FUNCTIONS.split())
 SYMBOLS = frozenset(_SYMBOLS.split())
 KNOWN = FUNCTIONS | SYMBOLS
+# The blocks the renderer sets verbatim: a `$` in a listing delimits nothing.
+VERBATIM = frozenset({"passage", "code"})
 
 # `$...$`, the only place any of this applies. An escaped dollar opens nothing.
 _MATH = re.compile(r"(?<!\\)\$(.*?)(?<!\\)\$", re.DOTALL)
@@ -97,6 +99,8 @@ def _walk(value: Any) -> Any:
     match value:
         case str():
             return normalise(value)
+        case dict() if value.get("type") in VERBATIM:
+            return {key: item if key == "text" else _walk(item) for key, item in value.items()}
         case dict():
             return {key: _walk(item) for key, item in value.items()}
         case list():

@@ -59,6 +59,7 @@ function fetchMyHomework(id: string) {
         "due_on",
         "status",
         "submission",
+        "submission_transcription",
         "submitted_at",
         "date_created",
         "pdf",

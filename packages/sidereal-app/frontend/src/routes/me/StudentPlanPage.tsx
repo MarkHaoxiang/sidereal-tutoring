@@ -37,7 +37,7 @@ export function StudentPlanPage() {
       <h1 className={styles.heading}>Your study plan</h1>
 
       {isLoading ? <SkeletonRows count={1} label="Loading your study plan" /> : null}
-      {isError ? <p className={styles.status}>Your study plan could not be loaded. Try again in a moment.</p> : null}
+      {isError ? <p className={styles.status}>Could not load your study plan.</p> : null}
 
       {active.map((plan) => (
         <Card key={plan.id}>
@@ -46,7 +46,7 @@ export function StudentPlanPage() {
       ))}
 
       {!isLoading && !isError && active.length === 0 ? (
-        <EmptyState message="No study plan running right now. Your tutor will share one when it is ready." />
+        <EmptyState message="No study plan yet." />
       ) : null}
 
       {past.length > 0 ? (

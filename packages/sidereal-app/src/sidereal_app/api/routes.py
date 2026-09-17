@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import base64
+from collections.abc import Mapping
 from importlib.metadata import version
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Response
 from sidereal_core.canonical import RenderOutput
 from sidereal_core.logins import (
+    CallerRole,
     Identity,
     StudentLogin,
     create_login,
@@ -42,11 +45,15 @@ from sidereal_generate.papers import WorksheetResult, paper_worksheet, rerender_
 from sidereal_generate.settings import generate_settings
 from sidereal_generate.typst import recompile_homework
 from sidereal_ingest.documents import create_document, process_document
+from sidereal_ingest.submissions import transcribe_submission
 
 from sidereal_app.api.errors import (
+    ASSET_UNREADABLE,
     DOCUMENT_REQUIRED,
     FORMAT_UNSUPPORTED,
+    PAGES_UNSUPPORTED,
     STUDENT_REQUIRED,
+    TUTOR_ONLY,
     detail,
 )
 from sidereal_app.api.models import (
@@ -70,6 +77,7 @@ from sidereal_app.deps import (
     Directus,
     GeneratorSet,
     IngesterSet,
+    Scanner,
     Tutor,
     Typeset,
 )
@@ -174,6 +182,7 @@ async def add_document(
     user: CurrentUser,
     client: Directus,
     ingesters: IngesterSet,
+    scanner: Scanner,
     background: BackgroundTasks,
 ) -> Document:
     """File the material as pending and answer immediately; the row carries the outcome."""
@@ -186,7 +195,7 @@ async def add_document(
         student=body.student_id,
         session=body.session_id,
     )
-    background.add_task(process_document, client, ingesters, document.id)
+    background.add_task(process_document, client, ingesters, document.id, scanner=scanner)
     return document
 
 
@@ -196,11 +205,12 @@ async def reprocess_document(
     user: CurrentUser,
     client: Directus,
     ingesters: IngesterSet,
+    scanner: Scanner,
     background: BackgroundTasks,
 ) -> Document:
     """Read the material again — what a tutor's Retry on a failed row does."""
     document = await client.get_item(Collection.DOCUMENTS, Document, document_id)
-    background.add_task(process_document, client, ingesters, document.id)
+    background.add_task(process_document, client, ingesters, document.id, scanner=scanner)
     return document
 
 
@@ -228,6 +238,7 @@ async def create_job(
             period_start=body.period_start,
             period_end=body.period_end,
             format=body.format,
+            pages=body.pages,
         ),
         model=generators.for_kind(kind),
     )
@@ -241,6 +252,11 @@ def _check_input(kind: GenerationKind, body: JobRequest) -> None:
         raise HTTPException(
             status_code=422,
             detail=detail(FORMAT_UNSUPPORTED, "Only homework can be written in Typst."),
+        )
+    if body.pages is not None and kind is not GenerationKind.PAPER_EXTRACT:
+        raise HTTPException(
+            status_code=422,
+            detail=detail(PAGES_UNSUPPORTED, "Only extracting a paper can ask about pages."),
         )
     if kind is GenerationKind.PAPER_EXTRACT:
         if not 1 <= len(body.document_ids) <= 2:
@@ -268,13 +284,30 @@ async def preview_typst(body: TypstRequest, tutor: Tutor, typeset: Typeset) -> T
 async def render_canonical(body: RenderRequest, tutor: Tutor, typeset: Typeset) -> TypstRender:
     """A canonical structure previewed in the house style. Nothing is read or stored."""
     scheme = body.mark_scheme if isinstance(body, QuestionRenderRequest) else None
+    assets = _asset_bytes(body.assets)
     if body.output is RenderOutput.SOURCE:
         source = await typeset.render(
-            body.kind, body.document, RenderOutput.SOURCE, mark_scheme=scheme
+            body.kind, body.document, RenderOutput.SOURCE, mark_scheme=scheme, assets=assets
         )
         return TypstRender(pages=[], source=source)
-    pages = await typeset.render(body.kind, body.document, RenderOutput.SVG, mark_scheme=scheme)
+    pages = await typeset.render(
+        body.kind, body.document, RenderOutput.SVG, mark_scheme=scheme, assets=assets
+    )
     return TypstRender(pages=pages, source=None)
+
+
+def _asset_bytes(assets: Mapping[str, str]) -> dict[str, bytes]:
+    """The client encodes the bytes again; the caps are its own, and so is the 413."""
+    decoded: dict[str, bytes] = {}
+    for name, encoded in assets.items():
+        try:
+            decoded[name] = base64.b64decode(encoded, validate=True)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=422,
+                detail=detail(ASSET_UNREADABLE, f"The asset {name!r} is not base64."),
+            ) from exc
+    return decoded
 
 
 @router.post("/homework/{homework_id}/compile", status_code=202)
@@ -283,6 +316,21 @@ async def compile_homework(
 ) -> Homework:
     """Compile the row's `content` again. A failure sets `compile_error` and keeps the old PDF."""
     return await recompile_homework(client, typeset, homework_id)
+
+
+@router.post("/homework/{homework_id}/transcribe")
+async def transcribe_homework_submission(
+    homework_id: UUID, user: CurrentUser, client: Directus, scanner: Scanner
+) -> Homework:
+    """Read the handed-in photo or PDF into `submission_transcription`, and answer with the row."""
+    homework = await client.get_item(Collection.HOMEWORK, Homework, homework_id)
+    identity = await identify(client, user)
+    if identity.role is CallerRole.STUDENT and identity.student_id != homework.student:
+        raise HTTPException(
+            status_code=403,
+            detail=detail(TUTOR_ONLY, "Only this student or their tutor can do this."),
+        )
+    return await transcribe_submission(client, scanner, homework_id)
 
 
 @router.post("/papers/{paper_id}/render", status_code=202)

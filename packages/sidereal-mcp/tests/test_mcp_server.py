@@ -17,6 +17,8 @@ EXPECTED = {
     "remove_student_login",
     "list_documents",
     "ingest_source",
+    "scan_pages",
+    "transcribe_submission",
     "generate_homework",
     "extract_paper",
     "render_paper",

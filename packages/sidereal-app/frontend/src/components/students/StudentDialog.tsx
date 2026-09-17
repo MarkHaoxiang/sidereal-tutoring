@@ -63,10 +63,10 @@ export function StudentDialog({ open, onClose, student }: StudentDialogProps) {
     try {
       if (student) {
         await updateStudent.mutateAsync({ id: student.id, patch: values });
-        toast.success(`${name} updated`);
+        toast.success("Saved");
       } else {
         await createStudent.mutateAsync(values);
-        toast.success(`${name} added`);
+        toast.success("Added");
       }
       onClose();
     } catch (error) {
@@ -107,7 +107,7 @@ export function StudentDialog({ open, onClose, student }: StudentDialogProps) {
           }}
         />
       </Field>
-      <Field label="Level" help="Year group, exam board or grade — whatever you use.">
+      <Field label="Level" help="Year group, exam board or grade.">
         <Input
           value={draft.level}
           onChange={(event) => {

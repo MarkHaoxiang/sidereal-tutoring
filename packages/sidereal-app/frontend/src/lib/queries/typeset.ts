@@ -1,8 +1,16 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { useMemo } from "react";
 
 import { ApiError, api, unwrap } from "@/lib/api";
 import type { paths } from "@/lib/api-schema";
-import { TypstError, readDiagnostics } from "@/lib/typeset";
+import { assetBase64 } from "@/lib/files";
+import { TypstError, figureAssets, readDiagnostics } from "@/lib/typeset";
 
 import { homeworkKeys } from "./homework";
 
@@ -53,6 +61,36 @@ async function renderTypst(body: RenderBody): Promise<Rendered> {
 /** One SVG per page, for the tutor's live preview. A source that will not compile throws. */
 export function usePreviewTypst() {
   return useMutation({ mutationFn: previewTypst });
+}
+
+/**
+ * The body with the bytes every `figure` block in it names, or null while they are still
+ * being fetched: an asset the request does not carry is a 422 before the compiler runs.
+ */
+export function useRenderAssets(body: RenderBody | null): RenderBody | null {
+  const names = useMemo(() => (body === null ? [] : figureAssets(body)), [body]);
+  const fetched = useQueries({
+    queries: names.map((name) => ({
+      queryKey: ["asset", name] as const,
+      queryFn: () => assetBase64(name),
+      staleTime: Infinity,
+      retry: false,
+    })),
+  });
+
+  if (body === null || names.length === 0) {
+    return body;
+  }
+  const assets: Record<string, string> = {};
+  names.forEach((name, index) => {
+    const data = fetched[index]?.data;
+    if (typeof data === "string") {
+      assets[name] = data;
+    }
+  });
+  // A figure whose file will not load is left out, so the render says so rather than hanging.
+  const settled = fetched.every((result) => !result.isLoading);
+  return settled ? { ...body, assets } : null;
 }
 
 /**

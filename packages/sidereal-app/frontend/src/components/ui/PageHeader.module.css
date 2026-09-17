@@ -1,5 +1,5 @@
 .header {
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
 }
 
 .back {
@@ -61,6 +61,7 @@
 .actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: flex-end;
   gap: 0.5rem;
 }
 
@@ -75,7 +76,7 @@
 
 @media (max-width: 40rem) {
   .header {
-    margin-bottom: 1.5rem;
+    margin-bottom: 1.25rem;
   }
 
   .row {

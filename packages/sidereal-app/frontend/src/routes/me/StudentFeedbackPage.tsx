@@ -18,7 +18,7 @@ export function StudentFeedbackPage() {
           <ArrowLeft size={14} aria-hidden="true" /> Feedback
         </Link>
         <h1 className={styles.heading}>Feedback</h1>
-        {feedback ? <p className={styles.subheading}>Written {formatDate(feedback.date_created)}</p> : null}
+        {feedback ? <p className={styles.subheading}>{formatDate(feedback.date_created)}</p> : null}
       </div>
 
       {isLoading ? (
@@ -26,7 +26,7 @@ export function StudentFeedbackPage() {
           <Spinner /> Loading…
         </p>
       ) : null}
-      {isError ? <p className={styles.status}>This feedback could not be loaded.</p> : null}
+      {isError ? <p className={styles.status}>Could not load this feedback.</p> : null}
 
       {feedback?.content ? (
         <Card>

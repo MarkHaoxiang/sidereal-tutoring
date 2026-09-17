@@ -136,6 +136,31 @@ def _register(resolve: Resolve) -> MCPServer:
             return await tools.ingest_source(services, source, kind, student_id, session_id)
 
     @server.tool()
+    async def scan_pages(
+        ctx: Context,
+        file_ids: Sequence[UUID],
+        paper_id: UUID | None = None,
+        student_id: UUID | None = None,
+        session_id: UUID | None = None,
+        title: str | None = None,
+    ) -> Document:
+        """Transcribe uploaded handwritten pages into a document row, in the order given.
+
+        `paper_id` is the paper the pages answer, and makes the row carry the working
+        question by question.
+        """
+        async with caller(ctx) as services:
+            return await tools.scan_pages(
+                services, file_ids, paper_id, student_id, session_id, title
+            )
+
+    @server.tool()
+    async def transcribe_submission(ctx: Context, homework_id: UUID) -> Homework:
+        """Read a student's handed-in photo or PDF into the homework's submission_transcription."""
+        async with caller(ctx) as services:
+            return await tools.transcribe_submission(services, homework_id)
+
+    @server.tool()
     async def generate_homework(
         ctx: Context,
         student_id: UUID,
@@ -151,14 +176,19 @@ def _register(resolve: Resolve) -> MCPServer:
 
     @server.tool()
     async def extract_paper(
-        ctx: Context, document_id: UUID, mark_scheme_id: UUID | None = None
+        ctx: Context,
+        document_id: UUID,
+        mark_scheme_id: UUID | None = None,
+        pages: bool | None = None,
     ) -> GenerationJob:
         """Read a ready document into a paper: its structure, its PDFs and its question rows.
 
         `mark_scheme_id` is the paper's mark scheme, when it was filed as its own document.
+        `pages` sends the source PDF's pages as images too: `true` always, `false` never, and
+        the default `null` decides from the PDF itself.
         """
         async with caller(ctx) as services:
-            return await tools.extract_paper(services, document_id, mark_scheme_id)
+            return await tools.extract_paper(services, document_id, mark_scheme_id, pages)
 
     @server.tool()
     async def render_paper(ctx: Context, paper_id: UUID) -> Paper:

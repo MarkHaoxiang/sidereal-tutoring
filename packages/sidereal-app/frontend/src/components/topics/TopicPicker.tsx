@@ -99,7 +99,7 @@ export function TopicPicker({ value, onChange, disabled = false, className }: To
 
       {topics && topics.length === 0 ? (
         <p className={styles.note}>
-          No topics yet. Build the tree on the <Link to="/topics">Topics</Link> page.
+          No topics yet — build the tree on the <Link to="/topics">Topics</Link> page.
         </p>
       ) : null}
 

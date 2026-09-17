@@ -25,9 +25,7 @@ export function AdminTutorsPage() {
     try {
       await setStatus.mutateAsync({ userId: tutor.user_id, status: next });
       toast.success(
-        next === "suspended"
-          ? `${tutorName(tutor)} can no longer sign in`
-          : `${tutorName(tutor)} can sign in again`
+        next === "suspended" ? "Suspended" : "Reactivated"
       );
     } catch (error) {
       toast.error(apiError(error));
@@ -37,9 +35,7 @@ export function AdminTutorsPage() {
   return (
     <div>
       <PageHeader
-        eyebrow="Admin"
         title="Tutors"
-        subtitle="Everyone who teaches here. A tutor sees only the students who are theirs."
         actions={
           <Button
             variant="primary"
@@ -53,11 +49,11 @@ export function AdminTutorsPage() {
       />
 
       {isLoading ? <SkeletonRows count={3} variant="line" label="Loading the tutors" /> : null}
-      {isError ? <p className={pageStyles.status}>Could not load the tutors. Try refreshing the page.</p> : null}
+      {isError ? <p className={pageStyles.status}>Could not load the tutors.</p> : null}
 
       {tutors && tutors.length === 0 ? (
         <EmptyState
-          message="No tutors yet. Add one and they can sign in and start taking students."
+          message="No tutors yet."
           action={
             <Button
               variant="primary"
@@ -168,7 +164,7 @@ export function AdminTutorsPage() {
           setRemoving(null);
         }}
         title={removing ? `Remove ${tutorName(removing)}?` : "Remove this tutor?"}
-        message="Their sign-in goes for good. A tutor who still has students cannot be removed — hand those students to someone else first."
+        message="Their sign-in goes for good. A tutor with students cannot be removed — hand those over first."
         confirmLabel="Remove"
         danger
         onConfirm={async () => {
@@ -181,7 +177,7 @@ export function AdminTutorsPage() {
             toast.error(apiError(error));
             throw error;
           }
-          toast.success(`${tutorName(removing)} removed`);
+          toast.success("Removed");
         }}
       />
     </div>

@@ -10,10 +10,7 @@ import styles from "./AccountPage.module.css";
 export function AccountPage() {
   return (
     <div>
-      <PageHeader
-        title="Your account"
-        subtitle="Your name and photo, how the app looks, and the password you sign in with."
-      />
+      <PageHeader title="Your account" />
 
       <div className={pageStyles.stack}>
         <ProfileCard />

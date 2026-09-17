@@ -3,7 +3,7 @@
 
 export type StudentStatus = "active" | "paused" | "archived";
 export type SessionStatus = "scheduled" | "completed" | "cancelled";
-export type DocumentKind = "transcript" | "web_page" | "question_bank" | "upload";
+export type DocumentKind = "transcript" | "web_page" | "question_bank" | "upload" | "scan";
 export type DocumentStatus = "pending" | "processing" | "ready" | "failed";
 export type HomeworkStatus = "draft" | "assigned" | "submitted" | "marked";
 export type HomeworkFormat = "markdown" | "typst";
@@ -54,6 +54,29 @@ export interface Session extends AuditFields {
   status: SessionStatus;
 }
 
+// A scan's transcription: `documents.transcription` for a solutions scan and
+// `homework.submission_transcription` for a hand-in, keyed by the paper's or homework's
+// question numbers. Maths is Typst markup; `[?]` marks an unreadable span.
+export type TranscriptionConfidence = "high" | "medium" | "low";
+
+export interface TranscribedQuestion {
+  number: string;
+  text: string;
+  confidence: TranscriptionConfidence;
+  note?: string;
+}
+
+export interface Transcription {
+  // `homework.submission_transcription` carries all of these, `model` and `usage` being what
+  // the call cost; `documents.transcription` carries `questions` alone, and the whole of it is
+  // the row's own `text`.
+  text?: string;
+  confidence?: TranscriptionConfidence;
+  questions: TranscribedQuestion[];
+  model?: string;
+  usage?: Record<string, unknown>;
+}
+
 export interface Document extends AuditFields {
   id: string;
   title: string | null;
@@ -63,11 +86,15 @@ export interface Document extends AuditFields {
   text: string | null;
   student: string | Student | null;
   session: string | Session | null;
+  paper: string | Paper | null;
+  transcription: Transcription | null;
   status: DocumentStatus;
   error: string | null;
   metadata: Record<string, unknown> | null;
   // Alias m2m field through the `document_topics` junction.
   topics: string[] | DocumentTopic[];
+  // Alias m2m field through the `document_pages` junction.
+  pages: string[] | DocumentPage[];
 }
 
 export interface Topic extends AuditFields {
@@ -85,11 +112,85 @@ export interface Topic extends AuditFields {
 // The canonical document structures, mirroring services/typeset/src/document.rs field for
 // field. `papers.structure` is a CanonicalPaper and `papers.mark_scheme` a CanonicalMarkScheme;
 // the typeset service's /render refuses any field not named here.
+export type CanonicalAnswerKind =
+  | "lines"
+  | "box"
+  | "multiple_choice"
+  | "essay"
+  | "grid"
+  | "table"
+  | "none";
+
+export interface CanonicalAnswerOption {
+  label?: string | null;
+  text: string;
+}
+
+// `type` decides which of the other fields are read; the rest are ignored.
+export interface CanonicalAnswer {
+  type: CanonicalAnswerKind;
+  lines?: number | null;
+  options?: CanonicalAnswerOption[];
+  height_mm?: number | null;
+  rows?: number | null;
+  cols?: number | null;
+}
+
+export interface CanonicalPassageBlock {
+  type: "passage";
+  title?: string | null;
+  text: string;
+}
+
+// Points at a CanonicalPaper.passages entry, printed once at the start of the paper.
+export interface CanonicalPassageRefBlock {
+  type: "passage_ref";
+  id: string;
+}
+
+export interface CanonicalCodeBlock {
+  type: "code";
+  language?: string | null;
+  text: string;
+}
+
+export interface CanonicalTableBlock {
+  type: "table";
+  caption?: string | null;
+  header?: string[] | null;
+  rows?: string[][];
+}
+
+// `asset` names one of the render request's assets, never a path: a file id and its suffix.
+export interface CanonicalFigureBlock {
+  type: "figure";
+  asset: string;
+  caption?: string | null;
+  width_mm?: number | null;
+}
+
+export type CanonicalBlock =
+  | CanonicalPassageBlock
+  | CanonicalPassageRefBlock
+  | CanonicalCodeBlock
+  | CanonicalTableBlock
+  | CanonicalFigureBlock;
+
+export interface CanonicalPassage {
+  id: string;
+  title?: string | null;
+  text: string;
+}
+
 export interface CanonicalPart {
   label: string;
   text: string;
   marks?: number | null;
+  /** The deprecated spelling of `{ type: "lines" }`. A node carries this or `answer`, never both. */
   answer_lines?: number | null;
+  answer?: CanonicalAnswer | null;
+  blocks?: CanonicalBlock[];
+  // Parts nest one level, `(a)` then `(i)`, so a part of a part carries none of its own.
   parts?: CanonicalPart[];
 }
 
@@ -98,7 +199,18 @@ export interface CanonicalQuestion {
   stem?: string | null;
   marks?: number | null;
   parts?: CanonicalPart[];
+  /** The deprecated spelling of `{ type: "lines" }`. A node carries this or `answer`, never both. */
   answer_lines?: number | null;
+  answer?: CanonicalAnswer | null;
+  blocks?: CanonicalBlock[];
+}
+
+// A run of questions under one heading; `choose` is how many of them the student answers.
+export interface CanonicalSection {
+  title?: string | null;
+  instructions?: string | null;
+  choose?: number | null;
+  questions?: CanonicalQuestion[];
 }
 
 export interface CanonicalPaper {
@@ -110,6 +222,8 @@ export interface CanonicalPaper {
   total_marks?: number | null;
   instructions?: string | null;
   questions?: CanonicalQuestion[];
+  sections?: CanonicalSection[];
+  passages?: CanonicalPassage[];
 }
 
 export interface CanonicalMarkSchemePart {
@@ -117,6 +231,7 @@ export interface CanonicalMarkSchemePart {
   answer: string;
   marks?: number | null;
   notes?: string | null;
+  blocks?: CanonicalBlock[];
 }
 
 export interface CanonicalMarkSchemeQuestion {
@@ -124,6 +239,7 @@ export interface CanonicalMarkSchemeQuestion {
   parts?: CanonicalMarkSchemePart[];
   answer?: string | null;
   notes?: string | null;
+  blocks?: CanonicalBlock[];
 }
 
 export interface CanonicalMarkScheme {
@@ -192,6 +308,7 @@ export interface Homework extends AuditFields {
   status: HomeworkStatus;
   submission: string | null;
   submission_file: string | DirectusFile | null;
+  submission_transcription: Transcription | null;
   submitted_at: string | null;
   generated_from: GenerationProvenance | null;
   // Alias m2m field through the `homework_questions` junction.
@@ -239,6 +356,13 @@ export interface HomeworkQuestion extends AuditFields {
   sort: number | null;
 }
 
+export interface DocumentPage extends AuditFields {
+  id: string;
+  document: string | Document;
+  file: string | DirectusFile;
+  sort: number | null;
+}
+
 export interface DocumentTopic extends AuditFields {
   id: string;
   document: string | Document;
@@ -275,6 +399,7 @@ export interface Schema {
   topics: Topic[];
   homework_questions: HomeworkQuestion[];
   document_topics: DocumentTopic[];
+  document_pages: DocumentPage[];
   question_topics: QuestionTopic[];
   homework_topics: HomeworkTopic[];
 }

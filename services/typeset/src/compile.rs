@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::sync::LazyLock;
 
 use serde::Serialize;
@@ -16,6 +17,8 @@ use typst_as_lib::file_resolver::FileResolver;
 use typst_layout::PagedDocument;
 use typst_pdf::PdfOptions;
 use typst_svg::SvgOptions;
+
+use crate::assets::Assets;
 
 /// The fonts the compiler may use, parsed once. Only these exist: nothing reads the host's
 /// font directories, so a document renders identically wherever the binary runs.
@@ -73,11 +76,12 @@ impl Diagnostic {
     }
 }
 
-/// Compiles `text`, blocking the calling thread for as long as the compiler runs.
+/// Compiles `text`, blocking the calling thread for as long as the compiler runs. `assets`
+/// are the only files that exist: the figures that came with the request, keyed by name.
 ///
 /// The error case is the compiler's own diagnostics; a caller turns them into a 422 rather
 /// than a failure of the service.
-pub fn compile(text: &str, output: Output) -> Result<Compiled, Vec<Diagnostic>> {
+pub fn compile(text: &str, output: Output, assets: &Assets) -> Result<Compiled, Vec<Diagnostic>> {
     let source = Source::detached(text.to_owned());
 
     let blocked = blocked_imports(&source);
@@ -85,12 +89,12 @@ pub fn compile(text: &str, output: Output) -> Result<Compiled, Vec<Diagnostic>> 
         return Err(blocked);
     }
 
-    // `main_file` registers the source's own resolver first, so `NoFiles` only ever answers for
+    // `main_file` registers the source's own resolver first, so `Files` only ever answers for
     // an id the document asked for itself, and its error is the one the compiler reports.
     let engine = TypstEngine::builder()
         .main_file(source.clone())
         .fonts(FONTS.iter().cloned())
-        .add_file_resolver(NoFiles)
+        .add_file_resolver(Files::new(assets))
         .build();
 
     let outcome = engine.with_world(|world| {
@@ -159,32 +163,61 @@ fn blocked_imports(source: &Source) -> Vec<Diagnostic> {
         .collect()
 }
 
-/// Denies every file the document asks for. Registered after the main source's own resolver,
-/// so `read`, `include`, `image` and package imports all end here with an explicit reason.
+/// The whole filesystem the document gets: the request's own figures, held in memory and
+/// looked up by name with the path thrown away. Registered after the main source's own
+/// resolver, so `read`, `include`, a package import and an `image` of anything else all end
+/// here with an explicit reason. With no assets it denies everything, as it always did.
 #[derive(Debug)]
-struct NoFiles;
+struct Files {
+    binaries: HashMap<String, Bytes>,
+}
 
-impl FileResolver for NoFiles {
-    fn resolve_binary(&self, id: FileId) -> FileResult<Cow<'_, Bytes>> {
-        Err(denied(id))
+impl Files {
+    fn new(assets: &Assets) -> Self {
+        Self {
+            binaries: assets
+                .iter()
+                .map(|(name, bytes)| (name.to_owned(), Bytes::new(bytes.to_vec())))
+                .collect(),
+        }
     }
 
-    fn resolve_source(&self, id: FileId) -> FileResult<Cow<'_, Source>> {
-        Err(denied(id))
+    fn denied(&self, id: FileId) -> FileError {
+        match id.root() {
+            VirtualRoot::Package(spec) => {
+                FileError::Package(PackageError::Other(Some(EcoString::from(format!(
+                    "{spec} is not available: this service compiles offline"
+                )))))
+            }
+            VirtualRoot::Project if self.binaries.is_empty() => {
+                FileError::Other(Some(EcoString::from(format!(
+                    "this service has no filesystem, so `{}` cannot be read",
+                    id.vpath().get_without_slash()
+                ))))
+            }
+            VirtualRoot::Project => FileError::Other(Some(EcoString::from(format!(
+                "this service has no filesystem: `{}` is not one of the assets sent with this \
+                 request",
+                id.vpath().get_without_slash()
+            )))),
+        }
     }
 }
 
-fn denied(id: FileId) -> FileError {
-    match id.root() {
-        VirtualRoot::Package(spec) => {
-            FileError::Package(PackageError::Other(Some(EcoString::from(format!(
-                "{spec} is not available: this service compiles offline"
-            )))))
+impl FileResolver for Files {
+    fn resolve_binary(&self, id: FileId) -> FileResult<Cow<'_, Bytes>> {
+        if let VirtualRoot::Project = id.root() {
+            let path = id.vpath().get_without_slash();
+            let name = path.rsplit('/').next().unwrap_or(path);
+            if let Some(bytes) = self.binaries.get(name) {
+                return Ok(Cow::Borrowed(bytes));
+            }
         }
-        VirtualRoot::Project => FileError::Other(Some(EcoString::from(format!(
-            "this service has no filesystem, so `{}` cannot be read",
-            id.vpath().get_without_slash()
-        )))),
+        Err(self.denied(id))
+    }
+
+    fn resolve_source(&self, id: FileId) -> FileResult<Cow<'_, Source>> {
+        Err(self.denied(id))
     }
 }
 
@@ -219,6 +252,7 @@ mod tests {
     #![allow(clippy::unwrap_used, clippy::panic)]
 
     use super::{Output, compile};
+    use crate::assets::Assets;
 
     #[test]
     fn the_embedded_fonts_include_new_computer_modern() {
@@ -242,7 +276,8 @@ mod tests {
 
     #[test]
     fn a_file_read_is_refused_with_a_reason() {
-        let errors = compile("#read(\"/etc/passwd\")", Output::Pdf).unwrap_err();
+        let errors =
+            compile("#read(\"/etc/passwd\")", Output::Pdf, &Assets::default()).unwrap_err();
         let message = &errors[0].message;
         assert!(message.contains("no filesystem"), "{message}");
     }

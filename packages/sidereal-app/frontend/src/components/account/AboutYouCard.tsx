@@ -12,7 +12,7 @@ export function AboutYouCard() {
     <Card title="About you">
       {isLoading ? <SkeletonRows count={2} variant="line" label="Loading your details" /> : null}
       {isError || (!isLoading && !student) ? (
-        <p className={styles.hint}>Your details could not be loaded. Try again in a moment.</p>
+        <p className={styles.hint}>Could not load your details.</p>
       ) : null}
 
       {student ? (

@@ -45,7 +45,7 @@ export function SessionsTab() {
     <div className={styles.panel}>
       <div className={styles.toolbar}>
         <Button variant="primary" onClick={schedule}>
-          Schedule a session
+          Schedule session
         </Button>
       </div>
 
@@ -54,10 +54,10 @@ export function SessionsTab() {
 
       {data && data.length === 0 ? (
         <EmptyState
-          message="No sessions yet. Schedule the first one and it will show up here."
+          message="No sessions yet."
           action={
             <Button variant="primary" onClick={schedule}>
-              Schedule a session
+              Schedule session
             </Button>
           }
         />
@@ -79,7 +79,7 @@ export function SessionsTab() {
                 ))}
               </div>
             ) : (
-              <p className={listStyles.meta}>Nothing scheduled yet.</p>
+              <p className={listStyles.meta}>Nothing scheduled.</p>
             )}
           </section>
 
@@ -97,7 +97,7 @@ export function SessionsTab() {
                 ))}
               </div>
             ) : (
-              <p className={listStyles.meta}>No sessions have happened yet.</p>
+              <p className={listStyles.meta}>Nothing yet.</p>
             )}
           </section>
         </>

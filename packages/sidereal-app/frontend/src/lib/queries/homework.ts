@@ -1,8 +1,11 @@
 import { deleteItem, readItem, readItems, updateItem } from "@directus/sdk";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { api, unwrap } from "@/lib/api";
 import { directus } from "@/lib/directus";
 import type { HomeworkStatus } from "@/lib/schema";
+
+import { meKeys } from "./me";
 
 export interface HomeworkListParams {
   studentId?: string;
@@ -43,6 +46,7 @@ function fetchHomework(id: string) {
         "status",
         "due_on",
         "submission",
+        "submission_transcription",
         "submitted_at",
         "generated_from",
         "date_created",
@@ -114,6 +118,26 @@ export function useUpdateHomework() {
       directus.request(updateItem("homework", id, patch, { fields: ["id", "title", "status"] })),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: homeworkKeys.all });
+    },
+  });
+}
+
+/**
+ * Reads the handed-in photo or PDF into `submission_transcription`. The call transcribes
+ * before it answers, and its answer is the row.
+ */
+export function useTranscribeSubmission() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      unwrap(
+        await api.POST("/api/homework/{homework_id}/transcribe", {
+          params: { path: { homework_id: id } },
+        })
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: homeworkKeys.all });
+      void queryClient.invalidateQueries({ queryKey: meKeys.all });
     },
   });
 }

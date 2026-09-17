@@ -37,7 +37,7 @@ export function StudentSessionsPage() {
       <h1 className={styles.heading}>Lessons</h1>
 
       {isLoading ? <SkeletonRows count={3} label="Loading your lessons" /> : null}
-      {isError ? <p className={styles.status}>Your lessons could not be loaded. Try again in a moment.</p> : null}
+      {isError ? <p className={styles.status}>Could not load your lessons.</p> : null}
 
       <section>
         <h2 className={styles.sectionHeading}>Coming up</h2>

@@ -1,20 +1,37 @@
 from __future__ import annotations
 
 import json
+import re
 from uuid import UUID
 
 import httpx
 import pytest
 from pydantic import ValidationError
 from sidereal_core.canonical import (
+    MAX_ANSWER_HEIGHT_MM,
     MAX_ANSWER_LINES,
+    MAX_ANSWER_OPTIONS,
+    MAX_FIGURE_WIDTH_MM,
+    MAX_GRID_COLS,
+    MAX_TABLE_COLS,
+    MAX_TABLE_ROWS,
+    AnswerKind,
+    CanonicalAnswer,
+    CanonicalAnswerOption,
+    CanonicalCodeBlock,
+    CanonicalFigureBlock,
     CanonicalMarkScheme,
     CanonicalMarkSchemeQuestion,
     CanonicalMarkup,
     CanonicalPaper,
     CanonicalPart,
+    CanonicalPassage,
+    CanonicalPassageBlock,
+    CanonicalPassageRefBlock,
     CanonicalQuestion,
+    CanonicalSection,
     CanonicalSubPart,
+    CanonicalTableBlock,
     CanonicalWorksheet,
     RenderKind,
     RenderOutput,
@@ -63,24 +80,32 @@ def test_a_document_carries_the_field_names_the_renderer_reads() -> None:
                 "stem": "The curve $C$ has equation $y = x^3$.",
                 "marks": None,
                 "answer_lines": None,
+                "answer": None,
+                "blocks": [],
                 "parts": [
                     {
                         "label": "a",
                         "text": "Find $(d y) / (d x)$.",
                         "marks": 2,
                         "answer_lines": 3,
+                        "answer": None,
+                        "blocks": [],
                         "parts": [
                             {
                                 "label": "i",
                                 "text": "State the gradient at $x = 1$.",
                                 "marks": None,
                                 "answer_lines": None,
+                                "answer": None,
+                                "blocks": [],
                             }
                         ],
                     }
                 ],
             }
         ],
+        "sections": [],
+        "passages": [],
     }
 
 
@@ -145,6 +170,7 @@ async def test_a_fragment_is_a_kind_of_its_own() -> None:
         "parts": [],
         "answer": "$3 x^2$",
         "notes": None,
+        "blocks": [],
     }
     assert "mark_scheme" not in fake.rendered[1]
     assert fake.rendered[1]["document"] == {"text": "$x^2 - 5x + 6$"}
@@ -218,3 +244,169 @@ def test_a_paper_row_ignores_a_column_the_model_does_not_know() -> None:
     }
 
     assert Paper.model_validate(row).status is PaperStatus.REVIEWED
+
+
+BLOCKS = (
+    CanonicalPassageBlock(title="Ozymandias", text="I met a traveller\n  from an antique land"),
+    CanonicalPassageRefBlock(id="ozymandias"),
+    CanonicalCodeBlock(language="python", text="def total(values):\n    return sum(values)"),
+    CanonicalTableBlock(
+        caption="Table 1", header=("Gate", "Time / $s$"), rows=(("A", "0.00"), ("B", "0.41"))
+    ),
+    CanonicalFigureBlock(asset="figure-1.png", caption="Figure 1", width_mm=70),
+)
+
+
+def test_every_block_kind_carries_its_tag_and_reads_back() -> None:
+    question = CanonicalQuestion(number="2", blocks=BLOCKS)
+
+    dumped = question.model_dump(mode="json")
+
+    assert [block["type"] for block in dumped["blocks"]] == [
+        "passage",
+        "passage_ref",
+        "code",
+        "table",
+        "figure",
+    ]
+    assert CanonicalQuestion.model_validate(dumped) == question
+
+
+def test_a_block_union_is_any_of_so_a_strict_tool_schema_accepts_it() -> None:
+    assert "oneOf" not in json.dumps(CanonicalPaper.model_json_schema())
+
+
+def test_no_definition_in_a_canonical_schema_refers_to_itself() -> None:
+    defs = CanonicalPaper.model_json_schema()["$defs"]
+    refs = {
+        name: set(re.findall(r'"#/\$defs/([^"]+)"', json.dumps(definition)))
+        for name, definition in defs.items()
+    }
+
+    reachable = {name: set(targets) for name, targets in refs.items()}
+    growing = True
+    while growing:
+        growing = False
+        for name, targets in reachable.items():
+            grown = targets | {onwards for target in targets for onwards in refs[target]}
+            if grown != targets:
+                reachable[name] = grown
+                growing = True
+
+    for name, targets in reachable.items():
+        assert name not in targets, f"{name} is reachable from itself"
+
+
+def test_a_sub_part_holds_no_parts_of_its_own() -> None:
+    with pytest.raises(ValidationError, match="parts"):
+        CanonicalSubPart.model_validate({"label": "i", "text": "State it.", "parts": []})
+
+
+def test_a_two_level_part_reads_back_unchanged() -> None:
+    dumped = PAPER.questions[0].parts[0].model_dump(mode="json")
+
+    assert set(dumped) == {"label", "text", "marks", "answer_lines", "answer", "blocks", "parts"}
+    assert set(dumped["parts"][0]) == set(dumped) - {"parts"}
+    assert CanonicalPart.model_validate(dumped) == PAPER.questions[0].parts[0]
+
+
+def test_a_block_field_the_structure_does_not_have_is_refused() -> None:
+    with pytest.raises(ValidationError):
+        CanonicalQuestion.model_validate(
+            {"number": "2", "blocks": [{"type": "code", "text": "x", "caption": "no"}]}
+        )
+
+
+def test_a_table_block_is_rectangular_and_bounded() -> None:
+    with pytest.raises(ValidationError, match="header or at least one row"):
+        CanonicalTableBlock()
+    assert CanonicalTableBlock(rows=(("A", "0.00"),)).header is None
+    with pytest.raises(ValidationError, match="cells where the table has 2 columns"):
+        CanonicalTableBlock(header=("a", "b"), rows=(("1",),))
+    with pytest.raises(ValidationError, match=f"at most {MAX_TABLE_COLS} columns"):
+        CanonicalTableBlock(header=tuple(str(n) for n in range(MAX_TABLE_COLS + 1)))
+    with pytest.raises(ValidationError, match=f"at most {MAX_TABLE_ROWS} rows"):
+        CanonicalTableBlock(header=("a",), rows=(("1",),) * (MAX_TABLE_ROWS + 1))
+
+
+def test_a_figure_is_no_wider_than_the_text_column() -> None:
+    assert CanonicalFigureBlock(asset="f.png", width_mm=MAX_FIGURE_WIDTH_MM).width_mm == 165
+    with pytest.raises(ValidationError, match="width_mm"):
+        CanonicalFigureBlock(asset="f.png", width_mm=MAX_FIGURE_WIDTH_MM + 1)
+    with pytest.raises(ValidationError, match="width_mm"):
+        CanonicalFigureBlock(asset="f.png", width_mm=0)
+
+
+def test_an_answer_reads_only_the_fields_its_kind_needs() -> None:
+    choice = CanonicalAnswer(
+        type=AnswerKind.MULTIPLE_CHOICE,
+        options=(
+            CanonicalAnswerOption(text="kinetic energy"),
+            CanonicalAnswerOption(label="D", text="power"),
+        ),
+    )
+
+    assert choice.model_dump(mode="json")["type"] == "multiple_choice"
+    assert CanonicalAnswer(type=AnswerKind.NONE).model_dump(mode="json")["lines"] is None
+
+
+def test_each_answer_kind_is_capped_where_the_renderer_caps_it() -> None:
+    with pytest.raises(ValidationError, match=f"at most {MAX_ANSWER_LINES}"):
+        CanonicalAnswer(type=AnswerKind.LINES, lines=MAX_ANSWER_LINES + 1)
+    with pytest.raises(ValidationError, match=f"at most {MAX_ANSWER_HEIGHT_MM}"):
+        CanonicalAnswer(type=AnswerKind.ESSAY, height_mm=MAX_ANSWER_HEIGHT_MM + 1)
+    with pytest.raises(ValidationError, match=f"1 to {MAX_ANSWER_OPTIONS} options"):
+        CanonicalAnswer(type=AnswerKind.MULTIPLE_CHOICE)
+    with pytest.raises(ValidationError, match="needs both rows and cols"):
+        CanonicalAnswer(type=AnswerKind.GRID, rows=10)
+    with pytest.raises(ValidationError, match=f"1 to {MAX_GRID_COLS}"):
+        CanonicalAnswer(type=AnswerKind.GRID, rows=10, cols=MAX_GRID_COLS + 1)
+    with pytest.raises(ValidationError, match=f"1 to {MAX_TABLE_COLS}"):
+        CanonicalAnswer(type=AnswerKind.TABLE, rows=4, cols=MAX_TABLE_COLS + 1)
+
+
+def test_a_node_carries_one_answer_spelling_or_the_other() -> None:
+    with pytest.raises(ValidationError, match="deprecated spelling"):
+        CanonicalQuestion(number="1", answer_lines=3, answer=CanonicalAnswer(type=AnswerKind.LINES))
+    with pytest.raises(ValidationError, match="deprecated spelling"):
+        CanonicalPart(
+            label="a", text="Find it.", answer_lines=3, answer=CanonicalAnswer(type=AnswerKind.BOX)
+        )
+    with pytest.raises(ValidationError, match="deprecated spelling"):
+        CanonicalSubPart(
+            label="i", text="State it.", answer_lines=3, answer=CanonicalAnswer(type=AnswerKind.BOX)
+        )
+
+
+def test_a_section_cannot_ask_for_more_questions_than_it_offers() -> None:
+    questions = (CanonicalQuestion(number="01"), CanonicalQuestion(number="02"))
+
+    assert CanonicalSection(title="Section A", choose=1, questions=questions).choose == 1
+    with pytest.raises(ValidationError, match="cannot be chosen"):
+        CanonicalSection(choose=3, questions=questions)
+    with pytest.raises(ValidationError, match="cannot be chosen"):
+        CanonicalSection(choose=0, questions=questions)
+
+
+def test_a_paper_carries_its_sections_and_passages() -> None:
+    paper = CanonicalPaper(
+        title="English Literature",
+        sections=(
+            CanonicalSection(
+                title="Section A: Shakespeare",
+                choose=1,
+                questions=(CanonicalQuestion(number="01", blocks=BLOCKS[1:2]),),
+            ),
+        ),
+        passages=(CanonicalPassage(id="ozymandias", title="Ozymandias", text="I met a traveller"),),
+    )
+
+    dumped = paper.model_dump(mode="json")
+
+    assert dumped["questions"] == []
+    assert dumped["sections"][0]["choose"] == 1
+    assert dumped["sections"][0]["questions"][0]["blocks"][0] == {
+        "type": "passage_ref",
+        "id": "ozymandias",
+    }
+    assert dumped["passages"][0]["id"] == "ozymandias"

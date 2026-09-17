@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Provenance } from "@/components/artefacts/Provenance";
 import { addedByName } from "@/components/material/authors";
 import { WorksheetDialog } from "@/components/papers/WorksheetDialog";
-import { buildPatch, paperDraft } from "@/components/papers/draft";
+import { buildPatch, paperDraft, structureQuestions } from "@/components/papers/draft";
 import type { PaperDraft } from "@/components/papers/draft";
 import {
   Button,
@@ -118,7 +118,7 @@ export function PaperDetailPage() {
     }
     try {
       await render.mutateAsync(paperId);
-      toast.success("Saved and re-rendered");
+      toast.success("Saved");
     } catch (error) {
       toast.error(apiError(error));
     }
@@ -142,7 +142,7 @@ export function PaperDetailPage() {
     }
     try {
       await setStatus.mutateAsync({ id: paperId, status: next.status });
-      toast.success(next.status === "reviewed" ? "Marked as reviewed" : "Archived");
+      toast.success(next.status === "reviewed" ? "Reviewed" : "Archived");
     } catch (error) {
       toast.error(apiError(error));
     }
@@ -154,7 +154,7 @@ export function PaperDetailPage() {
     }
     try {
       await remove.mutateAsync(paperId);
-      toast.success("Paper deleted");
+      toast.success("Deleted");
       void navigate("/library/papers");
     } catch (error) {
       toast.error(apiError(error));
@@ -187,7 +187,6 @@ export function PaperDetailPage() {
         <>
           <PageHeader
             back={{ to: "/library/papers", label: "Papers" }}
-            eyebrow="Paper"
             title={
               renaming ? (
                 <span className={styles.headerActions}>
@@ -233,7 +232,7 @@ export function PaperDetailPage() {
                     void saveAndRender();
                   }}
                 >
-                  Save and re-render
+                  Save
                 </Button>
                 {next ? (
                   <Button
@@ -250,7 +249,7 @@ export function PaperDetailPage() {
             meta={
               <>
                 <StatusChip status={paper.status} />
-                <span>Added {formatDateTime(paper.date_created)}</span>
+                <span>{formatDateTime(paper.date_created)}</span>
                 <span>by {addedByName(paper.user_created, user?.id ?? null)}</span>
                 <Provenance value={paper.generated_from} />
               </>
@@ -260,9 +259,7 @@ export function PaperDetailPage() {
           <div className={styles.stack}>
             {dirty ? (
               <div className={styles.saveBar}>
-                <p className={styles.saveText}>
-                  There are changes here that have not been saved yet.
-                </p>
+                <p className={styles.saveText}>Unsaved changes.</p>
                 <div className={styles.saveActions}>
                   <Button
                     variant="primary"
@@ -271,7 +268,7 @@ export function PaperDetailPage() {
                       void saveAndRender();
                     }}
                   >
-                    Save and re-render
+                    Save
                   </Button>
                   <Button
                     disabled={busy}
@@ -324,7 +321,7 @@ export function PaperDetailPage() {
             }}
             paperId={paper.id}
             paperTitle={paper.title}
-            questions={paper.structure?.questions ?? []}
+            questions={structureQuestions(paper.structure)}
           />
 
           <ConfirmDialog
@@ -333,7 +330,7 @@ export function PaperDetailPage() {
               setConfirming(false);
             }}
             title="Delete this paper?"
-            message="The paper, its structure and the questions lifted from it are deleted. The material it was read from stays in the library."
+            message="The paper, its structure and its questions are deleted. The material it came from stays in the library."
             confirmLabel="Delete"
             danger
             onConfirm={deletePaper}

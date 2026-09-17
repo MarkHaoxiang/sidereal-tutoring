@@ -20,11 +20,12 @@ export interface MaterialRowProps {
 
 export function MaterialRow({ document, to, topics, addedBy }: MaterialRowProps) {
   const retry = useRetryDocument();
+  const pageCount = (document.pages ?? []).length;
 
   const tryAgain = async () => {
     try {
       await retry.mutateAsync(document.id);
-      toast.success("Reading this material again");
+      toast.success("Reading again");
     } catch (error) {
       toast.error(apiError(error));
     }
@@ -33,14 +34,13 @@ export function MaterialRow({ document, to, topics, addedBy }: MaterialRowProps)
   return (
     <li className={styles.row}>
       <Link to={to} className={styles.link}>
-        <span className={styles.top}>
-          <span className={styles.title}>{document.title ?? "Untitled material"}</span>
-          <StatusChip status={document.kind} />
-          <StatusChip status={document.status} />
-        </span>
-        {topics && topics.length > 0 ? <TopicChips topics={topics} /> : null}
+        <span className={styles.title}>{document.title ?? "Untitled material"}</span>
+        <StatusChip status={document.kind} />
+        <StatusChip status={document.status} />
         <span className={styles.meta}>
-          <span>Added {formatDateTime(document.date_created)}</span>
+          {pageCount > 0 ? <span>{pageCount === 1 ? "1 page" : `${String(pageCount)} pages`}</span> : null}
+          {topics && topics.length > 0 ? <TopicChips topics={topics} /> : null}
+          <span>{formatDateTime(document.date_created)}</span>
           {addedBy ? <span>by {addedBy}</span> : null}
         </span>
       </Link>

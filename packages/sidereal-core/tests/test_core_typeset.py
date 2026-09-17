@@ -1,14 +1,36 @@
 from __future__ import annotations
 
+import base64
 from datetime import date
 
 import httpx
 import pytest
+from sidereal_core.canonical import (
+    CanonicalFigureBlock,
+    CanonicalPaper,
+    CanonicalQuestion,
+    RenderKind,
+)
 from sidereal_core.settings import DEFAULT_TYPESET_URL, typeset_settings
 from sidereal_core.testing import FAIL_MARKER, FAKE_PDF, FakeTypeset
-from sidereal_core.typeset import TypesetClient, TypesetError, TypesetUnavailableError
+from sidereal_core.typeset import (
+    MAX_ASSET_BYTES,
+    MAX_ASSETS_BYTES,
+    TypesetClient,
+    TypesetError,
+    TypesetUnavailableError,
+)
 
 SOURCE = "= Week 3\n$x^2 - 5x + 6$\n"
+FIGURE = b"\x89PNG\r\n\x1a\n not a real image, only bytes"
+WITH_FIGURE = CanonicalPaper(
+    title="Physics 1",
+    questions=(
+        CanonicalQuestion(
+            number="1", blocks=(CanonicalFigureBlock(asset="figure-1.png", width_mm=70),)
+        ),
+    ),
+)
 
 
 async def test_a_source_becomes_a_pdf_and_svg_pages() -> None:
@@ -77,3 +99,38 @@ async def test_a_refusal_without_diagnostics_keeps_the_services_own_sentence() -
 def test_settings_default_and_override() -> None:
     assert typeset_settings({}).url == DEFAULT_TYPESET_URL
     assert typeset_settings({"SIDEREAL_TYPESET_URL": "http://host:1/"}).url == "http://host:1"
+
+
+async def test_a_figure_s_bytes_go_over_as_base64_under_the_name_it_asked_for() -> None:
+    fake = FakeTypeset()
+
+    async with fake.client() as client:
+        await client.render(RenderKind.PAPER, WITH_FIGURE, assets={"figure-1.png": FIGURE})
+        await client.render(RenderKind.PAPER, WITH_FIGURE)
+
+    assert fake.rendered[0]["assets"] == {"figure-1.png": base64.b64encode(FIGURE).decode()}
+    assert base64.b64decode(fake.rendered[0]["assets"]["figure-1.png"]) == FIGURE
+    assert "assets" not in fake.rendered[1]
+
+
+async def test_an_asset_over_the_services_limit_is_refused_before_it_is_sent() -> None:
+    fake = FakeTypeset()
+
+    async with fake.client() as client:
+        with pytest.raises(TypesetError, match=r"figure-1\.png") as one:
+            await client.render(
+                RenderKind.PAPER, WITH_FIGURE, assets={"figure-1.png": b"x" * (MAX_ASSET_BYTES + 1)}
+            )
+        with pytest.raises(TypesetError, match="the assets are larger") as together:
+            await client.render(
+                RenderKind.PAPER,
+                WITH_FIGURE,
+                assets={
+                    f"figure-{n}.png": b"x" * MAX_ASSET_BYTES
+                    for n in range(MAX_ASSETS_BYTES // MAX_ASSET_BYTES + 1)
+                },
+            )
+
+    assert one.value.status == 413
+    assert together.value.status == 413
+    assert fake.rendered == []

@@ -99,3 +99,37 @@ export function useFileBlob(fileId: string | null, fallbackName: string): FileBl
 
   return state;
 }
+
+// A figure names its file the way sidereal_generate does: the Directus file id and a suffix,
+// so the renderer sees a file name and never a path.
+const ASSET_NAME = /^([0-9a-f-]{36})\.(png|jpe?g|svg)$/i;
+
+/** The file behind an asset name, or null when the name does not name one. */
+export function assetFileId(asset: string): string | null {
+  return ASSET_NAME.exec(asset.trim())?.[1] ?? null;
+}
+
+function base64(bytes: Uint8Array): string {
+  // In chunks: one spread of a whole image's bytes overflows the argument list.
+  let binary = "";
+  for (let index = 0; index < bytes.length; index += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+  }
+  return btoa(binary);
+}
+
+/** An asset's bytes as the render request carries them: standard base64, no data: prefix. */
+export async function assetBase64(asset: string): Promise<string> {
+  const fileId = assetFileId(asset);
+  if (fileId === null) {
+    throw new Error(`${asset} does not name a file`);
+  }
+  const token = await directus.getToken();
+  const response = await fetch(`${directusUrl}/assets/${fileId}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!response.ok) {
+    throw new Error(String(response.status));
+  }
+  return base64(new Uint8Array(await response.arrayBuffer()));
+}

@@ -13,8 +13,6 @@ import styles from "./artefacts.module.css";
 export interface ArtefactDetailProps {
   backTo: string;
   backLabel: string;
-  /** What this is, in a word, above the title. */
-  eyebrow: string;
   title: string;
   /** Left out where the artefact has no title of its own, as feedback does not. */
   onRename?: (title: string) => Promise<void>;
@@ -42,7 +40,6 @@ export interface ArtefactDetailProps {
 export function ArtefactDetail({
   backTo,
   backLabel,
-  eyebrow,
   title,
   onRename,
   meta,
@@ -116,7 +113,6 @@ export function ArtefactDetail({
     <div>
       <PageHeader
         back={{ to: backTo, label: backLabel }}
-        eyebrow={eyebrow}
         title={
           renaming ? (
             <span className={styles.renameRow}>

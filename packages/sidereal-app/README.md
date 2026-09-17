@@ -32,13 +32,14 @@ uv run --package sidereal-app pytest packages/sidereal-app/tests
 | `POST` | `/api/students/{id}/login` | `{email, password}`. 201 and the new login; 409 if there is one already. |
 | `POST` | `/api/students/{id}/login/password` | `{password}`. 204. |
 | `DELETE` | `/api/students/{id}/login` | 204. The work stays; only the login goes. |
-| `POST` | `/api/documents` | `source` is `{type: file, file_id}`, `{type: url, url}` or `{type: text, text}`. Returns 202 and the pending row. |
+| `POST` | `/api/documents` | `source` is `{type: file, file_id}`, `{type: url, url}`, `{type: text, text}` or `{type: scan, file_ids, paper_id?}`. Returns 202 and the pending row. |
 | `POST` | `/api/documents/{id}/process` | Reads the material again. Returns 202 and the row. |
-| `POST` | `/api/jobs/{kind}` | `kind` is `homework`, `feedback`, `plan` or `paper_extract`. `format` is `markdown` or `typst` and only homework takes `typst`. `paper_extract` takes one `document_ids` entry and no student. Returns 202 and the queued job. |
+| `POST` | `/api/jobs/{kind}` | `kind` is `homework`, `feedback`, `plan` or `paper_extract`. `format` is `markdown` or `typst` and only homework takes `typst`. `paper_extract` takes one `document_ids` entry and no student, and alone takes `pages`: `true` or `false` to force sending the PDF's pages as images, `null` (default) to decide from the PDF. Returns 202 and the queued job. |
 | `GET` | `/api/jobs/{id}` | The job, including `output_collection` and `output_id` once it succeeds. |
 | `POST` | `/api/papers/{id}/render` | Tutors only. Renders the stored structure again and returns 202 and the row. |
 | `POST` | `/api/papers/{id}/worksheet` | Tutors only. `{question_numbers, student_id?, title?, due?}`. 200 and `{source, pdf_file_id}`. |
 | `POST` | `/api/typeset/preview` | `{source}`. Tutors only. 200 and `{pages: [svg]}`, or 422 with `diagnostics`. |
+| `POST` | `/api/homework/{id}/transcribe` | The tutor, or the student the homework belongs to. Reads `submission_file` into `submission_transcription` (`{text, confidence, questions, model, usage}`) and returns 200 and the row. |
 | `POST` | `/api/homework/{id}/compile` | Tutors only. Compiles the row's `content` and returns 202 and the row; a failure sets `compile_error` and keeps the old `pdf`. |
 
 Every request but `/api/health` needs `Authorization: Bearer <directus token>`.

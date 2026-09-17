@@ -10,10 +10,7 @@ import styles from "./me.module.css";
 export function StudentAccountPage() {
   return (
     <div className={styles.stack}>
-      <div>
-        <h1 className={styles.heading}>Your account</h1>
-        <p className={styles.subheading}>Your name and photo, how the app looks, and your password.</p>
-      </div>
+      <h1 className={styles.heading}>Your account</h1>
 
       <ProfileCard />
       <AppearanceCard />

@@ -4,18 +4,20 @@ import { Button } from "@/components/ui";
 
 import { SchemeCard } from "./SchemeCard";
 import { emptySchemeQuestion, moved } from "./draft";
-import type { QuestionDraft, SchemeQuestionDraft } from "./draft";
+import type { PassageDraft, QuestionDraft, SchemeQuestionDraft } from "./draft";
 import styles from "./papers.module.css";
 
 export interface MarkSchemeEditorProps {
   scheme: SchemeQuestionDraft[];
   /** The paper's questions, so each entry is set under the question it answers. */
   questions: QuestionDraft[];
+  /** The paper's passages, so a question that points at one is set with it. */
+  passages: PassageDraft[];
   onChange: (scheme: SchemeQuestionDraft[]) => void;
 }
 
 /** The answers, numbered to match the paper. It renders as the second PDF. */
-export function MarkSchemeEditor({ scheme, questions, onChange }: MarkSchemeEditorProps) {
+export function MarkSchemeEditor({ scheme, questions, passages, onChange }: MarkSchemeEditorProps) {
   const numbers = questions.map((question) => question.number.trim()).filter(Boolean);
   const missing = numbers.filter(
     (number) => !scheme.some((question) => question.number.trim() === number)
@@ -34,6 +36,7 @@ export function MarkSchemeEditor({ scheme, questions, onChange }: MarkSchemeEdit
                   entry.number.trim() !== "" && entry.number.trim() === question.number.trim()
               ) ?? null
             }
+            passages={passages}
             index={index}
             count={scheme.length}
             onChange={(next) => {
@@ -49,7 +52,7 @@ export function MarkSchemeEditor({ scheme, questions, onChange }: MarkSchemeEdit
         ))}
       </div>
 
-      {scheme.length === 0 ? <p className={styles.status}>There is no mark scheme yet.</p> : null}
+      {scheme.length === 0 ? <p className={styles.status}>No mark scheme yet.</p> : null}
 
       <div className={styles.addRow}>
         <Button
@@ -69,7 +72,7 @@ export function MarkSchemeEditor({ scheme, questions, onChange }: MarkSchemeEdit
               ]);
             }}
           >
-            Add the missing numbers
+            Add missing numbers
           </Button>
         ) : null}
       </div>

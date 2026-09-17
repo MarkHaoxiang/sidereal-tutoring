@@ -37,6 +37,8 @@ function fetchDocuments(params: DocumentListParams) {
         "error",
         "source_url",
         "date_created",
+        // A scan is several photos; the row says how many without reading them.
+        "pages",
         { student: ["id", "name"] },
         { session: ["id", "scheduled_at"] },
       ],
@@ -64,6 +66,7 @@ function fetchLibraryDocuments(params: LibraryListParams) {
         "error",
         "source_url",
         "date_created",
+        "pages",
         { student: ["id", "name"] },
         { session: ["id", "scheduled_at"] },
         { user_created: ["id", "first_name", "last_name"] },
@@ -93,6 +96,11 @@ function fetchDocument(id: string) {
         "metadata",
         "date_created",
         "file",
+        "transcription",
+        { pages: ["id", "sort", "file"] },
+        // A solutions scan is read against the paper's questions, so the page sets each
+        // one above the answer to it.
+        { paper: ["id", "title", "structure"] },
         { student: ["id", "name"] },
         { session: ["id", "scheduled_at"] },
         { user_created: ["id", "first_name", "last_name"] },
@@ -164,6 +172,25 @@ export function useUploadMaterialFile() {
       form.append("file", file);
       const uploaded = await directus.request(uploadFiles(form));
       return uploaded.id;
+    },
+  });
+}
+
+/**
+ * A scan's pages, uploaded in the order the tutor chose them: the ids come back in that
+ * order, which is the order the transcriber reads them in.
+ */
+export function useUploadScanPages() {
+  return useMutation({
+    mutationFn: async (files: File[]) => {
+      const ids: string[] = [];
+      for (const file of files) {
+        const form = new FormData();
+        form.append("file", file);
+        const uploaded = await directus.request(uploadFiles(form));
+        ids.push(uploaded.id);
+      }
+      return ids;
     },
   });
 }

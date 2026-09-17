@@ -42,7 +42,7 @@ export function GenerationProgress({ jobId, kind, onDone, onTryAgain }: Generati
     <div className={styles.progress}>
       {failure === null ? (
         <p className={styles.progressText}>
-          <Spinner /> Generating… this usually takes under a minute.
+          <Spinner /> Generating… usually under a minute.
         </p>
       ) : (
         <>

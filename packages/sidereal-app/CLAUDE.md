@@ -22,8 +22,8 @@ Top layer. Imports core, ingest and generate; never sidereal-mcp.
   row carries the outcome. Filing and reading the row are `sidereal_ingest.documents`, not app logic.
 - The login endpoints hold no logic: `sidereal_core.logins` does the work, and a
   `StudentLoginError` becomes a status and a `code` in `main.py`, nowhere else.
-- Tests override `get_http_client`, `get_generators`, `get_ingesters` and `get_typeset` only: the auth
-  dependency itself is exercised, never stubbed.
+- Tests override `get_http_client`, `get_generators`, `get_ingesters`, `get_scanner` and
+  `get_typeset` only: the auth dependency itself is exercised, never stubbed.
 - Typesetting is the tutor's: `require_tutor` refuses a caller a `students` row points at with 403,
   and an admin passes it.
 - `/api/admin/*` is `require_admin`: a tutor and a student both get 403 `admin_only`.
@@ -42,8 +42,23 @@ Top layer. Imports core, ingest and generate; never sidereal-mcp.
 - One `TypesetClient` for the process, built by the lifespan over its own pool.
 - `POST /api/typeset/render` reads nothing and stores nothing: a canonical structure or a
   markup fragment goes in, SVG pages or the rendered source come back.
+- A render's `assets` ride the request as base64 under the name a `figure` block asked for; the
+  app decodes them and the core client owns both the encoding and the caps.
+- An asset set over those caps is 413 `typeset_too_large`, never `typeset_failed`; a value that
+  is not base64 is 422 `asset_unreadable` before any call goes out.
 - `POST /api/jobs/paper_extract` takes exactly one document and no student; every other kind takes a
   student. Both are 422 with a `code` before a job row exists.
+- `pages` is on `paper_extract` alone: any other kind carrying it, even `false`, is 422
+  `pages_unsupported` before a job row exists.
 - Papers are the tutor's: render and worksheet are `require_tutor`, and each reads the paper with the
   caller's own token first, so a paper they cannot see is Directus's own answer.
 - A `PaperError` is 422 `paper_unusable`, carrying the sentence generate wrote.
+- A `DocumentError` or an `IngestError` that reaches a response is 422 `material_unusable`, carrying
+  the sentence ingest wrote.
+- A scan is a document source like any other: `POST /api/documents` files the pages and transcribes
+  them in the background, and the row carries the outcome.
+- `POST /api/homework/{id}/transcribe` transcribes before it answers, and its 200 body is the row it
+  wrote. The tutor may call it, and so may the student the homework belongs to; any other student is
+  403 `tutor_only`.
+- The scanner is built once by the lifespan, like the generators: it holds the transcription
+  backend's client.

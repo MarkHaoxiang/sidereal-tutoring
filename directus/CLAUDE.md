@@ -14,7 +14,8 @@
   `on_delete: NO ACTION`. Delete and recreate the relation with both halves to repair one.
 - Status/kind values are the lowercase tokens from the domain vocabulary
   (`active`/`paused`/`archived`, `scheduled`/`completed`/`cancelled`,
-  `transcript`/`web_page`/`question_bank`/`upload`, `pending`/`processing`/`ready`/`failed`,
+  `transcript`/`web_page`/`question_bank`/`upload`/`scan`,
+  `pending`/`processing`/`ready`/`failed`,
   `draft`/`assigned`/`submitted`/`marked`, `draft`/`sent`, `draft`/`active`/`completed`,
   `draft`/`reviewed`/`archived`, `homework`/`feedback`/`plan`/`paper_extract`,
   `queued`/`running`/`succeeded`/`failed`). The Python `StrEnum`s and the TypeScript unions
@@ -29,11 +30,17 @@
 - A topic junction is named `<owning collection>_topics`, carries `sort`, cascades on both
   sides, and exposes `topics` on the owning collection and the owner's plural name on `topics`.
   A new collection that wants topics gets its own junction; none is ever reused.
-- `directus_files` carries five o2m alias fields — `homework_pdf`, `homework_submission_file`,
-  `document_file`, `paper_rendered_pdf` and `paper_mark_scheme_pdf` — purely so a permission
-  rule can filter a file by the row that references it. Without the alias field Directus stores
-  such a rule and then fails every read with a Postgres error, so the aliases are load-bearing,
-  not decoration. They are in the snapshot and `schema apply` creates them.
+- A `scan` document's pages hang off the `document_pages` junction — `documents.pages` on one
+  side, the `document_page` o2m on `directus_files` on the other, `sort` ordering them,
+  `CASCADE` on both legs — and a page row is reachable exactly as far as the document it
+  belongs to, which is also what the tutor file rule rides; `documents.file` stays the
+  single-file upload. `documents.paper` is the paper a solutions scan answers: `SET NULL`, and
+  the opposite direction from `papers.document`.
+- `directus_files` carries six o2m alias fields — `homework_pdf`, `homework_submission_file`,
+  `document_file`, `document_page`, `paper_rendered_pdf` and `paper_mark_scheme_pdf` — purely
+  so a permission rule can filter a file by the row that references it. Without the alias field
+  Directus stores such a rule and then fails every read with a Postgres error, so the aliases
+  are load-bearing, not decoration. They are in the snapshot and `schema apply` creates them.
 - A student reads a file only if it is their own homework's `pdf` or `submission_file`, or they
   uploaded it; the third arm is what lets them read back an upload not yet linked to a row.
   `/assets/<id>` honours the same rule, so the PDF is served by Directus, not by the app.
@@ -45,10 +52,10 @@
   `generation_jobs`, or any `directus_users` row but their own.
 - The Student policy is `app_access: false`: students reach the API and never the admin app.
 - A student's only writes are `homework` update — fields `submission`, `submission_file`,
-  `submitted_at`, `status`, on rows still `assigned`, with `status` allowed to become
-  `submitted` and nothing else — `directus_files` create for the hand-in itself, `directus_files`
-  delete of their own uploads, and their own account. The row filter is what stops a second
-  hand-in.
+  `submission_transcription`, `submitted_at`, `status`, on rows still `assigned`, with `status`
+  allowed to become `submitted` and nothing else — `directus_files` create for the hand-in
+  itself, `directus_files` delete of their own uploads, and their own account. The row filter is
+  what stops a second hand-in. `submission_transcription` is in their read list too.
 - `topics` is the one collection a student reads unfiltered: it is a shared vocabulary, not
   anyone's data. The junctions are still scoped to their own homework, and `document_topics`
   is not granted at all because a student reaches no `documents` row.
@@ -97,10 +104,11 @@
   no read rule until a student links to it, and it cannot be found afterwards either. A
   readable id comes from a nested create on a student's own `user` field.
 - A tutor reads a file through `uploaded_by`, their own students' homework aliases, or the
-  `document_file`, `paper_rendered_pdf` and `paper_mark_scheme_pdf` aliases. Each of those three
-  needs `_some` in an `_or` arm of its own — `_some` under a shared `_or` matches everything —
-  and a paper's arm rides the m2o to `document`, so one null test covers both the student-less
-  document and the paper that has none. Writing is not widened by the library.
+  `document_file`, `document_page`, `paper_rendered_pdf` and `paper_mark_scheme_pdf` aliases.
+  Each of those four needs `_some` in an `_or` arm of its own — `_some` under a shared `_or`
+  matches everything — and a paper's or a page's arm rides the m2o to `document`, so one null
+  test covers both the student-less document and the paper that has none. Writing is not
+  widened by the library.
 - A `questions` row unlinked from both its document and its homework is reachable by its
   creator alone.
 - `directus_roles` has no `admin_access` in Directus 12 — it lives on the policy — and a tutor

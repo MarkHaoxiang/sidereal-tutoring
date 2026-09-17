@@ -93,7 +93,7 @@ export function WorksheetDialog({ open, onClose, paperId, paperTitle, questions 
                 void submit();
               }}
             >
-              Make the worksheet
+              Make worksheet
             </Button>
           </>
         )
@@ -103,13 +103,11 @@ export function WorksheetDialog({ open, onClose, paperId, paperTitle, questions 
         <PdfView fileId={pdfId} fallbackName={`${title.trim() || paperTitle}.pdf`} />
       ) : (
         <>
-          <p className={styles.note}>
-            This makes a PDF to open or download. Nothing is set for the student to hand in.
-          </p>
+          <p className={styles.note}>Makes a PDF only — no homework is set.</p>
 
           <Field label="Questions" error={error}>
             {questions.length === 0 ? (
-              <p className={styles.status}>This paper has no questions to put on a worksheet.</p>
+              <p className={styles.status}>No questions on this paper.</p>
             ) : (
               <div className={styles.picker}>
                 {questions.map((question) => (
@@ -129,7 +127,7 @@ export function WorksheetDialog({ open, onClose, paperId, paperTitle, questions 
             )}
           </Field>
 
-          <Field label="For a student" help="Optional — their name goes at the top of the sheet.">
+          <Field label="For a student (optional)">
             <Select
               value={studentId}
               onChange={(event) => {
@@ -146,7 +144,7 @@ export function WorksheetDialog({ open, onClose, paperId, paperTitle, questions 
           </Field>
 
           <div className={styles.dates}>
-            <Field label="Title" help="Optional — the paper's title is used if you leave this empty.">
+            <Field label="Title" help="The paper's title is used if blank.">
               <Input
                 value={title}
                 onChange={(event) => {

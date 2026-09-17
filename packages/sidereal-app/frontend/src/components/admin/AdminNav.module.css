@@ -159,13 +159,6 @@
   color: var(--color-accent);
 }
 
-.userEyebrow {
-  color: var(--color-fg-muted);
-  font-size: var(--font-size-eyebrow);
-  letter-spacing: var(--tracking-eyebrow);
-  text-transform: uppercase;
-}
-
 .userName {
   font-weight: 500;
 }

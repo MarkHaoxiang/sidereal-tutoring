@@ -1,6 +1,8 @@
 // The house exam-paper layout. `POST /render` returns `questions.typ`, this file, a
 // `#show: paper.with(...)` line and the rendered questions — one source that compiles alone.
 
+#let title-width = 80%
+
 #let paper(
   title: "",
   source: none,
@@ -26,6 +28,10 @@
   if year != none { overline.push(str(year)) }
 
   block(width: 100%, below: 0.8em, align(center, {
+    // A heading is set, never flowed: a justified line stretches its words and a hyphenated
+    // one breaks a paper's name in half ("Non-Calcu-lator").
+    set par(justify: false)
+    set text(hyphenate: false)
     if overline.len() > 0 {
       text(
         size: 10pt,
@@ -35,7 +41,9 @@
       )
       v(0.45em)
     }
-    text(size: 17pt, weight: "bold", title)
+    // A narrower measure than the text column, so a long title breaks at a space rather than
+    // at the hyphen in a name like "Non-Calculator".
+    block(width: title-width, text(size: 17pt, weight: "bold", title))
     if source != none and source != "" {
       v(0.4em)
       text(size: 10pt, fill: luma(35%), source)

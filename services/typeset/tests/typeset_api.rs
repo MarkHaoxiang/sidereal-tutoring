@@ -785,3 +785,742 @@ async fn an_unknown_field_in_a_fragment_is_a_422_naming_the_path_to_it() {
     let body: Value = markup.json().await.unwrap();
     assert_eq!(body["errors"][0]["path"], "size", "{body}");
 }
+
+/// A 1×1 truecolour PNG, written out here so the tests need no fixture file and no network.
+const PIXEL_PNG: &str =
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR42mNQcEgAAAFEAME1cEXuAAAAAElFTkSuQmCC";
+
+async fn source_of(service: &Service, body: Value) -> String {
+    let response = service.post("/render", body).await;
+    assert_eq!(
+        response.status().as_u16(),
+        200,
+        "{:?}",
+        response.text().await
+    );
+    response.json::<Value>().await.unwrap()["source"]
+        .as_str()
+        .unwrap()
+        .to_owned()
+}
+
+#[tokio::test]
+async fn a_newline_in_a_field_is_a_line_break_and_a_blank_line_a_paragraph() {
+    let service = Service::start().await;
+    let document = json!({
+        "title": "Lineation",
+        "questions": [{
+            "number": "1",
+            "stem": "I met a traveller from an antique land,\nWho said—two vast legs of stone\n\nStand in the desert.",
+        }],
+    });
+
+    let source = source_of(
+        &service,
+        json!({ "kind": "worksheet", "document": document, "output": "source" }),
+    )
+    .await;
+    assert!(source.contains("antique land,\\\nWho said"), "{source}");
+    assert!(
+        source.contains("of stone\n\nStand in the desert."),
+        "{source}"
+    );
+
+    // Three lines of verse where one prose line would fit: the breaks reached the page.
+    let pages = service
+        .post(
+            "/render",
+            json!({ "kind": "markup", "document": { "text": "one\ntwo\nthree" }, "output": "svg" }),
+        )
+        .await;
+    assert_eq!(pages.status().as_u16(), 200);
+    let body: Value = pages.json().await.unwrap();
+    let broken = view_box_height(body["pages"][0].as_str().unwrap());
+
+    let pages = service
+        .post(
+            "/render",
+            json!({ "kind": "markup", "document": { "text": "one two three" }, "output": "svg" }),
+        )
+        .await;
+    let body: Value = pages.json().await.unwrap();
+    let flowed = view_box_height(body["pages"][0].as_str().unwrap());
+    assert!(broken > flowed * 2.0, "{broken}pt against {flowed}pt");
+}
+
+#[tokio::test]
+async fn a_section_carries_its_own_heading_choice_and_total() {
+    let service = Service::start().await;
+    let document = json!({
+        "title": "English Literature",
+        "total_marks": 75,
+        "sections": [{
+            "title": "Section A: Shakespeare",
+            "instructions": "Answer *one* question in this section.",
+            "choose": 1,
+            "questions": [
+                { "number": "01", "stem": "Explore the presentation of jealousy in *Othello*.", "marks": 25 },
+                { "number": "02", "stem": "Explore the presentation of power in *Othello*.", "marks": 25 },
+            ],
+        }],
+    });
+
+    let source = source_of(
+        &service,
+        json!({ "kind": "paper", "document": document, "output": "source" }),
+    )
+    .await;
+    // Two questions of 25 under a choice of one is 25 answerable marks, not 50, and the
+    // paper's own total is untouched.
+    assert!(source.contains("#section-heading("), "{source}");
+    assert!(source.contains("], 1, 25)"), "{source}");
+    assert!(source.contains("total-marks: 75"), "{source}");
+
+    let compiled = service
+        .post(
+            "/render",
+            json!({ "kind": "paper", "document": document, "output": "pdf" }),
+        )
+        .await;
+    assert_eq!(
+        compiled.status().as_u16(),
+        200,
+        "{:?}",
+        compiled.text().await
+    );
+    assert!(compiled.bytes().await.unwrap().starts_with(b"%PDF"));
+
+    let too_many = service
+        .post(
+            "/render",
+            json!({
+                "kind": "paper",
+                "document": { "title": "t", "sections": [{ "choose": 3, "questions": [{ "number": "1" }] }] },
+            }),
+        )
+        .await;
+    assert_eq!(too_many.status().as_u16(), 422);
+    let body: Value = too_many.json().await.unwrap();
+    assert_eq!(body["errors"][0]["path"], "sections[0].choose", "{body}");
+}
+
+#[tokio::test]
+async fn every_answer_type_calls_its_helper_and_compiles() {
+    let service = Service::start().await;
+    let document = json!({
+        "title": "Answer spaces",
+        "questions": [
+            { "number": "1", "stem": "Ruled lines.", "answer": { "type": "lines", "lines": 3 } },
+            { "number": "2", "stem": "A box.", "answer": { "type": "box", "height_mm": 30 } },
+            { "number": "3", "stem": "Shade one lozenge.", "answer": { "type": "multiple_choice", "options": [
+                { "text": "$2$" },
+                { "label": "B", "text": "$20$" },
+            ] } },
+            { "number": "4", "stem": "An essay.", "answer": { "type": "essay", "height_mm": 60 } },
+            { "number": "5", "stem": "A grid.", "answer": { "type": "grid", "rows": 6, "cols": 8 } },
+            { "number": "6", "stem": "A table.", "answer": { "type": "table", "rows": 3, "cols": 4 } },
+            { "number": "7", "stem": "Nothing at all.", "answer": { "type": "none" } },
+        ],
+    });
+
+    let source = source_of(
+        &service,
+        json!({ "kind": "worksheet", "document": document, "output": "source" }),
+    )
+    .await;
+    assert!(source.contains("#answerlines(3)"), "{source}");
+    assert!(source.contains("#answer-box(30mm)"), "{source}");
+    assert!(
+        source.contains("(label: none, body: [\n$2$\n]),"),
+        "{source}"
+    );
+    assert!(
+        source.contains("(label: \"B\", body: [\n$20$\n]),"),
+        "{source}"
+    );
+    assert!(source.contains("#answer-essay(60mm)"), "{source}");
+    assert!(source.contains("#answer-grid(6, 8)"), "{source}");
+    assert!(source.contains("#answer-table(3, 4)"), "{source}");
+
+    let response = service
+        .post(
+            "/render",
+            json!({ "kind": "worksheet", "document": document, "output": "svg" }),
+        )
+        .await;
+    assert_eq!(
+        response.status().as_u16(),
+        200,
+        "{:?}",
+        response.text().await
+    );
+    let body: Value = response.json().await.unwrap();
+    assert_eq!(body["pages"].as_array().unwrap().len(), 2, "{body}");
+
+    let missing = service
+        .post(
+            "/render",
+            json!({
+                "kind": "worksheet",
+                "document": { "title": "t", "questions": [{ "number": "1", "answer": { "type": "grid", "rows": 4 } }] },
+            }),
+        )
+        .await;
+    assert_eq!(missing.status().as_u16(), 422);
+    let body: Value = missing.json().await.unwrap();
+    assert_eq!(
+        body["errors"][0]["path"], "questions[0].answer.cols",
+        "{body}"
+    );
+}
+
+#[tokio::test]
+async fn an_answer_space_indents_with_the_part_it_belongs_to() {
+    let service = Service::start().await;
+    let document = json!({
+        "title": "Indents",
+        "questions": [{
+            "number": "1",
+            "parts": [{
+                "label": "a",
+                "text": "One.",
+                "answer": { "type": "box" },
+                "parts": [{ "label": "i", "text": "Two.", "answer": { "type": "lines", "lines": 2 } }],
+            }],
+        }],
+    });
+
+    let source = source_of(
+        &service,
+        json!({ "kind": "paper", "document": document, "output": "source" }),
+    )
+    .await;
+    assert!(
+        source.contains("#answer-box(40mm, indent: part-indent)"),
+        "{source}"
+    );
+    assert!(
+        source.contains("#answerlines(2, indent: part-indent * 2)"),
+        "{source}"
+    );
+}
+
+#[tokio::test]
+async fn a_passage_keeps_its_lines_and_a_listing_its_indentation() {
+    let service = Service::start().await;
+    let document = json!({
+        "title": "Blocks",
+        "passages": [{
+            "id": "sonnet",
+            "title": "Ozymandias",
+            "text": "I met a traveller from an antique land,\nWho said—\"Two vast and trunkless legs of stone\"",
+        }],
+        "questions": [{
+            "number": "1",
+            "stem": "Read the passage and the program.",
+            "blocks": [
+                { "type": "passage_ref", "id": "sonnet" },
+                { "type": "passage", "title": "An extract", "text": "First line.\nSecond line." },
+                { "type": "code", "language": "python", "text": "def total(values):\n    return sum(values)" },
+                { "type": "table", "caption": "Table 1", "header": ["Gate", "Time / $s$"],
+                  "rows": [["A", "0.00"], ["B", "0.41"]] },
+            ],
+        }],
+    });
+
+    let source = source_of(
+        &service,
+        json!({ "kind": "paper", "document": document, "output": "source" }),
+    )
+    .await;
+    // The passage is a Typst string, not markup: its newlines survive as `\n` in the literal.
+    assert!(
+        source.contains(
+            "#passage-block([\nOzymandias\n], \"I met a traveller from an antique land,\\nWho said"
+        ),
+        "{source}"
+    );
+    assert!(
+        source.contains("#passage-block([\nAn extract\n], \"First line.\\nSecond line.\")"),
+        "{source}"
+    );
+    assert!(
+        source.contains("#code-block(\"python\", \"def total(values):\\n    return sum(values)\")"),
+        "{source}"
+    );
+    assert!(
+        source.contains("#data-table([\nTable 1\n], ([\nGate\n], [\nTime / $s$\n], ), ("),
+        "{source}"
+    );
+    assert!(
+        source.contains("#passage-ref([\nOzymandias\n])"),
+        "{source}"
+    );
+
+    let compiled = service
+        .post(
+            "/render",
+            json!({ "kind": "paper", "document": document, "output": "pdf" }),
+        )
+        .await;
+    assert_eq!(
+        compiled.status().as_u16(),
+        200,
+        "{:?}",
+        compiled.text().await
+    );
+    assert!(compiled.bytes().await.unwrap().starts_with(b"%PDF"));
+
+    let dangling = service
+        .post(
+            "/render",
+            json!({
+                "kind": "paper",
+                "document": { "title": "t", "questions": [{ "number": "1", "blocks": [{ "type": "passage_ref", "id": "nowhere" }] }] },
+            }),
+        )
+        .await;
+    assert_eq!(dangling.status().as_u16(), 422);
+    let body: Value = dangling.json().await.unwrap();
+    assert_eq!(
+        body["errors"][0]["path"], "questions[0].blocks[0].id",
+        "{body}"
+    );
+
+    let ragged = service
+        .post(
+            "/render",
+            json!({
+                "kind": "paper",
+                "document": { "title": "t", "questions": [{ "number": "1", "blocks": [
+                    { "type": "table", "header": ["a", "b"], "rows": [["1"]] },
+                ] }] },
+            }),
+        )
+        .await;
+    assert_eq!(ragged.status().as_u16(), 422);
+    let body: Value = ragged.json().await.unwrap();
+    assert_eq!(
+        body["errors"][0]["path"], "questions[0].blocks[0].rows[0]",
+        "{body}"
+    );
+}
+
+fn figure() -> Value {
+    json!({
+        "title": "Figures",
+        "questions": [{
+            "number": "1",
+            "stem": "The circuit is shown below.",
+            "blocks": [{ "type": "figure", "asset": "figure-1.png", "caption": "Figure 1", "width_mm": 40 }],
+        }],
+    })
+}
+
+#[tokio::test]
+async fn a_figure_renders_from_an_asset_and_a_missing_one_is_refused() {
+    let service = Service::start().await;
+
+    let source = source_of(
+        &service,
+        json!({
+            "kind": "paper",
+            "document": figure(),
+            "assets": { "figure-1.png": PIXEL_PNG },
+            "output": "source",
+        }),
+    )
+    .await;
+    assert!(
+        source.contains("#figure-block(\"figure-1.png\", [\nFigure 1\n], 40mm)"),
+        "{source}"
+    );
+
+    let compiled = service
+        .post(
+            "/render",
+            json!({
+                "kind": "paper",
+                "document": figure(),
+                "assets": { "figure-1.png": PIXEL_PNG },
+                "output": "pdf",
+            }),
+        )
+        .await;
+    assert_eq!(
+        compiled.status().as_u16(),
+        200,
+        "{:?}",
+        compiled.text().await
+    );
+    assert!(compiled.bytes().await.unwrap().starts_with(b"%PDF"));
+
+    // A fragment takes assets too, so the app can show one question with its figure.
+    let fragment = service
+        .post(
+            "/render",
+            json!({
+                "kind": "question",
+                "document": {
+                    "number": "1",
+                    "blocks": [{ "type": "figure", "asset": "figure-1.png" }],
+                },
+                "assets": { "figure-1.png": PIXEL_PNG },
+                "output": "svg",
+            }),
+        )
+        .await;
+    assert_eq!(
+        fragment.status().as_u16(),
+        200,
+        "{:?}",
+        fragment.text().await
+    );
+    let body: Value = fragment.json().await.unwrap();
+    assert_eq!(body["pages"].as_array().unwrap().len(), 1, "{body}");
+
+    let missing = service
+        .post("/render", json!({ "kind": "paper", "document": figure() }))
+        .await;
+    assert_eq!(missing.status().as_u16(), 422);
+    let body: Value = missing.json().await.unwrap();
+    assert_eq!(
+        body["errors"][0]["path"], "questions[0].blocks[0].asset",
+        "{body}"
+    );
+    assert!(
+        body["errors"][0]["message"]
+            .as_str()
+            .unwrap()
+            .contains("figure-1.png"),
+        "{body}"
+    );
+
+    // A name that is a path, or a format the compiler cannot read, never reaches the compiler.
+    let path = service
+        .post(
+            "/render",
+            json!({
+                "kind": "paper",
+                "document": { "title": "t" },
+                "assets": { "../secret.png": PIXEL_PNG },
+            }),
+        )
+        .await;
+    assert_eq!(path.status().as_u16(), 422);
+    let body: Value = path.json().await.unwrap();
+    assert_eq!(body["errors"][0]["path"], "assets.../secret.png", "{body}");
+}
+
+#[tokio::test]
+async fn an_oversize_asset_is_a_413() {
+    let service = Service::start().await;
+    // Valid base64 that decodes to more than one asset may be.
+    let oversize = "A".repeat(2_800_000);
+
+    let response = service
+        .post(
+            "/render",
+            json!({
+                "kind": "paper",
+                "document": { "title": "t" },
+                "assets": { "big.png": oversize },
+            }),
+        )
+        .await;
+    assert_eq!(response.status().as_u16(), 413);
+    let body: Value = response.json().await.unwrap();
+    assert!(
+        body["message"].as_str().unwrap().contains("big.png"),
+        "{body}"
+    );
+}
+
+#[tokio::test]
+async fn a_mark_scheme_entry_may_carry_a_marking_table() {
+    let service = Service::start().await;
+    let document = json!({
+        "title": "Marking",
+        "questions": [{
+            "number": "1",
+            "parts": [{
+                "label": "a",
+                "answer": "$r = 1/4$",
+                "marks": 3,
+                "blocks": [{ "type": "table", "header": ["Step", "Mark"], "rows": [["Substitutes", "M1"], ["Answer", "A1"]] }],
+            }],
+        }],
+    });
+
+    let source = source_of(
+        &service,
+        json!({ "kind": "mark_scheme", "document": document, "output": "source" }),
+    )
+    .await;
+    assert!(source.contains("#scheme-row(\"a\", 3)["), "{source}");
+    assert!(
+        source.contains("#data-table(none, ([\nStep\n], [\nMark\n], ), ("),
+        "{source}"
+    );
+
+    let compiled = service
+        .post(
+            "/render",
+            json!({ "kind": "mark_scheme", "document": document, "output": "pdf" }),
+        )
+        .await;
+    assert_eq!(
+        compiled.status().as_u16(),
+        200,
+        "{:?}",
+        compiled.text().await
+    );
+    assert!(compiled.bytes().await.unwrap().starts_with(b"%PDF"));
+}
+
+#[tokio::test]
+async fn a_document_written_before_answer_types_renders_as_it_did() {
+    let service = Service::start().await;
+
+    let source = source_of(
+        &service,
+        json!({ "kind": "paper", "document": paper(), "output": "source" }),
+    )
+    .await;
+    // The last occurrence: the templates mention the `#show:` line in their own comments.
+    let body = source.rsplit("#show: paper.with(").next().unwrap();
+    for added in [
+        "#answer-",
+        "#section-heading(",
+        "#passage-block(",
+        "#passage-ref(",
+        "#code-block(",
+        "#data-table(",
+        "#figure-block(",
+    ] {
+        assert!(!body.contains(added), "{added} in\n{body}");
+    }
+    assert!(
+        body.contains("#answerlines(3, indent: part-indent)"),
+        "{body}"
+    );
+    assert!(body.contains("#answerlines(4)"), "{body}");
+
+    // `answer_lines` is the older spelling of the same thing, and saying both is refused.
+    let both = service
+        .post(
+            "/render",
+            json!({
+                "kind": "paper",
+                "document": { "title": "t", "questions": [{
+                    "number": "1", "answer_lines": 3, "answer": { "type": "lines", "lines": 3 },
+                }] },
+            }),
+        )
+        .await;
+    assert_eq!(both.status().as_u16(), 422);
+    let body: Value = both.json().await.unwrap();
+    assert_eq!(
+        body["errors"][0]["path"], "questions[0].answer_lines",
+        "{body}"
+    );
+}
+
+/// Prose a real paper contains that Typst would otherwise read as syntax.
+const AWKWARD: [&str; 11] = [
+    "The region where a < b and the region where x > y.",
+    "Write to email@example.com before <the deadline>.",
+    "A lone ` backtick and a 5 <3 comparison.",
+    "*unbalanced prose and a _lone underscore.",
+    "Costs rose 20% -- a * b -- and fell again.",
+    "Given $a < b$ and $x >= y$, show that a < x.",
+    "Use *bold* and _emph_ as before, with snake_case_name intact.",
+    "Divide a */ b and then / halve it",
+    "/ no colon on this line",
+    "The *quick _brown* fox_ crossed over.",
+    "- one *asterisk\n- two *asterisks",
+];
+
+#[tokio::test]
+async fn prose_that_looks_like_typst_syntax_still_renders() {
+    let service = Service::start().await;
+
+    for text in AWKWARD {
+        let response = service
+            .post(
+                "/render",
+                json!({ "kind": "markup", "document": { "text": text }, "output": "svg" }),
+            )
+            .await;
+        assert_eq!(
+            response.status().as_u16(),
+            200,
+            "{text}\n{:?}",
+            response.text().await
+        );
+        let body: Value = response.json().await.unwrap();
+        assert_eq!(body["pages"].as_array().unwrap().len(), 1, "{text} {body}");
+    }
+
+    // The same prose in every markup field of a paper, and in a table's cells.
+    let document = json!({
+        "title": "Awkward prose",
+        "instructions": AWKWARD[0],
+        "questions": [{
+            "number": "1",
+            "stem": AWKWARD[1],
+            "blocks": [{ "type": "table", "caption": AWKWARD[2], "header": ["a < b", "x > y"],
+                         "rows": [[AWKWARD[3], AWKWARD[4]], [AWKWARD[7], AWKWARD[9]]] }],
+            "parts": [{
+                "label": "a",
+                "text": AWKWARD[5],
+                "answer": { "type": "multiple_choice", "options": [
+                    { "text": AWKWARD[3] }, { "text": AWKWARD[8] }, { "text": AWKWARD[10] },
+                ] },
+            }],
+        }],
+    });
+    let compiled = service
+        .post(
+            "/render",
+            json!({ "kind": "paper", "document": document, "output": "pdf" }),
+        )
+        .await;
+    assert_eq!(
+        compiled.status().as_u16(),
+        200,
+        "{:?}",
+        compiled.text().await
+    );
+    assert!(compiled.bytes().await.unwrap().starts_with(b"%PDF"));
+}
+
+#[tokio::test]
+async fn a_passage_and_a_listing_take_the_same_prose_verbatim() {
+    let service = Service::start().await;
+    // A passage is a Typst string, so none of this is syntax — but a quote, a backslash or a
+    // newline would still close the literal if they were not escaped.
+    let awkward = "if (a < b) { print(\"x > y\"); }\n\tmail@example.com `tick` *star* \\ end";
+    let document = json!({
+        "title": "Verbatim",
+        "questions": [{
+            "number": "1",
+            "blocks": [
+                { "type": "passage", "title": "a < b", "text": awkward },
+                { "type": "code", "language": "c", "text": awkward },
+            ],
+        }],
+    });
+
+    let source = source_of(
+        &service,
+        json!({ "kind": "paper", "document": document, "output": "source" }),
+    )
+    .await;
+    assert!(
+        source.contains("\\\"x \\u{3e} y\\\"") || source.contains("\\\"x > y\\\""),
+        "{source}"
+    );
+    assert!(
+        source.contains("\\n\\tmail@example.com `tick` *star* \\\\ end"),
+        "{source}"
+    );
+
+    let compiled = service
+        .post(
+            "/render",
+            json!({ "kind": "paper", "document": document, "output": "pdf" }),
+        )
+        .await;
+    assert_eq!(
+        compiled.status().as_u16(),
+        200,
+        "{:?}",
+        compiled.text().await
+    );
+    assert!(compiled.bytes().await.unwrap().starts_with(b"%PDF"));
+}
+
+/// Typst's SVG is one `<use>` per glyph, so a soft hyphen is one glyph that no character in
+/// the title accounts for.
+fn glyphs(svg: &str) -> usize {
+    svg.matches("<use ").count()
+}
+
+fn visible(text: &str) -> usize {
+    text.chars()
+        .filter(|character| !character.is_whitespace())
+        .count()
+}
+
+async fn one_page(service: &Service, kind: &str, document: Value) -> String {
+    let response = service
+        .post(
+            "/render",
+            json!({ "kind": kind, "document": document, "output": "svg" }),
+        )
+        .await;
+    assert_eq!(
+        response.status().as_u16(),
+        200,
+        "{:?}",
+        response.text().await
+    );
+    let body: Value = response.json().await.unwrap();
+    let pages = body["pages"].as_array().unwrap();
+    assert_eq!(pages.len(), 1, "{body}");
+    pages[0].as_str().unwrap().to_owned()
+}
+
+#[tokio::test]
+async fn a_long_title_wraps_without_a_soft_hyphen() {
+    let service = Service::start().await;
+    // The real paper that hyphenated as "Non-Calcu-lator".
+    const LONG: &str = "GCSE Mathematics Higher Tier Paper 1 Non-Calculator";
+    const SHORT: &str = "GCSE";
+
+    let paper = |title: &str| {
+        json!({
+            "title": title,
+            "questions": [{ "number": "1", "stem": "Work it out.", "marks": 2 }],
+        })
+    };
+
+    let source = source_of(
+        &service,
+        json!({ "kind": "paper", "document": paper(LONG), "output": "source" }),
+    )
+    .await;
+    assert!(source.contains("hyphenate: false"), "{source}");
+
+    // Two pages that differ only in the title: the longer one costs exactly one glyph per
+    // visible character it added. A hyphenated break would cost one more.
+    let long = glyphs(&one_page(&service, "paper", paper(LONG)).await);
+    let short = glyphs(&one_page(&service, "paper", paper(SHORT)).await);
+    assert_eq!(
+        long - short,
+        visible(LONG) - visible(SHORT),
+        "the title was broken with a hyphen: {long} glyphs against {short}"
+    );
+
+    // The same for the headings of the other kinds, and for a section's title.
+    let worksheet = |title: &str| json!({ "title": title, "questions": [] });
+    let long = glyphs(&one_page(&service, "worksheet", worksheet(LONG)).await);
+    let short = glyphs(&one_page(&service, "worksheet", worksheet(SHORT)).await);
+    assert_eq!(long - short, visible(LONG) - visible(SHORT));
+
+    let scheme = |title: &str| json!({ "title": title, "questions": [] });
+    let long = glyphs(&one_page(&service, "mark_scheme", scheme(LONG)).await);
+    let short = glyphs(&one_page(&service, "mark_scheme", scheme(SHORT)).await);
+    assert_eq!(long - short, visible(LONG) - visible(SHORT));
+
+    let section = |title: &str| {
+        json!({
+            "title": "t",
+            "sections": [{ "title": title, "questions": [{ "number": "1", "marks": 3 }] }],
+        })
+    };
+    let long = glyphs(&one_page(&service, "paper", section(LONG)).await);
+    let short = glyphs(&one_page(&service, "paper", section(SHORT)).await);
+    assert_eq!(long - short, visible(LONG) - visible(SHORT));
+}

@@ -27,7 +27,7 @@
   above: 1.4em,
   below: 0.8em,
   {
-    block(below: 0.5em, strong("Question " + number))
+    block(below: 0.5em, text(hyphenate: false, strong("Question " + number)))
     body
     line(length: 100%, stroke: 0.4pt + luma(80%))
   },
@@ -45,6 +45,8 @@
   show math.equation: set text(font: "New Computer Modern Math")
 
   block(width: 100%, below: 1.2em, {
+    set par(justify: false)
+    set text(hyphenate: false)
     text(size: 16pt, weight: "bold", title)
     v(0.3em)
     text(size: 10pt, tracking: 0.08em, fill: luma(35%), upper("Mark scheme"))

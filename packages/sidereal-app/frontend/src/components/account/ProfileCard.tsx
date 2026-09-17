@@ -53,7 +53,7 @@ export function ProfileCard() {
         last_name: lastName.trim() || null,
         email: address,
       });
-      toast.success("Your details are saved");
+      toast.success("Saved");
     } catch (error) {
       toast.error(apiError(error));
     }
@@ -70,7 +70,7 @@ export function ProfileCard() {
     }
     try {
       await saveAvatar.mutateAsync(file);
-      toast.success("Your photo is saved");
+      toast.success("Saved");
     } catch (error) {
       toast.error(apiError(error));
     }
@@ -79,7 +79,7 @@ export function ProfileCard() {
   const remove = async () => {
     try {
       await removeAvatar.mutateAsync();
-      toast.success("Your photo is removed");
+      toast.success("Removed");
     } catch (error) {
       toast.error(apiError(error));
     }
@@ -113,7 +113,7 @@ export function ProfileCard() {
               </Button>
             ) : null}
           </div>
-          <p className={styles.hint}>A square photo looks best. It is shown to you, and to nobody else.</p>
+          <p className={styles.hint}>Square looks best. Only you see it.</p>
         </div>
         <input
           ref={fileInput}

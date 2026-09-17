@@ -150,7 +150,7 @@ export function GenerateDialog({ open, onClose, studentId, kind, onStarted }: Ge
     >
       <Field
         label="Material to work from"
-        help={lastLessonId ? "Material from the last lesson is ticked for you." : undefined}
+        help={lastLessonId ? "The last lesson's material is ticked." : undefined}
         error={error}
       >
         {documents.isLoading ? (
@@ -161,8 +161,8 @@ export function GenerateDialog({ open, onClose, studentId, kind, onStarted }: Ge
         {ready && ready.length === 0 ? (
           <p className={styles.status}>
             {shared.length > 0
-              ? "Nothing for this student yet. Choose from the library below, or add material on the Material tab."
-              : "Nothing to work from yet. Add material on the Material tab and wait until it says Ready."}
+              ? "Nothing for this student yet — choose from the library below."
+              : "Nothing to work from yet. Add material on the Material tab."}
           </p>
         ) : null}
         {ready && ready.length > 0 ? (
@@ -208,7 +208,6 @@ export function GenerateDialog({ open, onClose, studentId, kind, onStarted }: Ge
 
         {libraryOpen ? (
           <div className={styles.libraryBody}>
-            <p className={styles.libraryHint}>Material every tutor can use, whoever added it.</p>
             {shared.length > 0 ? (
               <>
                 <Input
@@ -229,10 +228,10 @@ export function GenerateDialog({ open, onClose, studentId, kind, onStarted }: Ge
               </p>
             ) : null}
             {library.data && shared.length === 0 ? (
-              <p className={styles.status}>The library is empty. Anything you add there shows up here.</p>
+              <p className={styles.status}>The library is empty.</p>
             ) : null}
             {shared.length > 0 && sharedVisible.length === 0 ? (
-              <p className={styles.status}>Nothing in the library matches what you are looking for.</p>
+              <p className={styles.status}>Nothing matches.</p>
             ) : null}
             {sharedVisible.length > 0 ? (
               <div className={styles.material}>
@@ -257,7 +256,7 @@ export function GenerateDialog({ open, onClose, studentId, kind, onStarted }: Ge
       </div>
 
       {copy.hasFormat ? (
-        <Field label="Format" help="Typeset homework compiles to a printable PDF with proper maths.">
+        <Field label="Format">
           <div className={styles.formats}>
             {FORMATS.map((option) => (
               <button
@@ -276,7 +275,7 @@ export function GenerateDialog({ open, onClose, studentId, kind, onStarted }: Ge
         </Field>
       ) : null}
 
-      <Field label="Instructions" help="Optional — anything you would tell a colleague doing this for you.">
+      <Field label="Instructions (optional)">
         <Textarea
           value={instructions}
           rows={4}

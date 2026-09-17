@@ -101,7 +101,6 @@ export function AdminNav({ variant }: { variant: "sidebar" | "top" }) {
 
         <div className={styles.footer}>
           <Link to="/account" className={styles.user} onClick={close}>
-            <span className={styles.userEyebrow}>Signed in as</span>
             <span className={styles.userName}>{userDisplayName(user)}</span>
           </Link>
           <div className={styles.footerActions}>

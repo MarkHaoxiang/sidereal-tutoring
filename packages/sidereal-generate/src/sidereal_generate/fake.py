@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 
 from pydantic import BaseModel
 from sidereal_core.canonical import (
@@ -17,9 +18,11 @@ from sidereal_core.models import Document, HomeworkFormat
 
 from sidereal_generate.models import (
     FeedbackOutput,
+    FigureRequest,
     GeneratedQuestion,
     GenerationRequest,
     HomeworkOutput,
+    MarkSchemeExtraction,
     PaperExtraction,
     PlanOutput,
 )
@@ -27,6 +30,14 @@ from sidereal_generate.usage import UsageTally
 
 FAKE_MODEL = "fake"
 FAKE_PREFIX = "[fake]"
+# Pages were sent, so a figure comes back: the crop is of nothing in particular.
+_FAKE_FIGURE = FigureRequest(
+    page=1,
+    bbox=[0.1, 0.1, 0.9, 0.5],
+    caption=f"{FAKE_PREFIX} No figure was read from the source.",
+    question_number="1",
+    part_label=None,
+)
 # Typst reads these as markup; a backslash in front makes each one a character again.
 TYPST_SPECIAL = frozenset("\\`#$*_[]<>@=~+-/'\"")
 
@@ -119,15 +130,16 @@ class FakePaperExtractor:
     async def extract(
         self,
         document: Document,
-        mark_scheme: Document | None = None,
         *,
+        pages: Sequence[bytes] = (),
+        drawn: Sequence[int] = (),
         usage: UsageTally | None = None,
     ) -> PaperExtraction:
         _spend(usage)
-        title = f"{FAKE_PREFIX} {document.title}"
         return PaperExtraction(
+            figures=() if not pages else (_FAKE_FIGURE,),
             paper=CanonicalPaper(
-                title=title,
+                title=f"{FAKE_PREFIX} {document.title}",
                 source=document.title,
                 board="none",
                 year=None,
@@ -159,8 +171,19 @@ class FakePaperExtractor:
                     ),
                 ),
             ),
+        )
+
+    async def extract_mark_scheme(
+        self,
+        document: Document,
+        paper: CanonicalPaper,
+        *,
+        usage: UsageTally | None = None,
+    ) -> MarkSchemeExtraction:
+        _spend(usage)
+        return MarkSchemeExtraction(
             mark_scheme=CanonicalMarkScheme(
-                title=f"{title}: mark scheme",
+                title=f"{paper.title}: mark scheme",
                 questions=(
                     CanonicalMarkSchemeQuestion(
                         number="1",
@@ -171,7 +194,7 @@ class FakePaperExtractor:
                     ),
                     CanonicalMarkSchemeQuestion(number="2", answer="$(d y) / (d x) = 2 x$"),
                 ),
-            ),
+            )
         )
 
     async def repair(
@@ -184,11 +207,21 @@ class FakePaperExtractor:
         _spend(usage)
         return _repaired(extraction)
 
+    async def repair_mark_scheme(
+        self,
+        extraction: MarkSchemeExtraction,
+        diagnostics: str,
+        *,
+        usage: UsageTally | None = None,
+    ) -> MarkSchemeExtraction:
+        _spend(usage)
+        return _repaired(extraction)
 
-def _repaired(extraction: PaperExtraction) -> PaperExtraction:
-    """What the fake `repair` returns: the same paper with `$PQ$`-style names spaced."""
+
+def _repaired[M: BaseModel](extraction: M) -> M:
+    """What a fake repair returns: the same structure with `$PQ$`-style names spaced."""
     fixed = re.sub(r"\$([A-Z])([A-Z])\$", r"$\1 \2$", extraction.model_dump_json())
-    return PaperExtraction.model_validate_json(fixed)
+    return type(extraction).model_validate_json(fixed)
 
 
 def _spend(usage: UsageTally | None) -> None:

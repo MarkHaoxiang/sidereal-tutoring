@@ -7,8 +7,9 @@ dependencies = [
     "sidereal-core",
     "httpx",
     "selectolax",
-    "pypdf",
     "python-docx",
+    "pypdfium2>=5.13.0",
+    "pillow>=12.3.0",
 ]
 
 [tool.uv.sources]

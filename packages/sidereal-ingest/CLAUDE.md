@@ -22,5 +22,29 @@ Sits above sidereal-core. Imports core only.
 - `WebPageIngester` takes a `Fetcher`, never a URL library, so tests inject responses and never touch
   the network.
 - Anything recognised but unreadable raises `IngestError`; a raw `httpx` or `OSError` never escapes.
+- The `Transcriber` protocol is here and the model call is not: an implementation lives in
+  sidereal-generate, and `ScanIngester` is given one.
+- `ScanIngester` takes bytes, not a path: a scan's pages are rasterised and downsized in memory and
+  never reach the disk. At most 20 pages, 150 dpi, 1600px on the long edge, JPEG.
+- `pdf.py` is the only place a PDF is opened, and every constant that shapes one lives there.
+- A PDF's text is rebuilt from per-character loose boxes into rows and columns, so stacked
+  fractions, superscripts and tables keep their arrangement. Never the plain text API.
+- A paper's pages go to a vision call at 110 dpi, at most 40 pages, 1400px on the long edge, JPEG —
+  a scan's 150 dpi / 20 pages / 1600px is a different job and stays its own. A longer PDF is
+  truncated, never refused; `page_count` is how a caller learns it was.
+- `needs_page_images` is the one test of whether a paper is too drawn to read as text: images on
+  at least 20% of its pages.
+- A figure `bbox` is `(x0, y0, x1, y1)` normalised 0-1 from the page's top-left, and is cropped
+  from a 200 dpi render of that one page. A box a model gives is clamped, unswapped and, if it
+  has no area, refused.
+- A scan's pages are `document_pages` rows written in order when the row is filed; processing reads
+  them back by `sort` and transcribes them in that order.
+- `documents.transcription` is `{questions: [...]}` and is written only when the scan names a paper.
+  A notes scan's transcription is the row's `text`, and its `transcription` stays null.
+- `homework.submission_transcription` is `{text, confidence, questions, model, usage}` — the whole
+  transcription in the one column. Transcribing never writes `generated_from`: a student may write
+  their own submission fields and Directus refuses them that one.
+- A scan's `IngestError` sentences are already the tutor's: `process_document` files them as `error`
+  unchanged, where every other source's are rephrased.
 - `.txt` is claimed by both the transcript and upload ingesters. `default_ingesters()` orders transcripts
   first; that order is the tie-break.

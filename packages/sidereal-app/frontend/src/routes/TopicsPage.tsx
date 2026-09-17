@@ -65,7 +65,7 @@ export function TopicsPage() {
       setNewName("");
       setAddingUnder(null);
       setSelectedId(added.id);
-      toast.success(`“${name}” added`);
+      toast.success("Added");
     } catch (error) {
       toast.error(apiError(error));
     }
@@ -91,7 +91,7 @@ export function TopicsPage() {
     setSavingDescription(true);
     try {
       await update.mutateAsync({ id: selected.id, patch: { description: description.trim() || null } });
-      toast.success("Description saved");
+      toast.success("Saved");
     } catch (error) {
       toast.error(apiError(error));
     } finally {
@@ -279,7 +279,7 @@ export function TopicsPage() {
     <div>
       <PageHeader
         title="Topics"
-        subtitle="The tree you tag material, questions and homework with. It is yours to shape — there is no syllabus behind it."
+        subtitle="Tag material, questions and homework."
         actions={
           <Button
             variant="primary"
@@ -294,11 +294,11 @@ export function TopicsPage() {
       />
 
       {isLoading ? <SkeletonRows count={5} variant="line" label="Loading your topics" /> : null}
-      {isError ? <p className={pageStyles.status}>Could not load topics. Try refreshing the page.</p> : null}
+      {isError ? <p className={pageStyles.status}>Could not load topics.</p> : null}
 
       {topics && rows.length === 0 && addingUnder === null ? (
         <EmptyState
-          message="No topics yet. Start with a broad one — Algebra, say — and add what sits under it."
+          message="No topics yet — start with a broad one like Algebra."
           action={
             <Button
               variant="primary"
@@ -330,7 +330,7 @@ export function TopicsPage() {
                 ) : null}
                 <h2 className={styles.detailTitle}>{selected.name}</h2>
 
-                <Field label="Description" help="What this topic covers, in your own words.">
+                <Field label="Description">
                   <Textarea
                     rows={5}
                     value={description}
@@ -348,7 +348,7 @@ export function TopicsPage() {
                       void saveDescription();
                     }}
                   >
-                    Save description
+                    Save
                   </Button>
                 </div>
 
@@ -362,9 +362,7 @@ export function TopicsPage() {
                 </dl>
               </>
             ) : (
-              <p className={pageStyles.status}>
-                Choose a topic to see what it covers and how much is tagged with it.
-              </p>
+              <p className={pageStyles.status}>Choose a topic.</p>
             )}
           </div>
         </div>
@@ -376,7 +374,7 @@ export function TopicsPage() {
           setDeleting(null);
         }}
         title={deleting ? `Delete “${deleting.name}”?` : "Delete this topic?"}
-        message="Anything under it is kept and moves up to the top level. Material, questions and homework tagged with it lose that tag and are otherwise untouched."
+        message="Anything under it moves up to the top level. Material, questions and homework keep everything but this tag."
         confirmLabel="Delete"
         danger
         onConfirm={async () => {
@@ -392,7 +390,7 @@ export function TopicsPage() {
           if (selectedId === deleting.id) {
             setSelectedId(null);
           }
-          toast.success("Topic deleted");
+          toast.success("Deleted");
         }}
       />
     </div>

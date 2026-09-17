@@ -34,11 +34,22 @@ async def test_extract_paper_runs_the_job_to_completion() -> None:
     assert len(fake.rows(Collection.QUESTIONS)) == 2
 
 
+async def test_extract_paper_passes_pages_into_the_job_input() -> None:
+    fake = FakeDirectus()
+    document_id = seed_document(fake)
+
+    # `False` needs no PDF behind the document, unlike `True`: only the plumbing is under test.
+    job = await tools.extract_paper(build_services(fake), document_id, pages=False)
+
+    assert fake.rows(Collection.GENERATION_JOBS)[0]["input"]["pages"] is False
+    assert job.status is JobStatus.SUCCEEDED
+
+
 async def test_render_paper_replaces_the_pdfs_from_the_structure() -> None:
     fake = FakeDirectus()
     typeset = FakeTypeset()
     services = build_services(fake, typeset)
-    job = await tools.extract_paper(services, seed_document(fake))
+    job = await tools.extract_paper(services, seed_document(fake), seed_document(fake))
     assert job.output_id is not None
 
     paper = await tools.render_paper(services, job.output_id)

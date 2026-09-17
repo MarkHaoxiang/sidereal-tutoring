@@ -62,7 +62,6 @@ export function HomeworkDetailPage() {
     <ArtefactDetail
       backTo={backTo}
       backLabel="Homework"
-      eyebrow="Homework"
       title={homework.title ?? "Untitled homework"}
       onRename={async (title) => {
         await update.mutateAsync({ id: homework.id, patch: { title: title || null } });
@@ -70,17 +69,17 @@ export function HomeworkDetailPage() {
       meta={
         <>
           <StatusChip status={homework.status} />
-          <span>Created {formatDateTime(homework.date_created)}</span>
+          <span>{formatDateTime(homework.date_created)}</span>
           {homework.due_on ? <span>Due {formatDate(homework.due_on)}</span> : null}
           {isTypst ? <span>Typeset</span> : null}
         </>
       }
       generatedFrom={homework.generated_from}
       content={homework.content}
-      emptyContent="This homework has no content yet."
+      emptyContent="No content yet."
       onSaveContent={async (content) => {
         await update.mutateAsync({ id: homework.id, patch: { content } });
-        toast.success("Homework saved");
+        toast.success("Saved");
       }}
       {...(isTypst
         ? {
@@ -90,7 +89,7 @@ export function HomeworkDetailPage() {
                 onSave={async (content) => {
                   await update.mutateAsync({ id: homework.id, patch: { content } });
                   await compile.mutateAsync(homework.id);
-                  toast.success("Saved and compiled");
+                  toast.success("Saved");
                 }}
               />
             ),
@@ -102,7 +101,7 @@ export function HomeworkDetailPage() {
               label: next.label,
               run: async () => {
                 await update.mutateAsync({ id: homework.id, patch: { status: next.next } });
-                toast.success(next.label.replace("Mark as", "Marked as"));
+                toast.success(next.done);
               },
             },
           }
@@ -110,9 +109,11 @@ export function HomeworkDetailPage() {
       above={
         <>
           <Submission
+            homeworkId={homework.id}
             submittedAt={homework.submitted_at}
             submission={homework.submission}
             attachmentId={handedInFileId}
+            transcription={homework.submission_transcription}
           />
           {isTypst ? (
             <TypstCard
@@ -141,7 +142,7 @@ export function HomeworkDetailPage() {
         </>
       }
       deleteTitle="Delete this homework?"
-      deleteMessage="The homework and its questions are removed. The material it came from stays as it is."
+      deleteMessage="The homework and its questions are removed. The material it came from stays."
       onDelete={async () => {
         try {
           await remove.mutateAsync(homework.id);
@@ -149,7 +150,7 @@ export function HomeworkDetailPage() {
           toast.error(apiError(error));
           throw error;
         }
-        toast.success("Homework deleted");
+        toast.success("Deleted");
         void navigate(backTo);
       }}
     >

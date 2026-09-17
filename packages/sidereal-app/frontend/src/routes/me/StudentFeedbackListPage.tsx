@@ -18,7 +18,7 @@ export function StudentFeedbackListPage() {
       <h1 className={styles.heading}>Feedback</h1>
 
       {isLoading ? <SkeletonRows count={3} label="Loading your feedback" /> : null}
-      {isError ? <p className={styles.status}>Your feedback could not be loaded. Try again in a moment.</p> : null}
+      {isError ? <p className={styles.status}>Could not load your feedback.</p> : null}
 
       {rows.length > 0 ? (
         <ul className={styles.list}>
@@ -34,7 +34,7 @@ export function StudentFeedbackListPage() {
       ) : null}
 
       {!isLoading && !isError && rows.length === 0 ? (
-        <EmptyState message="No feedback yet. It turns up here after a lesson." />
+        <EmptyState message="Nothing yet — feedback turns up after a lesson." />
       ) : null}
     </div>
   );

@@ -2,15 +2,19 @@ import { Plus } from "lucide-react";
 
 import { Button, Field, Input, Textarea } from "@/components/ui";
 
+import { AnswerField } from "./AnswerField";
+import { BlocksEditor } from "./BlocksEditor";
 import { EditorTools } from "./EditorTools";
 import { emptyPart, emptySubPart, moved } from "./draft";
-import type { PartDraft, QuestionDraft, SubPartDraft } from "./draft";
+import type { PartDraft, PassageDraft, QuestionDraft, SubPartDraft } from "./draft";
 import styles from "./papers.module.css";
 
 export interface QuestionFieldsProps {
   question: QuestionDraft;
   /** What this question is called, for the fields' labels: "question 3". */
   name: string;
+  /** The paper's passages, so a `passage_ref` block is chosen rather than typed. */
+  passages: PassageDraft[];
   onChange: (next: QuestionDraft) => void;
 }
 
@@ -22,18 +26,18 @@ function removeAt<T>(list: T[], index: number): T[] {
   return list.filter((_, position) => position !== index);
 }
 
-function MarksAndLines({
+/** What every node carries below its words: what it is worth, and where the answer goes. */
+function MarksAndAnswer({
   value,
   label,
   onChange,
 }: {
   value: SubPartDraft;
-  /** Names the two inputs for a screen reader: "Question 2 marks". */
   label: string;
   onChange: (next: SubPartDraft) => void;
 }) {
   return (
-    <div className={styles.numbers}>
+    <div className={styles.nodeRow}>
       <Field label="Marks">
         <Input
           type="number"
@@ -46,18 +50,14 @@ function MarksAndLines({
           }}
         />
       </Field>
-      <Field label="Answer lines">
-        <Input
-          type="number"
-          min={0}
-          step={1}
-          value={value.answerLines}
-          aria-label={`${label} answer lines`}
-          onChange={(event) => {
-            onChange({ ...value, answerLines: event.target.value });
-          }}
-        />
-      </Field>
+      <AnswerField
+        answerLines={value.answerLines}
+        answer={value.answer}
+        label={label}
+        onChange={(next) => {
+          onChange({ ...value, ...next });
+        }}
+      />
     </div>
   );
 }
@@ -67,6 +67,7 @@ function SubPartRow({
   index,
   count,
   where,
+  passages,
   onChange,
   onMove,
   onRemove,
@@ -75,6 +76,7 @@ function SubPartRow({
   index: number;
   count: number;
   where: string;
+  passages: PassageDraft[];
   onChange: (next: SubPartDraft) => void;
   onMove: (delta: -1 | 1) => void;
   onRemove: () => void;
@@ -105,7 +107,15 @@ function SubPartRow({
           }}
         />
       </Field>
-      <MarksAndLines value={part} label={name} onChange={onChange} />
+      <BlocksEditor
+        blocks={part.blocks}
+        passages={passages}
+        label={name}
+        onChange={(blocks) => {
+          onChange({ ...part, blocks });
+        }}
+      />
+      <MarksAndAnswer value={part} label={name} onChange={onChange} />
     </div>
   );
 }
@@ -115,6 +125,7 @@ function PartRow({
   index,
   count,
   where,
+  passages,
   onChange,
   onMove,
   onRemove,
@@ -123,6 +134,7 @@ function PartRow({
   index: number;
   count: number;
   where: string;
+  passages: PassageDraft[];
   onChange: (next: PartDraft) => void;
   onMove: (delta: -1 | 1) => void;
   onRemove: () => void;
@@ -153,7 +165,15 @@ function PartRow({
           }}
         />
       </Field>
-      <MarksAndLines
+      <BlocksEditor
+        blocks={part.blocks}
+        passages={passages}
+        label={name}
+        onChange={(blocks) => {
+          onChange({ ...part, blocks });
+        }}
+      />
+      <MarksAndAnswer
         value={part}
         label={name}
         onChange={(next) => {
@@ -170,6 +190,7 @@ function PartRow({
               index={subIndex}
               count={part.parts.length}
               where={name}
+              passages={passages}
               onChange={(next) => {
                 onChange({ ...part, parts: replaceAt(part.parts, subIndex, next) });
               }}
@@ -200,7 +221,7 @@ function PartRow({
 }
 
 /** One question's structure, as the tutor changes it: parts nest one level, `(a)` then `(i)`. */
-export function QuestionFields({ question, name, onChange }: QuestionFieldsProps) {
+export function QuestionFields({ question, name, passages, onChange }: QuestionFieldsProps) {
   return (
     <div className={styles.fields}>
       <div className={styles.numbers}>
@@ -227,17 +248,33 @@ export function QuestionFields({ question, name, onChange }: QuestionFieldsProps
         />
       </Field>
 
-      <MarksAndLines
+      <BlocksEditor
+        blocks={question.blocks}
+        passages={passages}
+        label={name}
+        onChange={(blocks) => {
+          onChange({ ...question, blocks });
+        }}
+      />
+
+      <MarksAndAnswer
         value={{
           key: question.key,
           label: "",
           text: "",
           marks: question.marks,
           answerLines: question.answerLines,
+          answer: question.answer,
+          blocks: question.blocks,
         }}
         label={name}
         onChange={(next) => {
-          onChange({ ...question, marks: next.marks, answerLines: next.answerLines });
+          onChange({
+            ...question,
+            marks: next.marks,
+            answerLines: next.answerLines,
+            answer: next.answer,
+          });
         }}
       />
 
@@ -250,6 +287,7 @@ export function QuestionFields({ question, name, onChange }: QuestionFieldsProps
               index={partIndex}
               count={question.parts.length}
               where={name}
+              passages={passages}
               onChange={(next) => {
                 onChange({ ...question, parts: replaceAt(question.parts, partIndex, next) });
               }}
@@ -277,8 +315,7 @@ export function QuestionFields({ question, name, onChange }: QuestionFieldsProps
       </div>
 
       <p className={styles.hint}>
-        Text here is Typst markup: maths goes between dollar signs, as <code>$x^2 - 5x + 6$</code>,
-        and <code>*bold*</code> and <code>_italic_</code> work too.
+        Typst markup: <code>$x^2$</code> sets maths, <code>*bold*</code>, <code>_italic_</code>
       </p>
     </div>
   );

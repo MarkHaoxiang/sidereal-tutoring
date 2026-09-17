@@ -790,6 +790,52 @@
         }
       }
     },
+    "/api/homework/{homework_id}/transcribe": {
+      "post": {
+        "summary": "Transcribe Homework Submission",
+        "description": "Read the handed-in photo or PDF into `submission_transcription`, and answer with the row.",
+        "operationId": "transcribe_homework_submission_api_homework__homework_id__transcribe_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "homework_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Homework Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Homework"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/papers/{paper_id}/render": {
       "post": {
         "summary": "Render Paper",
@@ -1003,6 +1049,19 @@
         "title": "AdminJob",
         "description": "A generation job as the whole-practice listing shows it."
       },
+      "AnswerKind": {
+        "type": "string",
+        "enum": [
+          "lines",
+          "box",
+          "multiple_choice",
+          "essay",
+          "grid",
+          "table",
+          "none"
+        ],
+        "title": "AnswerKind"
+      },
       "ApiHealth": {
         "properties": {
           "ok": {
@@ -1029,6 +1088,190 @@
           "student"
         ],
         "title": "CallerRole"
+      },
+      "CanonicalAnswer": {
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/AnswerKind"
+          },
+          "lines": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lines"
+          },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/CanonicalAnswerOption"
+            },
+            "type": "array",
+            "title": "Options",
+            "default": []
+          },
+          "height_mm": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height Mm"
+          },
+          "rows": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows"
+          },
+          "cols": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cols"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "type"
+        ],
+        "title": "CanonicalAnswer",
+        "description": "The space a student writes in. `type` decides which of the other fields are read."
+      },
+      "CanonicalAnswerOption": {
+        "properties": {
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "CanonicalAnswerOption"
+      },
+      "CanonicalBlock": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/CanonicalPassageBlock"
+          },
+          {
+            "$ref": "#/components/schemas/CanonicalPassageRefBlock"
+          },
+          {
+            "$ref": "#/components/schemas/CanonicalCodeBlock"
+          },
+          {
+            "$ref": "#/components/schemas/CanonicalTableBlock"
+          },
+          {
+            "$ref": "#/components/schemas/CanonicalFigureBlock"
+          }
+        ]
+      },
+      "CanonicalCodeBlock": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "code",
+            "title": "Type",
+            "default": "code"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "CanonicalCodeBlock"
+      },
+      "CanonicalFigureBlock": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "figure",
+            "title": "Type",
+            "default": "figure"
+          },
+          "asset": {
+            "type": "string",
+            "title": "Asset"
+          },
+          "caption": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Caption"
+          },
+          "width_mm": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width Mm"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "asset"
+        ],
+        "title": "CanonicalFigureBlock",
+        "description": "`asset` names one of the render request's assets, never a path."
       },
       "CanonicalMarkScheme": {
         "properties": {
@@ -1083,6 +1326,14 @@
               }
             ],
             "title": "Notes"
+          },
+          "blocks": {
+            "items": {
+              "$ref": "#/components/schemas/CanonicalBlock"
+            },
+            "type": "array",
+            "title": "Blocks",
+            "default": []
           }
         },
         "additionalProperties": false,
@@ -1128,6 +1379,14 @@
               }
             ],
             "title": "Notes"
+          },
+          "blocks": {
+            "items": {
+              "$ref": "#/components/schemas/CanonicalBlock"
+            },
+            "type": "array",
+            "title": "Blocks",
+            "default": []
           }
         },
         "additionalProperties": false,
@@ -1231,6 +1490,22 @@
             "type": "array",
             "title": "Questions",
             "default": []
+          },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/CanonicalSection"
+            },
+            "type": "array",
+            "title": "Sections",
+            "default": []
+          },
+          "passages": {
+            "items": {
+              "$ref": "#/components/schemas/CanonicalPassage"
+            },
+            "type": "array",
+            "title": "Passages",
+            "default": []
           }
         },
         "additionalProperties": false,
@@ -1272,6 +1547,24 @@
             ],
             "title": "Answer Lines"
           },
+          "answer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CanonicalAnswer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "blocks": {
+            "items": {
+              "$ref": "#/components/schemas/CanonicalBlock"
+            },
+            "type": "array",
+            "title": "Blocks",
+            "default": []
+          },
           "parts": {
             "items": {
               "$ref": "#/components/schemas/CanonicalSubPart"
@@ -1287,7 +1580,90 @@
           "label",
           "text"
         ],
-        "title": "CanonicalPart"
+        "title": "CanonicalPart",
+        "description": "`(a)` then `(i)`: parts nest one level."
+      },
+      "CanonicalPassage": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "text"
+        ],
+        "title": "CanonicalPassage"
+      },
+      "CanonicalPassageBlock": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "passage",
+            "title": "Type",
+            "default": "passage"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "CanonicalPassageBlock"
+      },
+      "CanonicalPassageRefBlock": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "passage_ref",
+            "title": "Type",
+            "default": "passage_ref"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "title": "CanonicalPassageRefBlock",
+        "description": "Points at a `CanonicalPaper.passages` entry, printed once at the start of the paper."
       },
       "CanonicalQuestion": {
         "properties": {
@@ -1335,6 +1711,24 @@
               }
             ],
             "title": "Answer Lines"
+          },
+          "answer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CanonicalAnswer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "blocks": {
+            "items": {
+              "$ref": "#/components/schemas/CanonicalBlock"
+            },
+            "type": "array",
+            "title": "Blocks",
+            "default": []
           }
         },
         "additionalProperties": false,
@@ -1343,6 +1737,55 @@
           "number"
         ],
         "title": "CanonicalQuestion"
+      },
+      "CanonicalSection": {
+        "properties": {
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "instructions": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instructions"
+          },
+          "choose": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Choose"
+          },
+          "questions": {
+            "items": {
+              "$ref": "#/components/schemas/CanonicalQuestion"
+            },
+            "type": "array",
+            "title": "Questions",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "CanonicalSection",
+        "description": "A run of questions under one heading; `choose` is how many the student answers."
       },
       "CanonicalSubPart": {
         "properties": {
@@ -1375,6 +1818,24 @@
               }
             ],
             "title": "Answer Lines"
+          },
+          "answer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CanonicalAnswer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "blocks": {
+            "items": {
+              "$ref": "#/components/schemas/CanonicalBlock"
+            },
+            "type": "array",
+            "title": "Blocks",
+            "default": []
           }
         },
         "additionalProperties": false,
@@ -1383,8 +1844,56 @@
           "label",
           "text"
         ],
-        "title": "CanonicalSubPart",
-        "description": "`(a)` then `(i)`: parts nest one level, so a part of a part holds none of its own."
+        "title": "CanonicalSubPart"
+      },
+      "CanonicalTableBlock": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "table",
+            "title": "Type",
+            "default": "table"
+          },
+          "caption": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Caption"
+          },
+          "header": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Header"
+          },
+          "rows": {
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "title": "Rows",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "CanonicalTableBlock"
       },
       "CanonicalWorksheet": {
         "properties": {
@@ -1591,6 +2100,30 @@
             "type": "object",
             "title": "Metadata"
           },
+          "paper": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paper"
+          },
+          "transcription": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transcription"
+          },
           "id": {
             "type": "string",
             "format": "uuid",
@@ -1659,7 +2192,8 @@
           "transcript",
           "web_page",
           "question_bank",
-          "upload"
+          "upload",
+          "scan"
         ],
         "title": "DocumentKind"
       },
@@ -1717,6 +2251,9 @@
             "$ref": "#/components/schemas/FileSourceRequest"
           },
           {
+            "$ref": "#/components/schemas/ScanSourceRequest"
+          },
+          {
             "$ref": "#/components/schemas/UrlSourceRequest"
           },
           {
@@ -1727,6 +2264,7 @@
           "propertyName": "type",
           "mapping": {
             "file": "#/components/schemas/FileSourceRequest",
+            "scan": "#/components/schemas/ScanSourceRequest",
             "text": "#/components/schemas/TextSourceRequest",
             "url": "#/components/schemas/UrlSourceRequest"
           }
@@ -2069,6 +2607,18 @@
             ],
             "title": "Submission"
           },
+          "submission_transcription": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Transcription"
+          },
           "submitted_at": {
             "anyOf": [
               {
@@ -2299,6 +2849,17 @@
           "format": {
             "$ref": "#/components/schemas/HomeworkFormat",
             "default": "markdown"
+          },
+          "pages": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pages"
           }
         },
         "additionalProperties": false,
@@ -2345,6 +2906,13 @@
             "title": "Output",
             "default": "svg"
           },
+          "assets": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Assets"
+          },
           "kind": {
             "type": "string",
             "const": "mark_scheme",
@@ -2372,6 +2940,13 @@
             ],
             "title": "Output",
             "default": "svg"
+          },
+          "assets": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Assets"
           },
           "kind": {
             "type": "string",
@@ -2610,6 +3185,13 @@
             "title": "Output",
             "default": "svg"
           },
+          "assets": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Assets"
+          },
           "kind": {
             "type": "string",
             "const": "paper",
@@ -2661,6 +3243,13 @@
             "title": "Output",
             "default": "svg"
           },
+          "assets": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Assets"
+          },
           "kind": {
             "type": "string",
             "const": "question",
@@ -2687,6 +3276,44 @@
           "document"
         ],
         "title": "QuestionRenderRequest"
+      },
+      "ScanSourceRequest": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "scan",
+            "title": "Type"
+          },
+          "file_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "File Ids"
+          },
+          "paper_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paper Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "type",
+          "file_ids"
+        ],
+        "title": "ScanSourceRequest",
+        "description": "Handwritten pages, in reading order, and the paper they answer when they answer one."
       },
       "StudentLogin": {
         "properties": {
@@ -3012,6 +3639,13 @@
             ],
             "title": "Output",
             "default": "svg"
+          },
+          "assets": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Assets"
           },
           "kind": {
             "type": "string",

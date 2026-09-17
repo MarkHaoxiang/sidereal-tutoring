@@ -67,10 +67,10 @@ export function SessionDialog({ open, onClose, studentId, session }: SessionDial
     try {
       if (session) {
         await updateSession.mutateAsync({ id: session.id, patch: values });
-        toast.success("Session updated");
+        toast.success("Saved");
       } else {
         await createSession.mutateAsync({ ...values, student: studentId, status: "scheduled" });
-        toast.success("Session scheduled");
+        toast.success("Scheduled");
       }
       onClose();
     } catch (error) {
@@ -132,7 +132,7 @@ export function SessionDialog({ open, onClose, studentId, session }: SessionDial
           }}
         />
       </Field>
-      <Field label="Notes" help="What you plan to cover, or anything to remember.">
+      <Field label="Notes">
         <Textarea
           value={draft.notes}
           onChange={(event) => {

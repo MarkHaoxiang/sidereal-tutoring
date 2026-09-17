@@ -55,7 +55,6 @@ export function StudentsListPage() {
     <div>
       <PageHeader
         title="Students"
-        subtitle="Everyone you are teaching, and when you see them next."
         actions={
           <Button
             variant="primary"
@@ -96,7 +95,7 @@ export function StudentsListPage() {
 
       {students.isLoading ? <SkeletonRows count={4} label="Loading your students" /> : null}
       {students.isError ? (
-        <p className={pageStyles.status}>Could not load students. Try refreshing the page.</p>
+        <p className={pageStyles.status}>Could not load students.</p>
       ) : null}
 
       {students.data && visible.length === 0 ? (
@@ -104,7 +103,7 @@ export function StudentsListPage() {
           message={
             term
               ? `No students match “${search.trim()}”.`
-              : "No students here yet. Add your first one and the rest follows."
+              : "No students yet."
           }
           action={
             term ? null : (
@@ -128,27 +127,19 @@ export function StudentsListPage() {
             return (
               <li key={student.id}>
                 <Link to={`/students/${student.id}/overview`} className={styles.row}>
-                  <span className={styles.top}>
-                    <span className={styles.name}>{student.name}</span>
-                    <StatusChip status={student.status} />
-                  </span>
-                  <span className={styles.detail}>{student.level ?? "No level set"}</span>
-                  {isAdmin ? (
-                    <span className={styles.detail}>
-                      {tutorById.get(relationId(student.tutor) ?? "") ?? "No tutor assigned"}
-                    </span>
-                  ) : null}
-                  {student.subjects && student.subjects.length > 0 ? (
-                    <span className={styles.subjects}>
-                      {student.subjects.map((subject) => (
-                        <span key={subject} className={styles.subject}>
-                          {subject}
-                        </span>
-                      ))}
-                    </span>
-                  ) : null}
-                  <span className={styles.detail}>
-                    {nextSession ? `Next session ${formatDate(nextSession)}` : "No session scheduled"}
+                  <span className={styles.name}>{student.name}</span>
+                  <StatusChip status={student.status} />
+                  <span className={styles.meta}>
+                    {student.level ? <span>{student.level}</span> : null}
+                    {isAdmin ? (
+                      <span>{tutorById.get(relationId(student.tutor) ?? "") ?? "Unassigned"}</span>
+                    ) : null}
+                    {(student.subjects ?? []).map((subject) => (
+                      <span key={subject} className={styles.subject}>
+                        {subject}
+                      </span>
+                    ))}
+                    <span>{nextSession ? `Next ${formatDate(nextSession)}` : "No session"}</span>
                   </span>
                 </Link>
               </li>

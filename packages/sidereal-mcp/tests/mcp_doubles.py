@@ -16,6 +16,8 @@ from sidereal_generate.models import (
     HomeworkOutput,
     PlanOutput,
 )
+from sidereal_ingest.scan import ScanIngester
+from sidereal_ingest.transcribe import FakeTranscriber
 from sidereal_ingest.transcript import TranscriptIngester
 from sidereal_ingest.upload import UploadIngester
 from sidereal_ingest.web import WebPageIngester
@@ -44,12 +46,16 @@ class StubFetcher:
 
 
 def build_services(
-    fake: FakeDirectus, typeset: FakeTypeset | None = None, token: str = DEFAULT_TOKEN
+    fake: FakeDirectus,
+    typeset: FakeTypeset | None = None,
+    token: str = DEFAULT_TOKEN,
+    transcriber: FakeTranscriber | None = None,
 ) -> Services:
     return Services(
         typeset=(typeset or FakeTypeset()).client(),
         directus=fake.client(token),
         ingesters=[TranscriptIngester(), WebPageIngester(StubFetcher()), UploadIngester()],
+        scanner=ScanIngester(transcriber or FakeTranscriber()),
         generators=Generators(
             homework=FakeGenerator(HOMEWORK, model="fake-homework"),
             feedback=FakeGenerator(FEEDBACK),

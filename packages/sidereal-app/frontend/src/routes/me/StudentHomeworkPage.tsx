@@ -27,7 +27,7 @@ export function StudentHomeworkPage() {
             <Spinner /> Loading…
           </p>
         ) : null}
-        {isError ? <p className={styles.status}>This homework could not be loaded.</p> : null}
+        {isError ? <p className={styles.status}>Could not load this homework.</p> : null}
       </div>
     );
   }
@@ -60,7 +60,7 @@ export function StudentHomeworkPage() {
 
       {isTypst && !pdfId && homework.content ? (
         <Card>
-          <p className={styles.quiet}>Your tutor is still preparing the typeset version.</p>
+          <p className={styles.quiet}>Your tutor is still preparing this.</p>
           <pre className={styles.source}>{homework.content}</pre>
         </Card>
       ) : null}

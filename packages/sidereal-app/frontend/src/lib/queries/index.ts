@@ -4,18 +4,20 @@
 //   sessions  useSessions({studentId?,status?,from?,to?,sort?,limit?}) · useSession(id) · useSessionLinks(studentId) · useCreateSession · useUpdateSession · useDeleteSession
 //   material  useDocuments({studentId?,status?,limit?}) · useLibraryDocuments({status?,limit?})
 //             (the student-less rows every tutor shares) · useDocument(id) · useCreateDocument ·
-//             useUploadMaterialFile(file) · useRetryDocument · useDeleteDocument({id,fileId})
+//             useUploadMaterialFile(file) · useUploadScanPages(files) · useRetryDocument ·
+//             useDeleteDocument({id,fileId})
 //   papers    usePapers() (the library's papers) · usePaper(id) · useSavePaper({id,patch}) ·
 //             useSetPaperStatus · useRenderPaper(id) · useWorksheet · useDeletePaper(id)
 //             (it clears the paper's questions rows first)
-//   homework  useHomeworkList({studentId?,status?,limit?}) · useHomework(id) · useGeneratedQuestions(ids) · useUpdateHomework · useDeleteHomework
+//   homework  useHomeworkList({studentId?,status?,limit?}) · useHomework(id) · useGeneratedQuestions(ids) · useUpdateHomework · useTranscribeSubmission(id) · useDeleteHomework
 //   feedback  useFeedbackList({...}) · useFeedback(id) · useUpdateFeedback · useDeleteFeedback
 //   plans     usePlans({...}) · usePlan(id) · useUpdatePlan · useDeletePlan
 //   topics    useTopics() (the whole tree) · useTopicUsage(id) · useCreateTopic ·
 //             useUpdateTopic · useDeleteTopic · useTagDocument · useTagHomework
 //   typeset   usePreviewTypst() (source → SVG pages) · useRenderTypst(body)
 //             (a canonical document → SVG pages or its Typst, cached by a hash of the
-//             body) · useCompileHomework(id)
+//             body) · useRenderAssets(body) (the body with every figure's bytes, null
+//             while they load) · useCompileHomework(id)
 //   jobs      useCreateJob() then useJob(jobId) — it polls until succeeded/failed
 //   logins    the student's sign-in, through the FastAPI app rather than Directus:
 //             useCreateStudentLogin · useResetStudentPassword · useRemoveStudentLogin

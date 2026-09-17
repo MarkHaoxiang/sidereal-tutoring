@@ -30,7 +30,7 @@ export function LoginPage() {
       // Three surfaces, one form: where they land is what /api/me says they are.
       void navigate(homePath(await login(email, password)), { replace: true });
     } catch {
-      setError("Could not sign in. Check the email and password and try again.");
+      setError("Could not sign in. Check the email and password.");
     } finally {
       setIsSubmitting(false);
     }
@@ -48,17 +48,14 @@ export function LoginPage() {
         <div className={styles.brandInner}>
           <Wordmark size="lg" className={styles.wordmark} />
           <p className={styles.tagline}>
-            Of the stars — a quiet study for your students, their material and the work you make from it.
+            Of the stars — a quiet study for your students and their work.
           </p>
         </div>
       </section>
 
       <div className={styles.formSide}>
         <form className={styles.form} onSubmit={handleSubmit}>
-          <div className={styles.intro}>
-            <h1 className={styles.title}>Sign in</h1>
-            <p className={styles.subtitle}>Pick up where you left off.</p>
-          </div>
+          <h1 className={styles.title}>Sign in</h1>
 
           <Field label="Email">
             <Input

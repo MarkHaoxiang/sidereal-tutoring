@@ -25,7 +25,7 @@ export function StudentLogin({ studentId, studentName, userId, email }: StudentL
   const remove = async () => {
     try {
       await removeLogin.mutateAsync(studentId);
-      toast.success(`${studentName} can no longer sign in`);
+      toast.success("Login removed");
     } catch (error) {
       toast.error(apiError(error));
       throw error;
@@ -88,7 +88,6 @@ export function StudentLogin({ studentId, studentName, userId, email }: StudentL
           setDialog(null);
         }}
         studentId={studentId}
-        studentName={studentName}
         mode={dialog ?? "create"}
       />
 
@@ -98,7 +97,7 @@ export function StudentLogin({ studentId, studentName, userId, email }: StudentL
           setConfirmRemove(false);
         }}
         title="Remove this login?"
-        message={`${studentName} will not be able to sign in any more. Everything they have handed in is kept, and you can set up a new login whenever you like.`}
+        message={`${studentName} will not be able to sign in any more. Everything they handed in is kept, and you can set up a new login later.`}
         confirmLabel="Remove login"
         danger
         onConfirm={remove}

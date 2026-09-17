@@ -15,6 +15,7 @@ from sidereal_core.settings import directus_settings
 from sidereal_core.typeset import TypesetClient
 from sidereal_generate.jobs import Generators
 from sidereal_ingest.base import Ingester
+from sidereal_ingest.scan import ScanIngester
 
 from sidereal_app.api.errors import (
     ADMIN_ONLY,
@@ -36,6 +37,11 @@ def get_http_client(request: Request) -> httpx.AsyncClient:
 def get_ingesters(request: Request) -> Sequence[Ingester]:
     """Built once by the lifespan: the web fetcher's rate limit is per process, not per request."""
     return cast("Sequence[Ingester]", request.app.state.ingesters)
+
+
+def get_scanner(request: Request) -> ScanIngester:
+    """Built once by the lifespan: it holds the transcription backend's client."""
+    return cast("ScanIngester", request.app.state.scanner)
 
 
 def get_directus_client(
@@ -109,6 +115,7 @@ CurrentUser = Annotated[DirectusUser, Depends(get_current_user)]
 Tutor = Annotated[Identity, Depends(require_tutor)]
 Admin = Annotated[Identity, Depends(require_admin)]
 IngesterSet = Annotated[Sequence[Ingester], Depends(get_ingesters)]
+Scanner = Annotated[ScanIngester, Depends(get_scanner)]
 Directus = Annotated[DirectusClient, Depends(get_directus_client)]
 GeneratorSet = Annotated[Generators, Depends(get_generators)]
 Typeset = Annotated[TypesetClient, Depends(get_typeset)]

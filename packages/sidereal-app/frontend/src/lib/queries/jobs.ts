@@ -26,6 +26,11 @@ export interface CreateJobInput {
   period_end?: string | null;
   /** Homework only; the app answers 422 for any other kind asked to be Typst. */
   format?: HomeworkFormat;
+  /**
+   * Extracting a paper only, and 422 on any other kind even as `false`: whether the pages are
+   * read as images. Null leaves the choice to the extractor.
+   */
+  pages?: boolean | null;
 }
 
 /** Polls until the job settles; pass `null` while nothing is running. */

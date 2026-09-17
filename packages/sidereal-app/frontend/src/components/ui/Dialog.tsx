@@ -77,7 +77,7 @@ export function Dialog({ open, onClose, title, children, footer, busy = false }:
             className={styles.close}
             onClick={onClose}
             disabled={busy}
-            aria-label="Close this dialog"
+            aria-label="Close"
           >
             <X size={16} aria-hidden="true" />
           </button>

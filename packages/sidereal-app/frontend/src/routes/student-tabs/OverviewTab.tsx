@@ -54,7 +54,7 @@ export function OverviewTab() {
     try {
       await updateStudent.mutateAsync({ id: studentId, patch: { notes: notes.trim() || null } });
       setDraftNotes(null);
-      toast.success("Notes saved");
+      toast.success("Saved");
     } catch (error) {
       toast.error(apiError(error));
     }
@@ -78,13 +78,13 @@ export function OverviewTab() {
             value={notes}
             rows={5}
             aria-label="Notes about this student"
-            placeholder="Anything worth remembering — how they learn, what they are working towards, exam dates."
+            placeholder="How they learn, what they are working towards, exam dates."
             onChange={(event) => {
               setDraftNotes(event.target.value);
             }}
           />
           <div className={styles.notesActions}>
-            {isDirty ? <span className={listStyles.meta}>Unsaved changes</span> : null}
+            {isDirty ? <span className={listStyles.meta}>Unsaved</span> : null}
             <Button
               variant="secondary"
               disabled={!isDirty}
@@ -93,7 +93,7 @@ export function OverviewTab() {
                 void saveNotes();
               }}
             >
-              Save notes
+              Save
             </Button>
           </div>
         </div>
@@ -117,7 +117,7 @@ export function OverviewTab() {
                   void navigate(`/students/${studentId}/sessions`);
                 }}
               >
-                Schedule a session
+                Schedule session
               </Button>
             }
           />
@@ -139,7 +139,7 @@ export function OverviewTab() {
             ))}
           </ul>
         ) : (
-          <EmptyState message="Nothing generated for this student yet. Add material first, then generate homework, feedback or a study plan." />
+          <EmptyState message="Nothing generated yet." />
         )}
       </Card>
     </div>

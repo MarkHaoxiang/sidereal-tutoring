@@ -12,27 +12,25 @@ export function PrintableTab() {
   return (
     <div className={styles.stack}>
       <div className={styles.tabActions}>
-        <Button onClick={makeWorksheet}>Make a worksheet</Button>
+        <Button onClick={makeWorksheet}>Make worksheet</Button>
         <Button loading={rendering} onClick={rerender}>
           Re-render
         </Button>
       </div>
 
       {renderedPdf === null && schemePdf === null ? (
-        <p className={styles.status}>
-          There are no PDFs yet. Re-render to make them from the structure.
-        </p>
+        <p className={styles.status}>No PDFs yet — choose Re-render.</p>
       ) : (
         <div className={styles.pdfs}>
           {renderedPdf ? (
             <div className={styles.pdf}>
-              <p className={styles.pdfLabel}>The paper</p>
+              <p className={styles.pdfLabel}>Paper</p>
               <PdfView fileId={renderedPdf} fallbackName={`${paper.title}.pdf`} />
             </div>
           ) : null}
           {schemePdf ? (
             <div className={styles.pdf}>
-              <p className={styles.pdfLabel}>The mark scheme</p>
+              <p className={styles.pdfLabel}>Mark scheme</p>
               <PdfView fileId={schemePdf} fallbackName={`${paper.title} mark scheme.pdf`} />
             </div>
           ) : null}

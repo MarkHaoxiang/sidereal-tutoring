@@ -9,20 +9,14 @@ import type { SessionLinkCounts, SessionListItem } from "@/lib/queries";
 import { formatDayHeading, formatDuration, formatTime } from "./schedule";
 import styles from "./SessionCard.module.css";
 
+/** What is linked to a session, as counts rather than a sentence. */
 function linkSummary(links: SessionLinkCounts | undefined): string {
-  if (!links || (links.material === 0 && links.artefacts === 0)) {
-    return "Nothing linked yet";
-  }
   const parts: string[] = [];
-  if (links.material > 0) {
-    parts.push(links.material === 1 ? "1 piece of material" : `${String(links.material)} pieces of material`);
+  if (links && links.material > 0) {
+    parts.push(`${String(links.material)} material`);
   }
-  if (links.artefacts > 0) {
-    parts.push(
-      links.artefacts === 1
-        ? "1 homework or feedback item"
-        : `${String(links.artefacts)} homework and feedback items`
-    );
+  if (links && links.artefacts > 0) {
+    parts.push(`${String(links.artefacts)} work`);
   }
   return parts.join(" · ");
 }
@@ -55,7 +49,7 @@ export function SessionCard({ session, links, onEdit }: SessionCardProps) {
             {formatDayHeading(session.scheduled_at)}, {formatTime(session.scheduled_at)}
           </p>
           <p className={styles.meta}>
-            {formatDuration(session.duration_minutes)} · {linkSummary(links)}
+            {[formatDuration(session.duration_minutes), linkSummary(links)].filter(Boolean).join(" · ")}
           </p>
         </div>
         <StatusChip status={session.status} />
@@ -69,7 +63,7 @@ export function SessionCard({ session, links, onEdit }: SessionCardProps) {
             size="sm"
             loading={updateSession.isPending}
             onClick={() => {
-              void setStatus("completed", "Session marked as completed").catch(() => undefined);
+              void setStatus("completed", "Completed").catch(() => undefined);
             }}
           >
             Mark completed
@@ -103,11 +97,11 @@ export function SessionCard({ session, links, onEdit }: SessionCardProps) {
           setConfirmCancel(false);
         }}
         title="Cancel this session?"
-        message="The session stays in the list, marked as cancelled. You can schedule another one at any time."
+        message="It stays in the list, marked as cancelled."
         confirmLabel="Cancel session"
         cancelLabel="Keep it"
         danger
-        onConfirm={() => setStatus("cancelled", "Session cancelled")}
+        onConfirm={() => setStatus("cancelled", "Cancelled")}
       />
     </article>
   );

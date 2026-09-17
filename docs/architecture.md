@@ -61,7 +61,7 @@ models, and the frontend's `src/lib/schema.ts`.
 | --- | --- | --- |
 | `students` | People being tutored | `status`: active, paused, archived |
 | `sessions` | Tutoring sessions | `status`: scheduled, completed, cancelled |
-| `documents` | Ingested source material, reduced to plain text; with no student it is the shared agency library | `kind`: transcript, web_page, question_bank, upload · `status`: pending, processing, ready, failed |
+| `documents` | Ingested source material, reduced to plain text; with no student it is the shared agency library | `kind`: transcript, web_page, question_bank, upload, scan · `status`: pending, processing, ready, failed |
 | `papers` | Exam papers from any source, normalised into one canonical structure that Typst templates render | `status`: draft, reviewed, archived |
 | `questions` | Individual questions, extracted or written; shared like documents when no student is behind them | — |
 | `topics` | A free tree of topics the tutor builds | — |
@@ -71,6 +71,7 @@ models, and the frontend's `src/lib/schema.ts`.
 | `generation_jobs` | LLM generation runs and their outcome | `kind`: homework, feedback, plan, paper_extract · `status`: queued, running, succeeded, failed |
 | `homework_questions` | Junction, `homework` ↔ `questions` | — |
 | `document_topics` | Junction, `documents` ↔ `topics` | — |
+| `document_pages` | Junction, `documents` ↔ `directus_files`: the pages of a scan, in `sort` order | — |
 | `question_topics` | Junction, `questions` ↔ `topics` | — |
 | `homework_topics` | Junction, `homework` ↔ `topics` | — |
 

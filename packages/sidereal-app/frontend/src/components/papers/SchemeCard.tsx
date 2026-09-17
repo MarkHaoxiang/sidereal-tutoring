@@ -8,8 +8,8 @@ import type { RenderBody } from "@/lib/queries";
 import { EditorTools } from "./EditorTools";
 import { FragmentView } from "./FragmentView";
 import { SchemeFields } from "./SchemeFields";
-import { canonicalQuestion, canonicalSchemeQuestion, withoutAnswerLines } from "./draft";
-import type { QuestionDraft, SchemeQuestionDraft } from "./draft";
+import { canonicalSchemeQuestion, fragmentQuestion, withoutAnswerSpace } from "./draft";
+import type { PassageDraft, QuestionDraft, SchemeQuestionDraft } from "./draft";
 import styles from "./papers.module.css";
 
 const SETTLE_MS = 600;
@@ -18,6 +18,8 @@ export interface SchemeCardProps {
   question: SchemeQuestionDraft;
   /** The paper's question of the same number, so the answers are set under what they answer. */
   asked: QuestionDraft | null;
+  /** The paper's passages, so a question that points at one is set with it. */
+  passages: PassageDraft[];
   index: number;
   count: number;
   onChange: (next: SchemeQuestionDraft) => void;
@@ -29,6 +31,7 @@ export interface SchemeCardProps {
 export function SchemeCard({
   question,
   asked,
+  passages,
   index,
   count,
   onChange,
@@ -39,11 +42,11 @@ export function SchemeCard({
 
   const name = `mark scheme ${question.number || String(index + 1)}`;
   const scheme = canonicalSchemeQuestion(question, index);
-  const answered = asked === null ? null : canonicalQuestion(asked, index);
+  const answered = asked === null ? null : fragmentQuestion(asked, index, passages);
   const document =
     asked === null
       ? { number: question.number.trim() }
-      : answered && withoutAnswerLines(answered);
+      : answered && withoutAnswerSpace(answered);
   const body: RenderBody | null =
     scheme === null || document === null
       ? null
@@ -60,10 +63,10 @@ export function SchemeCard({
         </h3>
         <p className={styles.questionMeta}>
           {asked === null
-            ? "No question on the paper has this number"
+            ? "No question with this number"
             : parts > 0
               ? `${String(parts)} ${parts === 1 ? "part" : "parts"}`
-              : "One answer for the whole question"}
+              : "Whole question"}
         </p>
         <div className={styles.questionTools}>
           <Button
@@ -99,7 +102,7 @@ export function SchemeCard({
         <FragmentView
           body={settled}
           label={name}
-          empty="This entry needs a number before it can be set."
+          empty="Needs a number."
         />
         {editing ? <SchemeFields question={question} name={name} onChange={onChange} /> : null}
       </div>

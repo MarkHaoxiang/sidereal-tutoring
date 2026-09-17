@@ -9,8 +9,7 @@ import type { TutorAccount } from "@/lib/queries";
 
 import styles from "./admin.module.css";
 
-const PASSWORD_HELP =
-  "Copy this password now and give it to the tutor — it is not shown again. You can set a new one whenever you need to.";
+const PASSWORD_HELP = "Copy it now — it is not shown again.";
 
 export interface TutorDialogProps {
   open: boolean;
@@ -55,24 +54,24 @@ export function TutorDialog({ open, onClose, mode, tutor }: TutorDialogProps) {
       return;
     }
     if (password.length < 8) {
-      setPasswordError("A password needs at least 8 characters. Generate takes care of it for you.");
+      setPasswordError("At least 8 characters — or use Generate.");
       return;
     }
     try {
       if (creating) {
-        const added = await createTutor.mutateAsync({
+        await createTutor.mutateAsync({
           email: address,
           password,
           first_name: firstName.trim() || null,
           last_name: lastName.trim() || null,
         });
-        toast.success(`${added.email ?? "The tutor"} can sign in now`);
+        toast.success("Tutor added");
       } else {
         if (!tutor) {
           return;
         }
         await resetPassword.mutateAsync({ userId: tutor.user_id, password });
-        toast.success("New password saved");
+        toast.success("Saved");
       }
       onClose();
     } catch (error) {

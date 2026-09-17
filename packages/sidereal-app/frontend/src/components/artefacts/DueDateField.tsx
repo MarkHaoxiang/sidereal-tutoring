@@ -24,7 +24,7 @@ export function DueDateField({ value, onSave }: DueDateFieldProps) {
     setSaving(true);
     try {
       await onSave(next || null);
-      toast.success(next ? "Due date saved" : "Due date cleared");
+      toast.success(next ? "Saved" : "Cleared");
     } catch (error) {
       toast.error(apiError(error));
       setDue(value ?? "");
@@ -35,7 +35,7 @@ export function DueDateField({ value, onSave }: DueDateFieldProps) {
 
   return (
     <div className={styles.section}>
-      <Field label="Due date" help="When the student should hand this in.">
+      <Field label="Due date">
         <Input
           type="date"
           value={due}

@@ -81,3 +81,8 @@ enable_error_code = [
     "possibly-undefined",
 ]
 mypy_path = "packages/sidereal-core/src:packages/sidereal-ingest/src:packages/sidereal-generate/src:packages/sidereal-mcp/src:packages/sidereal-app/src"
+
+# The PDF rasteriser ships no type information; nothing of its own reaches a signature here.
+[[tool.mypy.overrides]]
+module = ["pypdfium2.*"]
+ignore_missing_imports = true

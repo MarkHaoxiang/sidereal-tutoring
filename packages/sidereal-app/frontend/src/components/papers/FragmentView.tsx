@@ -1,4 +1,4 @@
-import { useRenderTypst } from "@/lib/queries";
+import { useRenderAssets, useRenderTypst } from "@/lib/queries";
 import type { RenderBody } from "@/lib/queries";
 import { typstProblem } from "@/lib/typeset";
 
@@ -14,7 +14,7 @@ export interface FragmentViewProps {
 
 /** A canonical fragment as the typeset service sets it, on the paper it will be printed on. */
 export function FragmentView({ body, label, empty }: FragmentViewProps) {
-  const rendered = useRenderTypst(body);
+  const rendered = useRenderTypst(useRenderAssets(body));
   const pages = rendered.data?.pages ?? [];
   const problem = rendered.error === null ? null : typstProblem(rendered.error);
 

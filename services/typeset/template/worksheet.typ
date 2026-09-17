@@ -17,6 +17,8 @@
   if due != none and due != "" { meta.push("Due: " + due) }
 
   block(width: 100%, below: 1.3em, {
+    set par(justify: false)
+    set text(hyphenate: false)
     text(size: 16pt, weight: "bold", title)
     v(0.35em)
     if meta.len() > 0 {

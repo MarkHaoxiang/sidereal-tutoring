@@ -36,6 +36,8 @@ Bottom layer. Imports no other workspace package.
   at `PROBE_TIMEOUT`.
 - A listing never asks per row: ids are gathered and looked up with one `_in` query, and counts come
   from Directus's own aggregate.
+- A scan's pages are `document_pages` rows carrying a `sort`; `documents.file` stays the single
+  uploaded file, and a scan does not set it.
 - Files are Directus's own collection, not `/items`: the row comes from `/files/{id}` and the bytes
   from `/assets/{id}`. `download_file` names the bytes with the row's `filename_download`, never
   with a name parsed out of a response header.
@@ -48,11 +50,20 @@ Bottom layer. Imports no other workspace package.
 - The canonical structures mirror `services/typeset/src/document.rs` — same field names, same
   nesting, unknown fields forbidden on both sides. A name that drifts is a 422 on the first
   render, never a dropped value.
-- Parts nest one level, so `CanonicalSubPart` is its own model and no canonical schema is
-  recursive: a strict tool schema cannot be.
+- Parts nest one level because `CanonicalSubPart` is its own model, and no canonical schema refers
+  to itself: strict structured output refuses a circular `$def`.
 - Optional canonical fields carry defaults, so a structure a tutor edited by hand still reads.
-  `answer_lines` is capped at the renderer's own limit.
-- `render` sends the structure and never Typst: the markup is the service's to write.
+- Every renderer extent is a module constant here and is checked at construction: answer lines,
+  height, options, grid, table, figure width, and a section's `choose`.
+- A node carries `answer` or the deprecated `answer_lines`, never both.
+- `CanonicalBlock` is a plain union, never `Field(discriminator=...)`: a discriminated union is
+  `oneOf` in JSON schema and a strict tool schema takes only `anyOf`. Each block's `type` literal
+  is what picks the member.
+- A canonical model validates one node. Whether a `passage_ref` id is in the paper and whether a
+  `figure`'s asset was sent are the service's checks, and stay there.
+- `render` sends the structure and never Typst: the markup is the service's to write. A figure's
+  bytes go as `assets=`, base64 on the wire, under the name the block asked for; over
+  `MAX_ASSET_BYTES` or `MAX_ASSETS_BYTES` is refused here rather than as a 413 there.
 - `FakeDirectus.admin` decides what `/users/me` says about the caller's policies; it serves
   `/server/info`, `/license` and `aggregate[count]` the way Directus does.
 - `FakeTypeset` compiles nothing. Source — or a rendered document — carrying `FAIL_MARKER` is its

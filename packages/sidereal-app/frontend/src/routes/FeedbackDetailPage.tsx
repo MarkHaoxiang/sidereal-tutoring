@@ -42,20 +42,19 @@ export function FeedbackDetailPage() {
     <ArtefactDetail
       backTo={backTo}
       backLabel="Feedback"
-      eyebrow="Feedback"
       title={`Feedback for ${feedback.student?.name ?? "this student"}`}
       meta={
         <>
           <StatusChip status={feedback.status} />
-          <span>Written {formatDateTime(feedback.date_created)}</span>
+          <span>{formatDateTime(feedback.date_created)}</span>
         </>
       }
       generatedFrom={feedback.generated_from}
       content={feedback.content}
-      emptyContent="This feedback has no content yet."
+      emptyContent="No content yet."
       onSaveContent={async (content) => {
         await update.mutateAsync({ id: feedback.id, patch: { content } });
-        toast.success("Feedback saved");
+        toast.success("Saved");
       }}
       {...(next
         ? {
@@ -63,13 +62,13 @@ export function FeedbackDetailPage() {
               label: next.label,
               run: async () => {
                 await update.mutateAsync({ id: feedback.id, patch: { status: next.next } });
-                toast.success("Marked as sent");
+                toast.success(next.done);
               },
             },
           }
         : {})}
       deleteTitle="Delete this feedback?"
-      deleteMessage="The feedback is removed. The material it came from stays as it is."
+      deleteMessage="The feedback is removed. The material it came from stays."
       onDelete={async () => {
         try {
           await remove.mutateAsync(feedback.id);
@@ -77,7 +76,7 @@ export function FeedbackDetailPage() {
           toast.error(apiError(error));
           throw error;
         }
-        toast.success("Feedback deleted");
+        toast.success("Deleted");
         void navigate(backTo);
       }}
     />

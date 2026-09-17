@@ -24,7 +24,7 @@ export function TopicsField({ topics, onSave, editable = true }: TopicsFieldProp
     setSaving(true);
     try {
       await onSave(draft);
-      toast.success("Topics saved");
+      toast.success("Saved");
       setEditing(false);
     } catch (error) {
       toast.error(apiError(error));
@@ -75,7 +75,7 @@ export function TopicsField({ topics, onSave, editable = true }: TopicsFieldProp
           </div>
         </>
       ) : (
-        <TopicChips topics={topics} empty="Not tagged with any topic yet." />
+        <TopicChips topics={topics} empty="No topics." />
       )}
     </div>
   );

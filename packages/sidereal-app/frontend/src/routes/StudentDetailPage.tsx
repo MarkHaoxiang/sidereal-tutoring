@@ -62,7 +62,7 @@ export function StudentDetailPage() {
   const handOver = async (tutor: string | null) => {
     try {
       await reassign.mutateAsync({ id, tutor });
-      toast.success(tutor ? "Student handed over" : "Student has no tutor now");
+      toast.success(tutor ? "Tutor changed" : "Tutor removed");
     } catch (error) {
       toast.error(apiError(error));
     }
@@ -71,7 +71,7 @@ export function StudentDetailPage() {
   const toggleArchive = async () => {
     try {
       await updateStudent.mutateAsync({ id, patch: { status: isArchived ? "active" : "archived" } });
-      toast.success(isArchived ? `${student?.name ?? "Student"} is active again` : `${student?.name ?? "Student"} archived`);
+      toast.success(isArchived ? "Unarchived" : "Archived");
     } catch (error) {
       toast.error(apiError(error));
       throw error;
@@ -89,8 +89,7 @@ export function StudentDetailPage() {
 
       {student ? (
         <PageHeader
-          back={{ to: "/students", label: "All students" }}
-          eyebrow="Student"
+          back={{ to: "/students", label: "Students" }}
           title={student.name}
           actions={
             <>
@@ -114,7 +113,7 @@ export function StudentDetailPage() {
           meta={
             <>
               <StatusChip status={student.status} />
-              <span>{student.level ?? "No level set"}</span>
+              {student.level ? <span>{student.level}</span> : null}
               {(student.subjects ?? []).map((subject) => (
                 <span key={subject} className={styles.subject}>
                   {subject}
@@ -177,8 +176,8 @@ export function StudentDetailPage() {
         title={isArchived ? "Bring this student back?" : "Archive this student?"}
         message={
           isArchived
-            ? "They will show up in your active list again. Nothing else changes."
-            : "They drop out of your active list. Their sessions, material and work are all kept, and you can bring them back at any time."
+            ? "They return to your active list."
+            : "They leave your active list. Sessions, material and work are all kept, and you can bring them back at any time."
         }
         confirmLabel={isArchived ? "Unarchive" : "Archive"}
         danger={!isArchived}

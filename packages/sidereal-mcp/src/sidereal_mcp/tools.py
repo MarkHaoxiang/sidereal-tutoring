@@ -30,7 +30,14 @@ from sidereal_generate.jobs import JobInput, run_job, start_job
 from sidereal_generate.papers import WorksheetResult, paper_worksheet, rerender_paper
 from sidereal_generate.settings import generate_settings
 from sidereal_generate.typst import recompile_homework
-from sidereal_ingest.documents import PathSource, UrlSource, create_document, process_document
+from sidereal_ingest import submissions
+from sidereal_ingest.documents import (
+    PathSource,
+    ScanSource,
+    UrlSource,
+    create_document,
+    process_document,
+)
 from sidereal_ingest.web import SCHEMES
 
 from sidereal_mcp.services import Services
@@ -110,6 +117,37 @@ async def ingest_source(
     return await process_document(services.directus, services.ingesters, document.id)
 
 
+async def scan_pages(
+    services: Services,
+    file_ids: Sequence[UUID],
+    paper_id: UUID | None = None,
+    student_id: UUID | None = None,
+    session_id: UUID | None = None,
+    title: str | None = None,
+) -> Document:
+    """Transcribe uploaded handwritten pages into a `documents` row, read to completion.
+
+    `paper_id` is the paper the pages answer: the working then comes back question by
+    question in `transcription`. Pages that could not be read are a `failed` row.
+    """
+    if student_id is not None:
+        await visible_student(services.directus, student_id)
+    document = await create_document(
+        services.directus,
+        ScanSource(tuple(file_ids), paper_id),
+        title=title,
+        student=student_id,
+        session=session_id,
+    )
+    return await process_document(
+        services.directus, services.ingesters, document.id, scanner=services.scanner
+    )
+
+
+async def transcribe_submission(services: Services, homework_id: UUID) -> Homework:
+    return await submissions.transcribe_submission(services.directus, services.scanner, homework_id)
+
+
 async def generate_homework(
     services: Services,
     student_id: UUID,
@@ -130,11 +168,16 @@ async def generate_homework(
 
 
 async def extract_paper(
-    services: Services, document_id: UUID, mark_scheme_id: UUID | None = None
+    services: Services,
+    document_id: UUID,
+    mark_scheme_id: UUID | None = None,
+    pages: bool | None = None,
 ) -> GenerationJob:
     """Read a ready document into a `papers` row, its PDFs and its `questions` rows."""
     documents = (document_id,) if mark_scheme_id is None else (document_id, mark_scheme_id)
-    return await _generate(services, GenerationKind.PAPER_EXTRACT, JobInput(documents=documents))
+    return await _generate(
+        services, GenerationKind.PAPER_EXTRACT, JobInput(documents=documents, pages=pages)
+    )
 
 
 async def render_paper(services: Services, paper_id: UUID) -> Paper:

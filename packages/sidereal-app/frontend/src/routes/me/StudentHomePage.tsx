@@ -28,7 +28,7 @@ function Section({ title, query, empty, children }: SectionProps) {
       {query.isLoading ? (
         <SkeletonRows count={2} label={`Loading ${title.toLowerCase()}`} />
       ) : query.isError ? (
-        <p className={styles.status}>This could not be loaded. Try again in a moment.</p>
+        <p className={styles.status}>Could not load this.</p>
       ) : (
         (children ?? <p className={styles.quiet}>{empty}</p>)
       )}
@@ -58,7 +58,6 @@ export function StudentHomePage() {
     <div className={styles.stack}>
       <header className={styles.note}>
         <h1 className={styles.greeting}>{greetingName ? `Hello, ${greetingName}` : "Hello"}</h1>
-        <p className={styles.noteLine}>Here is where your work, your feedback and your next lesson live.</p>
       </header>
 
       <Section title="Due soon" query={homework} empty="Nothing due right now — nice.">
@@ -73,7 +72,7 @@ export function StudentHomePage() {
         ) : null}
       </Section>
 
-      <Section title="New feedback" query={feedback} empty="No feedback yet. It turns up here after a lesson.">
+      <Section title="New feedback" query={feedback} empty="Nothing yet — feedback turns up after a lesson.">
         {recentFeedback.length > 0 ? (
           <ul className={styles.list}>
             {recentFeedback.map((row) => (
@@ -102,7 +101,7 @@ export function StudentHomePage() {
       <Section
         title="Your study plan"
         query={plans}
-        empty="No study plan yet. Your tutor will share one when it is ready."
+        empty="No study plan yet."
       >
         {activePlan ? (
           <p className={styles.line}>

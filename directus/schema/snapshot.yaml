@@ -26,6 +26,32 @@ collections:
       translations: null
       unarchive_value: null
       versioning: false
+  - collection: document_pages
+    meta:
+      accountability: all
+      archive_app_filter: true
+      archive_field: null
+      archive_value: null
+      autosave_revision_interval: null
+      collapse: open
+      collection: document_pages
+      color: null
+      display_template: null
+      group: library
+      hidden: true
+      icon: link
+      item_duplication_fields: null
+      note: 'Junction: documents <-> directus_files.'
+      preview_url: null
+      singleton: false
+      sort: null
+      sort_field: sort
+      status: active
+      translations: null
+      unarchive_value: null
+      versioning: false
+    schema:
+      name: document_pages
   - collection: document_topics
     meta:
       accountability: all
@@ -568,6 +594,31 @@ fields:
       validation: null
       validation_message: null
       width: full
+  - collection: directus_files
+    field: document_page
+    type: alias
+    meta:
+      collection: directus_files
+      conditions: null
+      display: null
+      display_options: null
+      field: document_page
+      group: null
+      hidden: true
+      interface: list-o2m
+      note: null
+      options:
+        template: '{{document.title}}'
+      readonly: false
+      required: false
+      searchable: true
+      sort: 6
+      special:
+        - o2m
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
   - collection: directus_users
     field: student
     type: alias
@@ -593,6 +644,339 @@ fields:
       validation: null
       validation_message: null
       width: full
+  - collection: document_pages
+    field: id
+    type: uuid
+    meta:
+      collection: document_pages
+      conditions: null
+      display: null
+      display_options: null
+      field: id
+      group: null
+      hidden: true
+      interface: input
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 1
+      special:
+        - uuid
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: id
+      table: document_pages
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: true
+      is_indexed: false
+      is_primary_key: true
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: document_pages
+    field: document
+    type: uuid
+    meta:
+      collection: document_pages
+      conditions: null
+      display: related-values
+      display_options:
+        template: '{{title}}'
+      field: document
+      group: null
+      hidden: false
+      interface: select-dropdown-m2o
+      note: null
+      options:
+        template: '{{title}}'
+      readonly: false
+      required: true
+      searchable: true
+      sort: 2
+      special:
+        - m2o
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: document
+      table: document_pages
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: documents
+      foreign_key_column: id
+  - collection: document_pages
+    field: file
+    type: uuid
+    meta:
+      collection: document_pages
+      conditions: null
+      display: file
+      display_options: null
+      field: file
+      group: null
+      hidden: false
+      interface: file
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 3
+      special:
+        - file
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: file
+      table: document_pages
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: directus_files
+      foreign_key_column: id
+  - collection: document_pages
+    field: sort
+    type: integer
+    meta:
+      collection: document_pages
+      conditions: null
+      display: null
+      display_options: null
+      field: sort
+      group: null
+      hidden: true
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 4
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: sort
+      table: document_pages
+      data_type: integer
+      default_value: null
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: document_pages
+    field: user_created
+    type: uuid
+    meta:
+      collection: document_pages
+      conditions: null
+      display: user
+      display_options: null
+      field: user_created
+      group: null
+      hidden: true
+      interface: select-dropdown-m2o
+      note: null
+      options:
+        template: '{{avatar.$thumbnail}} {{first_name}} {{last_name}}'
+      readonly: true
+      required: false
+      searchable: true
+      sort: 5
+      special:
+        - user-created
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: user_created
+      table: document_pages
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: directus_users
+      foreign_key_column: id
+  - collection: document_pages
+    field: date_created
+    type: timestamp
+    meta:
+      collection: document_pages
+      conditions: null
+      display: datetime
+      display_options:
+        relative: true
+      field: date_created
+      group: null
+      hidden: true
+      interface: datetime
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 6
+      special:
+        - date-created
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: date_created
+      table: document_pages
+      data_type: timestamp with time zone
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: document_pages
+    field: user_updated
+    type: uuid
+    meta:
+      collection: document_pages
+      conditions: null
+      display: user
+      display_options: null
+      field: user_updated
+      group: null
+      hidden: true
+      interface: select-dropdown-m2o
+      note: null
+      options:
+        template: '{{avatar.$thumbnail}} {{first_name}} {{last_name}}'
+      readonly: true
+      required: false
+      searchable: true
+      sort: 7
+      special:
+        - user-updated
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: user_updated
+      table: document_pages
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: directus_users
+      foreign_key_column: id
+  - collection: document_pages
+    field: date_updated
+    type: timestamp
+    meta:
+      collection: document_pages
+      conditions: null
+      display: datetime
+      display_options:
+        relative: true
+      field: date_updated
+      group: null
+      hidden: true
+      interface: datetime
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 8
+      special:
+        - date-updated
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: date_updated
+      table: document_pages
+      data_type: timestamp with time zone
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
   - collection: document_topics
     field: id
     type: uuid
@@ -1033,6 +1417,8 @@ fields:
             value: question_bank
           - text: Upload
             value: upload
+          - text: Scan
+            value: scan
       readonly: false
       required: false
       searchable: true
@@ -1587,6 +1973,116 @@ fields:
       sort: 100
       special:
         - m2m
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+  - collection: documents
+    field: paper
+    type: uuid
+    meta:
+      collection: documents
+      conditions: null
+      display: related-values
+      display_options:
+        template: '{{title}}'
+      field: paper
+      group: null
+      hidden: false
+      interface: select-dropdown-m2o
+      note: 'For a solutions scan: the paper the answers are to.'
+      options:
+        template: '{{title}}'
+      readonly: false
+      required: false
+      searchable: true
+      sort: 16
+      special:
+        - m2o
+      translations: null
+      validation: null
+      validation_message: null
+      width: half
+    schema:
+      name: paper
+      table: documents
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: papers
+      foreign_key_column: id
+  - collection: documents
+    field: transcription
+    type: json
+    meta:
+      collection: documents
+      conditions: null
+      display: null
+      display_options: null
+      field: transcription
+      group: null
+      hidden: false
+      interface: input-code
+      note: Per-question transcription of a solutions scan.
+      options:
+        language: json
+      readonly: false
+      required: false
+      searchable: true
+      sort: 17
+      special:
+        - cast-json
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: transcription
+      table: documents
+      data_type: json
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: documents
+    field: pages
+    type: alias
+    meta:
+      collection: documents
+      conditions: null
+      display: null
+      display_options: null
+      field: pages
+      group: null
+      hidden: false
+      interface: files
+      note: null
+      options:
+        template: '{{file.$thumbnail}}'
+      readonly: false
+      required: false
+      searchable: true
+      sort: 99
+      special:
+        - files
       translations: null
       validation: null
       validation_message: null
@@ -3373,6 +3869,48 @@ fields:
       has_auto_increment: false
       foreign_key_table: directus_files
       foreign_key_column: id
+  - collection: homework
+    field: submission_transcription
+    type: json
+    meta:
+      collection: homework
+      conditions: null
+      display: null
+      display_options: null
+      field: submission_transcription
+      group: null
+      hidden: false
+      interface: input-code
+      note: Transcription of the handed-in file.
+      options:
+        language: json
+      readonly: false
+      required: false
+      searchable: true
+      sort: 19
+      special:
+        - cast-json
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: submission_transcription
+      table: homework
+      data_type: json
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
   - collection: homework_questions
     field: id
     type: uuid
@@ -7852,6 +8390,90 @@ systemFields:
     schema:
       is_indexed: true
 relations:
+  - collection: document_pages
+    field: document
+    related_collection: documents
+    meta:
+      junction_field: file
+      many_collection: document_pages
+      many_field: document
+      one_allowed_collections: null
+      one_collection: documents
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: pages
+      sort_field: sort
+    schema:
+      table: document_pages
+      column: document
+      foreign_key_table: documents
+      foreign_key_column: id
+      constraint_name: document_pages_document_foreign
+      on_update: NO ACTION
+      on_delete: CASCADE
+  - collection: document_pages
+    field: file
+    related_collection: directus_files
+    meta:
+      junction_field: null
+      many_collection: document_pages
+      many_field: file
+      one_allowed_collections: null
+      one_collection: directus_files
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: document_page
+      sort_field: null
+    schema:
+      table: document_pages
+      column: file
+      foreign_key_table: directus_files
+      foreign_key_column: id
+      constraint_name: document_pages_file_foreign
+      on_update: NO ACTION
+      on_delete: CASCADE
+  - collection: document_pages
+    field: user_created
+    related_collection: directus_users
+    meta:
+      junction_field: null
+      many_collection: document_pages
+      many_field: user_created
+      one_allowed_collections: null
+      one_collection: directus_users
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: null
+      sort_field: null
+    schema:
+      table: document_pages
+      column: user_created
+      foreign_key_table: directus_users
+      foreign_key_column: id
+      constraint_name: document_pages_user_created_foreign
+      on_update: NO ACTION
+      on_delete: SET NULL
+  - collection: document_pages
+    field: user_updated
+    related_collection: directus_users
+    meta:
+      junction_field: null
+      many_collection: document_pages
+      many_field: user_updated
+      one_allowed_collections: null
+      one_collection: directus_users
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: null
+      sort_field: null
+    schema:
+      table: document_pages
+      column: user_updated
+      foreign_key_table: directus_users
+      foreign_key_column: id
+      constraint_name: document_pages_user_updated_foreign
+      on_update: NO ACTION
+      on_delete: SET NULL
   - collection: document_topics
     field: document
     related_collection: documents
@@ -8039,6 +8661,27 @@ relations:
       foreign_key_table: directus_files
       foreign_key_column: id
       constraint_name: documents_file_foreign
+      on_update: NO ACTION
+      on_delete: SET NULL
+  - collection: documents
+    field: paper
+    related_collection: papers
+    meta:
+      junction_field: null
+      many_collection: documents
+      many_field: paper
+      one_allowed_collections: null
+      one_collection: papers
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: null
+      sort_field: null
+    schema:
+      table: documents
+      column: paper
+      foreign_key_table: papers
+      foreign_key_column: id
+      constraint_name: documents_paper_foreign
       on_update: NO ACTION
       on_delete: SET NULL
   - collection: feedback

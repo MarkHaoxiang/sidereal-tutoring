@@ -17,7 +17,7 @@ from sidereal_core.canonical import (
 )
 from sidereal_core.models import HomeworkFormat
 from sidereal_core.tutors import TutorStatus
-from sidereal_ingest.documents import FileSource, TextSource, UrlSource
+from sidereal_ingest.documents import FileSource, ScanSource, TextSource, UrlSource
 from sidereal_ingest.web import SCHEMES
 
 
@@ -35,6 +35,7 @@ class JobRequest(BaseModel):
     period_start: date | None = None
     period_end: date | None = None
     format: HomeworkFormat = HomeworkFormat.MARKDOWN
+    pages: bool | None = None
 
 
 class WorksheetRequest(BaseModel):
@@ -62,6 +63,7 @@ class RenderBase(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     output: Literal[RenderOutput.SVG, RenderOutput.SOURCE] = RenderOutput.SVG
+    assets: dict[str, str] = Field(default_factory=dict)
 
 
 class PaperRenderRequest(RenderBase):
@@ -162,6 +164,19 @@ class UrlSourceRequest(BaseModel):
         return UrlSource(self.url)
 
 
+class ScanSourceRequest(BaseModel):
+    """Handwritten pages, in reading order, and the paper they answer when they answer one."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["scan"]
+    file_ids: list[UUID] = Field(min_length=1)
+    paper_id: UUID | None = None
+
+    def to_source(self) -> ScanSource:
+        return ScanSource(tuple(self.file_ids), self.paper_id)
+
+
 class TextSourceRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -173,7 +188,8 @@ class TextSourceRequest(BaseModel):
 
 
 type DocumentSourceRequest = Annotated[
-    FileSourceRequest | UrlSourceRequest | TextSourceRequest, Field(discriminator="type")
+    FileSourceRequest | ScanSourceRequest | UrlSourceRequest | TextSourceRequest,
+    Field(discriminator="type"),
 ]
 
 

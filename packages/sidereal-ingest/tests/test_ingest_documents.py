@@ -117,7 +117,7 @@ async def test_an_upload_is_filed_as_an_upload_and_keeps_the_filename() -> None:
         document = await process_document(client, ingesters(), created.id)
 
     assert document.kind is DocumentKind.UPLOAD
-    assert document.text == "Quadratic equations: practice set\nSolve x^2 - 5x + 6 = 0"
+    assert document.text == "   Quadratic equations: practice set\n   Solve x^2 - 5x + 6 = 0"
     assert document.metadata["filename"] == "question-bank.pdf"
     assert "title_source" not in document.metadata
 

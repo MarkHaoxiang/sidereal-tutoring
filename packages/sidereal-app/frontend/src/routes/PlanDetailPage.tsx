@@ -42,7 +42,6 @@ export function PlanDetailPage() {
     <ArtefactDetail
       backTo={backTo}
       backLabel="Study plans"
-      eyebrow="Study plan"
       title={plan.title ?? "Untitled study plan"}
       onRename={async (title) => {
         await update.mutateAsync({ id: plan.id, patch: { title: title || null } });
@@ -50,7 +49,7 @@ export function PlanDetailPage() {
       meta={
         <>
           <StatusChip status={plan.status} />
-          <span>Created {formatDateTime(plan.date_created)}</span>
+          <span>{formatDateTime(plan.date_created)}</span>
           {plan.period_start || plan.period_end ? (
             <span>{`${formatDate(plan.period_start)} – ${formatDate(plan.period_end)}`}</span>
           ) : null}
@@ -58,10 +57,10 @@ export function PlanDetailPage() {
       }
       generatedFrom={plan.generated_from}
       content={plan.content}
-      emptyContent="This study plan has no content yet."
+      emptyContent="No content yet."
       onSaveContent={async (content) => {
         await update.mutateAsync({ id: plan.id, patch: { content } });
-        toast.success("Study plan saved");
+        toast.success("Saved");
       }}
       {...(next
         ? {
@@ -69,13 +68,13 @@ export function PlanDetailPage() {
               label: next.label,
               run: async () => {
                 await update.mutateAsync({ id: plan.id, patch: { status: next.next } });
-                toast.success(next.label.replace("Mark as", "Marked as"));
+                toast.success(next.done);
               },
             },
           }
         : {})}
       deleteTitle="Delete this study plan?"
-      deleteMessage="The study plan is removed. The material it came from stays as it is."
+      deleteMessage="The study plan is removed. The material it came from stays."
       onDelete={async () => {
         try {
           await remove.mutateAsync(plan.id);
@@ -83,7 +82,7 @@ export function PlanDetailPage() {
           toast.error(apiError(error));
           throw error;
         }
-        toast.success("Study plan deleted");
+        toast.success("Deleted");
         void navigate(backTo);
       }}
     />

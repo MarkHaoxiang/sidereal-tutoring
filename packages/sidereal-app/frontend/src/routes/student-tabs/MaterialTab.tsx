@@ -20,11 +20,11 @@ export function MaterialTab() {
   return (
     <div>
       {isLoading ? <SkeletonRows count={3} label="Loading material" /> : null}
-      {isError ? <p className={styles.status}>Could not load this student's material.</p> : null}
+      {isError ? <p className={styles.status}>Could not load the material.</p> : null}
 
       {data && data.length === 0 ? (
         <EmptyState
-          message="No material yet. Add a worksheet, a link or your notes and it will be ready to generate from."
+          message="No material yet."
           action={
             <Button variant="primary" onClick={open}>
               Add material

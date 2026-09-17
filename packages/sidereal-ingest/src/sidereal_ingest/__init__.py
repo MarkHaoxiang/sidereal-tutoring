@@ -7,14 +7,36 @@ from sidereal_ingest.documents import (
     DocumentError,
     FileSource,
     PathSource,
+    ScanSource,
     Source,
     TextSource,
     UrlSource,
     create_document,
     process_document,
 )
+from sidereal_ingest.pdf import (
+    MAX_PAGE_IMAGES,
+    PageImage,
+    crop_figure,
+    needs_page_images,
+    page_count,
+    page_images,
+    raster_pages,
+)
 from sidereal_ingest.ratelimit import TokenBucket
+from sidereal_ingest.scan import MAX_PAGES, ScanFile, ScanIngester
 from sidereal_ingest.settings import DEFAULT_DATA_DIR, data_dir
+from sidereal_ingest.submissions import transcribe_submission
+from sidereal_ingest.transcribe import (
+    Confidence,
+    FakeTranscriber,
+    Page,
+    PaperQuestion,
+    TranscribedQuestion,
+    Transcriber,
+    Transcription,
+    TranscriptionResult,
+)
 from sidereal_ingest.transcript import TranscriptIngester, strip_timestamps
 from sidereal_ingest.upload import UploadIngester
 from sidereal_ingest.web import Fetcher, HttpxFetcher, WebPageIngester
@@ -22,29 +44,49 @@ from sidereal_ingest.web import Fetcher, HttpxFetcher, WebPageIngester
 __all__ = [
     "DEFAULT_DATA_DIR",
     "FILE_SUFFIXES",
+    "MAX_PAGES",
+    "MAX_PAGE_IMAGES",
+    "Confidence",
     "DocumentDraft",
     "DocumentError",
     "DocumentKind",
+    "FakeTranscriber",
     "FetchCache",
     "Fetcher",
     "FileSource",
     "HttpxFetcher",
     "IngestError",
     "Ingester",
+    "Page",
+    "PageImage",
+    "PaperQuestion",
     "PathSource",
+    "ScanFile",
+    "ScanIngester",
+    "ScanSource",
     "Source",
     "TextSource",
     "TokenBucket",
+    "TranscribedQuestion",
+    "Transcriber",
     "TranscriptIngester",
+    "Transcription",
+    "TranscriptionResult",
     "UploadIngester",
     "UrlSource",
     "WebPageIngester",
     "create_document",
+    "crop_figure",
     "data_dir",
     "default_ingesters",
+    "needs_page_images",
+    "page_count",
+    "page_images",
     "pick",
     "process_document",
+    "raster_pages",
     "strip_timestamps",
+    "transcribe_submission",
 ]
 
 

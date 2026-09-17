@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::time::Duration;
 
@@ -12,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_path_to_error::{Path, Segment};
 
+use crate::assets::{AssetError, Assets, MAX_ASSETS_BYTES};
 use crate::compile::{Compiled, Diagnostic, Output, compile};
 use crate::document::{
     Document, DocumentKind, MarkScheme, MarkSchemeQuestion, Markup, Paper, Question,
@@ -26,9 +28,10 @@ pub const MAX_SOURCE_BYTES: usize = 256 * 1024;
 /// How long one compilation may run before the caller is told it timed out.
 pub const COMPILE_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// JSON escaping can inflate a source several times over, so the transport limit is looser
-/// than `MAX_SOURCE_BYTES`; the decoded source is what the handlers actually measure.
-const MAX_BODY_BYTES: usize = 4 * MAX_SOURCE_BYTES + 64 * 1024;
+/// JSON escaping can inflate a source several times over, and base64 inflates the assets by a
+/// third, so the transport limit is looser than the limits the handlers measure: the decoded
+/// source against `MAX_SOURCE_BYTES` and the decoded assets against `MAX_ASSETS_BYTES`.
+const MAX_BODY_BYTES: usize = 4 * MAX_SOURCE_BYTES + MAX_ASSETS_BYTES / 3 * 4 + 128 * 1024;
 
 pub fn router() -> Router {
     Router::new()
@@ -61,10 +64,14 @@ struct SvgPages {
 }
 
 async fn compile_source(Json(request): Json<CompileRequest>) -> Result<Response, ApiError> {
-    compiled_response(request.source, request.output).await
+    compiled_response(request.source, request.output, Assets::default()).await
 }
 
-async fn compiled_response(source: String, output: Output) -> Result<Response, ApiError> {
+async fn compiled_response(
+    source: String,
+    output: Output,
+    assets: Assets,
+) -> Result<Response, ApiError> {
     let bytes = source.len();
     if bytes > MAX_SOURCE_BYTES {
         return Err(ApiError::TooLarge(bytes));
@@ -72,7 +79,7 @@ async fn compiled_response(source: String, output: Output) -> Result<Response, A
 
     // The compiler is synchronous and CPU-bound; the timeout cannot cancel it, but Typst caps
     // loop iterations, so a blocking task always finishes and the pool cannot fill up.
-    let task = tokio::task::spawn_blocking(move || compile(&source, output));
+    let task = tokio::task::spawn_blocking(move || compile(&source, output, &assets));
     let compiled = match tokio::time::timeout(COMPILE_TIMEOUT, task).await {
         Ok(Ok(compiled)) => compiled,
         Ok(Err(error)) => return Err(ApiError::Failed(error.to_string())),
@@ -162,6 +169,10 @@ pub struct RenderRequest {
     /// other kind.
     #[serde(default)]
     pub mark_scheme: Option<Value>,
+    /// The figures a `figure` block names, base64 by asset name. They exist for this request
+    /// and nowhere else: no path, no filesystem, no cache.
+    #[serde(default)]
+    pub assets: BTreeMap<String, String>,
     #[serde(default = "render_pdf")]
     pub output: RenderOutput,
 }
@@ -170,6 +181,7 @@ pub struct RenderRequest {
 /// with the path to it instead of a bare message.
 async fn render_document(body: Bytes) -> Result<Response, ApiError> {
     let request: RenderRequest = from_slice(&body)?;
+    let assets = Assets::decode(&request.assets)?;
     let scheme = request.mark_scheme;
     if scheme.is_some() && request.kind != DocumentKind::Question {
         return Err(ApiError::Invalid(vec![ValidationError {
@@ -195,7 +207,7 @@ async fn render_document(body: Bytes) -> Result<Response, ApiError> {
         DocumentKind::Markup => Document::Markup(from_value::<Markup>(request.document, "")?),
     };
 
-    let errors = document.validate();
+    let errors = document.validate(&assets);
     if !errors.is_empty() {
         tracing::info!(count = errors.len(), "document did not validate");
         return Err(ApiError::Invalid(errors));
@@ -215,8 +227,8 @@ async fn render_document(body: Bytes) -> Result<Response, ApiError> {
             }
             Ok(Json(TemplateResponse { source }).into_response())
         }
-        RenderOutput::Pdf => compiled_response(source, Output::Pdf).await,
-        RenderOutput::Svg => compiled_response(source, Output::Svg).await,
+        RenderOutput::Pdf => compiled_response(source, Output::Pdf, assets).await,
+        RenderOutput::Svg => compiled_response(source, Output::Svg, assets).await,
     }
 }
 
@@ -280,8 +292,21 @@ enum ApiError {
     Invalid(Vec<ValidationError>),
     BadJson(String),
     TooLarge(usize),
+    AssetsTooLarge(String),
     Timeout,
     Failed(String),
+}
+
+impl From<AssetError> for ApiError {
+    fn from(error: AssetError) -> Self {
+        match error {
+            AssetError::Rejected { name, message } => Self::Invalid(vec![ValidationError {
+                path: format!("assets.{name}"),
+                message,
+            }]),
+            AssetError::TooLarge { message } => Self::AssetsTooLarge(message),
+        }
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -322,6 +347,9 @@ impl IntoResponse for ApiError {
                 }),
             )
                 .into_response(),
+            Self::AssetsTooLarge(message) => {
+                (StatusCode::PAYLOAD_TOO_LARGE, Json(Message { message })).into_response()
+            }
             Self::Timeout => (
                 StatusCode::REQUEST_TIMEOUT,
                 Json(Message {

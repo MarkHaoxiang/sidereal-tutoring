@@ -149,14 +149,14 @@ export function TypstEditor({ content, onSave }: TypstEditorProps) {
             }}
           />
           <p className={styles.typstHint}>
-            <code>#question[…]</code> numbers a question, <code>#answerlines(3)</code> leaves three
-            ruled lines to answer on, and maths goes between <code>$…$</code>.
+            <code>#question[…]</code> numbers · <code>#answerlines(3)</code> rules lines ·{" "}
+            <code>$…$</code> sets maths
           </p>
         </div>
 
         <div className={styles.typstPane}>
           {pages === null ? (
-            <p className={styles.status}>Choose Preview to see the pages as the student will get them.</p>
+            <p className={styles.status}>Preview to see the pages.</p>
           ) : (
             <div className={styles.typstPreview}>
               {pages.map((page, index) => (
@@ -171,7 +171,7 @@ export function TypstEditor({ content, onSave }: TypstEditorProps) {
             </div>
           )}
           {pages !== null && previewed !== draft ? (
-            <p className={styles.typstStale}>Edited since this preview — choose Preview again.</p>
+            <p className={styles.typstStale}>Edited since this preview.</p>
           ) : null}
         </div>
       </div>

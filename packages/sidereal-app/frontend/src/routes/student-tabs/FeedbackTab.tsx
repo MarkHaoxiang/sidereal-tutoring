@@ -31,7 +31,7 @@ export function FeedbackTab() {
           studentId={studentId}
           kind="feedback"
           empty={data.length === 0}
-          emptyMessage="No feedback yet. Generate a note from this student's material."
+          emptyMessage="No feedback yet."
         />
       ) : null}
 
@@ -40,11 +40,9 @@ export function FeedbackTab() {
           {data.map((item) => (
             <li key={item.id}>
               <Link to={`/students/${studentId}/feedback/${item.id}`} className={styles.link}>
-                <span className={styles.top}>
-                  <span className={styles.title}>{firstLine(item.content)}</span>
-                  <StatusChip status={item.status} />
-                </span>
-                <span className={styles.meta}>Created {formatDateTime(item.date_created)}</span>
+                <span className={styles.title}>{firstLine(item.content)}</span>
+                <StatusChip status={item.status} />
+                <span className={styles.meta}>{formatDateTime(item.date_created)}</span>
               </Link>
             </li>
           ))}

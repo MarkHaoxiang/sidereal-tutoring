@@ -53,7 +53,8 @@ def test_a_paper_extract_job_needs_no_student_and_writes_the_paper(
         "2",
     ]
     assert fake_directus.files[paper["rendered_pdf"]][1].startswith(b"%PDF")
-    assert fake_directus.files[paper["mark_scheme_pdf"]][1].startswith(b"%PDF")
+    # One document and no mark scheme, so the mark-scheme call was never made.
+    assert paper["mark_scheme_pdf"] is None
 
 
 @pytest.mark.parametrize("documents", [[], ["a", "b", "b"]])
@@ -93,6 +94,35 @@ def test_a_paper_extract_job_accepts_a_mark_scheme_beside_the_paper(
     assert response.status_code == 202
     job = fake_directus.rows(Collection.GENERATION_JOBS)[0]
     assert job["input"]["documents"] == [str(document_id), scheme["id"]]
+
+
+def test_a_paper_extract_job_records_pages_on_its_input(
+    client: TestClient,
+    fake_directus: FakeDirectus,
+    document_id: UUID,
+    auth: dict[str, str],
+) -> None:
+    response = client.post(
+        "/api/jobs/paper_extract",
+        headers=auth,
+        json={"document_ids": [str(document_id)], "pages": True},
+    )
+
+    assert response.status_code == 202
+    job = fake_directus.rows(Collection.GENERATION_JOBS)[0]
+    assert job["input"]["pages"] is True
+
+
+def test_pages_is_refused_on_any_other_kind(
+    client: TestClient, fake_directus: FakeDirectus, student_id: UUID, auth: dict[str, str]
+) -> None:
+    response = client.post(
+        "/api/jobs/homework", headers=auth, json={"student_id": str(student_id), "pages": False}
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "pages_unsupported"
+    assert fake_directus.rows(Collection.GENERATION_JOBS) == []
 
 
 def test_every_other_kind_still_needs_a_student(

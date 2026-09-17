@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import base64
 from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
 from sidereal_core.models import Collection
 from sidereal_core.testing import DEFAULT_USER_ID, FAIL_MARKER, FakeDirectus, FakeTypeset
+from sidereal_core.typeset import MAX_ASSET_BYTES, MAX_ASSETS_BYTES
 
 STUDENT = UUID("11111111-1111-4111-8111-111111111111")
 SOURCE = "#question[Factorise $x^2 - 5x + 6$.]\n#answerlines(4)\n"
@@ -20,6 +22,18 @@ SCHEME_ENTRY = {
     "parts": [{"label": "a", "answer": "$3 x^2$", "marks": 2}],
     "notes": "Accept $3x^2$ unsimplified.",
 }
+FIGURE = "figure-1.png"
+FIGURE_QUESTION = {
+    "number": "4",
+    "stem": "The graph shows the curve $C$.",
+    "blocks": [{"type": "figure", "asset": FIGURE, "caption": "Figure 1"}],
+}
+FIGURE_BYTES = b"\x89PNG\r\n\x1a\n not a real image, just bytes"
+
+
+def zeros(decoded_bytes: int) -> str:
+    """Base64 for that many zero bytes, rounded down to three: "AAAA" is three of them."""
+    return "AAAA" * (decoded_bytes // 3)
 
 
 @pytest.fixture
@@ -142,6 +156,92 @@ def test_a_markup_fragment_renders(
     assert response.status_code == 200
     assert response.json()["pages"][0].startswith("<svg")
     assert fake_typeset.rendered[-1]["document"] == {"text": "$x^2 - 5x + 6$"}
+
+
+def test_a_questions_figure_rides_the_request_as_base64(
+    client: TestClient, fake_typeset: FakeTypeset, auth: dict[str, str]
+) -> None:
+    response = client.post(
+        "/api/typeset/render",
+        headers=auth,
+        json={
+            "kind": "question",
+            "document": FIGURE_QUESTION,
+            "assets": {FIGURE: base64.b64encode(FIGURE_BYTES).decode("ascii")},
+        },
+    )
+
+    assert response.status_code == 200
+    sent = fake_typeset.rendered[-1]["assets"]
+    assert base64.b64decode(sent[FIGURE]) == FIGURE_BYTES
+
+
+def test_a_render_without_assets_sends_no_assets_key(
+    client: TestClient, fake_typeset: FakeTypeset, auth: dict[str, str]
+) -> None:
+    response = client.post(
+        "/api/typeset/render",
+        headers=auth,
+        json={"kind": "question", "document": QUESTION},
+    )
+
+    assert response.status_code == 200
+    assert "assets" not in fake_typeset.rendered[-1]
+
+
+def test_an_asset_over_the_cap_is_a_413_before_the_service(
+    client: TestClient, fake_typeset: FakeTypeset, auth: dict[str, str]
+) -> None:
+    response = client.post(
+        "/api/typeset/render",
+        headers=auth,
+        json={
+            "kind": "question",
+            "document": FIGURE_QUESTION,
+            "assets": {FIGURE: zeros(MAX_ASSET_BYTES + 3)},
+        },
+    )
+
+    assert response.status_code == 413
+    assert response.json()["detail"]["code"] == "typeset_too_large"
+    assert fake_typeset.rendered == []
+
+
+def test_assets_over_the_cap_together_are_a_413_before_the_service(
+    client: TestClient, fake_typeset: FakeTypeset, auth: dict[str, str]
+) -> None:
+    one = zeros(MAX_ASSET_BYTES)
+    many = MAX_ASSETS_BYTES // len(base64.b64decode(one)) + 1
+
+    response = client.post(
+        "/api/typeset/render",
+        headers=auth,
+        json={
+            "kind": "question",
+            "document": FIGURE_QUESTION,
+            "assets": {f"figure-{n}.png": one for n in range(many)},
+        },
+    )
+
+    assert response.status_code == 413
+    assert response.json()["detail"]["code"] == "typeset_too_large"
+    assert fake_typeset.rendered == []
+
+
+def test_an_asset_that_is_not_base64_is_a_422_that_names_it(
+    client: TestClient, fake_typeset: FakeTypeset, auth: dict[str, str]
+) -> None:
+    response = client.post(
+        "/api/typeset/render",
+        headers=auth,
+        json={"kind": "question", "document": FIGURE_QUESTION, "assets": {FIGURE: "not base64!"}},
+    )
+
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert detail["code"] == "asset_unreadable"
+    assert FIGURE in detail["message"]
+    assert fake_typeset.rendered == []
 
 
 def test_a_fragment_that_will_not_compile_is_a_422_with_diagnostics(

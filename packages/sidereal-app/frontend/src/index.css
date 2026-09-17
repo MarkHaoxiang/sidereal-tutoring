@@ -323,3 +323,12 @@ a {
 .prose img {
   max-width: 100%;
 }
+
+/* A span the transcriber could not read, marked where it sits in the working. */
+.prose .unreadable {
+  background: var(--color-warning-tint);
+  color: var(--color-warning);
+  text-decoration: underline wavy var(--color-warning);
+  text-underline-offset: 0.2em;
+  font-style: normal;
+}

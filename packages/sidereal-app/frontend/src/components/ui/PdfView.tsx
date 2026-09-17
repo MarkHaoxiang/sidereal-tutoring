@@ -38,9 +38,7 @@ export function PdfView({ fileId, fallbackName, className }: PdfViewProps) {
   return (
     <div className={cx(styles.view, className)}>
       <object data={url} type="application/pdf" className={styles.frame} aria-label={`${name}, as a PDF`}>
-        <p className={styles.fallback}>
-          This browser will not show the PDF here. Open or download it instead.
-        </p>
+        <p className={styles.fallback}>This browser will not show the PDF here.</p>
       </object>
       <div className={styles.actions}>
         <a className={buttonClass} href={url} target="_blank" rel="noreferrer">

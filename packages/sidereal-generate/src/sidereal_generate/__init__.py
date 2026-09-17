@@ -8,6 +8,7 @@ from sidereal_generate.base import (
     PaperExtractor,
     PlanGenerator,
     strict_schema,
+    unstringify,
 )
 from sidereal_generate.claude import (
     AnthropicGenerator,
@@ -35,9 +36,11 @@ from sidereal_generate.jobs import (
 )
 from sidereal_generate.models import (
     FeedbackOutput,
+    FigureRequest,
     GeneratedQuestion,
     GenerationRequest,
     HomeworkOutput,
+    MarkSchemeExtraction,
     PaperExtraction,
     PlanOutput,
 )
@@ -72,6 +75,11 @@ from sidereal_generate.typst import (
     upload_pdf,
 )
 from sidereal_generate.usage import UsageTally
+from sidereal_generate.vision import (
+    OpenRouterTranscriber,
+    UnavailableTranscriber,
+    default_transcriber,
+)
 
 __all__ = [
     "DEFAULT_EXTRACT_MAX_TOKENS",
@@ -88,6 +96,7 @@ __all__ = [
     "FakePlanGenerator",
     "FeedbackGenerator",
     "FeedbackOutput",
+    "FigureRequest",
     "GenerateBackend",
     "GenerateSettings",
     "GeneratedQuestion",
@@ -101,21 +110,25 @@ __all__ = [
     "HomeworkOutput",
     "JobInput",
     "JobInputError",
+    "MarkSchemeExtraction",
     "NotTypstError",
     "OpenRouterCall",
     "OpenRouterGenerator",
     "OpenRouterPaperExtractor",
     "OpenRouterSettings",
+    "OpenRouterTranscriber",
     "PaperError",
     "PaperExtraction",
     "PaperExtractor",
     "PlanGenerator",
     "PlanOutput",
     "ReasoningEffort",
+    "UnavailableTranscriber",
     "UsageTally",
     "WorksheetResult",
     "compile_body",
     "default_generators",
+    "default_transcriber",
     "extract_paper",
     "feedback_generator",
     "generate_settings",
@@ -129,5 +142,6 @@ __all__ = [
     "run_job",
     "start_job",
     "strict_schema",
+    "unstringify",
     "upload_pdf",
 ]

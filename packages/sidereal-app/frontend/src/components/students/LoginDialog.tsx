@@ -8,19 +8,17 @@ import { useCreateStudentLogin, useResetStudentPassword } from "@/lib/queries";
 import { generatePassword } from "./password";
 import styles from "./students.module.css";
 
-const PASSWORD_HELP =
-  "Copy this password now and give it to the student — it is not shown again. You can set a new one whenever you need to.";
+const PASSWORD_HELP = "Copy it now — it is not shown again.";
 
 export interface LoginDialogProps {
   open: boolean;
   onClose: () => void;
   studentId: string;
-  studentName: string;
   /** "create" asks for an email too; "reset" only changes the password of a login that exists. */
   mode: "create" | "reset";
 }
 
-export function LoginDialog({ open, onClose, studentId, studentName, mode }: LoginDialogProps) {
+export function LoginDialog({ open, onClose, studentId, mode }: LoginDialogProps) {
   const createLogin = useCreateStudentLogin();
   const resetPassword = useResetStudentPassword();
   const [email, setEmail] = useState("");
@@ -51,16 +49,16 @@ export function LoginDialog({ open, onClose, studentId, studentName, mode }: Log
       return;
     }
     if (password.length < 8) {
-      setPasswordError("A password needs at least 8 characters. Generate takes care of it for you.");
+      setPasswordError("At least 8 characters — or use Generate.");
       return;
     }
     try {
       if (creating) {
         await createLogin.mutateAsync({ studentId, email: address, password });
-        toast.success(`${studentName} can sign in now`);
+        toast.success("Login created");
       } else {
         await resetPassword.mutateAsync({ studentId, password });
-        toast.success("New password saved");
+        toast.success("Saved");
       }
       onClose();
     } catch (error) {
@@ -100,12 +98,7 @@ export function LoginDialog({ open, onClose, studentId, studentName, mode }: Log
       }
     >
       {creating ? (
-        <Field
-          label="Email"
-          required
-          help={`${studentName} signs in with this address.`}
-          error={emailError}
-        >
+        <Field label="Email" required help="They sign in with this address." error={emailError}>
           <Input
             type="email"
             value={email}

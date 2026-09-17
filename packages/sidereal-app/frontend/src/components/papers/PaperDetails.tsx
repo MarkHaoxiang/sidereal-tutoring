@@ -70,7 +70,7 @@ export function PaperDetails({ draft, onChange }: PaperDetailsProps) {
           <Textarea
             rows={2}
             value={draft.instructions}
-            placeholder="What the paper tells a candidate before question 1."
+            placeholder="What the paper says before question 1"
             onChange={(event) => {
               onChange({ instructions: event.target.value });
             }}

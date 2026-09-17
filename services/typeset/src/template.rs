@@ -2,6 +2,7 @@
 /// `#show:` line and a body, so the result needs no other file.
 const HOMEWORK: &str = include_str!("../template/homework.typ");
 const QUESTIONS: &str = include_str!("../template/questions.typ");
+const BLOCKS: &str = include_str!("../template/blocks.typ");
 const PAPER: &str = include_str!("../template/paper.typ");
 const MARK_SCHEME: &str = include_str!("../template/mark_scheme.typ");
 const WORKSHEET: &str = include_str!("../template/worksheet.typ");
@@ -18,20 +19,20 @@ pub fn wrap_homework(title: &str, student: Option<&str>, due: Option<&str>, body
 }
 
 pub(crate) fn paper_preamble() -> String {
-    format!("{QUESTIONS}\n{PAPER}")
+    format!("{QUESTIONS}\n{BLOCKS}\n{PAPER}")
 }
 
 pub(crate) fn worksheet_preamble() -> String {
-    format!("{QUESTIONS}\n{WORKSHEET}")
+    format!("{QUESTIONS}\n{BLOCKS}\n{WORKSHEET}")
 }
 
 pub(crate) fn mark_scheme_preamble() -> String {
-    MARK_SCHEME.to_owned()
+    format!("{BLOCKS}\n{MARK_SCHEME}")
 }
 
 /// A fragment may carry a question and its scheme entry, so it gets both sets of helpers.
 pub(crate) fn fragment_preamble() -> String {
-    format!("{QUESTIONS}\n{MARK_SCHEME}\n{FRAGMENT}")
+    format!("{QUESTIONS}\n{BLOCKS}\n{MARK_SCHEME}\n{FRAGMENT}")
 }
 
 /// A Typst string literal, or `none` for an absent value.

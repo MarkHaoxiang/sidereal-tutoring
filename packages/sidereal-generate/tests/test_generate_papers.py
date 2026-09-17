@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
+import logging
+from collections.abc import Callable, Sequence
 from typing import Any
 from uuid import UUID
 
@@ -32,15 +33,16 @@ from sidereal_generate.fake import (
     FakePlanGenerator,
 )
 from sidereal_generate.jobs import Generators, JobInput, run_job, start_job
-from sidereal_generate.models import PaperExtraction
+from sidereal_generate.models import MarkSchemeExtraction, PaperExtraction
 from sidereal_generate.papers import PaperError, paper_worksheet, rerender_paper
-from sidereal_generate.prompts import PAPER_TOOL
+from sidereal_generate.prompts import MARK_SCHEME_TOOL, PAPER_TOOL
 from sidereal_generate.usage import UsageTally
 
 DOCUMENT_ID = UUID("22222222-2222-4222-8222-222222222222")
+SCHEME_ID = UUID("33333333-3333-4333-8333-333333333333")
 Handler = Callable[[httpx2.Request], httpx2.Response]
 
-PAPER_INPUT = {
+PAPER_INPUT: dict[str, Any] = {
     "paper": {
         "title": "Pure Mathematics 1",
         "source": "Edexcel 2025",
@@ -67,6 +69,9 @@ PAPER_INPUT = {
             }
         ],
     },
+    "figures": [],
+}
+SCHEME_INPUT: dict[str, Any] = {
     "mark_scheme": {
         "title": "Pure Mathematics 1: mark scheme",
         "questions": [
@@ -77,7 +82,7 @@ PAPER_INPUT = {
                 "parts": [{"label": "a", "answer": "$3 x^2$", "marks": 2, "notes": None}],
             }
         ],
-    },
+    }
 }
 
 
@@ -105,22 +110,45 @@ def seeded(text: str = "1. Show that $1 + 1 = 2$.\n2. Differentiate $y = x^2$.")
     return fake
 
 
-async def run(fake: FakeDirectus, typeset: FakeTypeset) -> GenerationJob:
+def seeded_with_scheme() -> FakeDirectus:
+    fake = seeded()
+    fake.seed(
+        Collection.DOCUMENTS,
+        {
+            "id": str(SCHEME_ID),
+            "title": "Mock paper 1 mark scheme",
+            "kind": "upload",
+            "status": "ready",
+            "text": "1 (a) $3 x^2$ (2)",
+        },
+    )
+    return fake
+
+
+async def run(
+    fake: FakeDirectus,
+    typeset: FakeTypeset,
+    documents: tuple[UUID, ...] = (DOCUMENT_ID, SCHEME_ID),
+) -> GenerationJob:
     async with fake.client() as client:
         job = await start_job(
-            client, GenerationKind.PAPER_EXTRACT, JobInput(documents=(DOCUMENT_ID,)), model="fake"
+            client, GenerationKind.PAPER_EXTRACT, JobInput(documents=documents), model="fake"
         )
         return await run_job(client, generators(), job.id, typeset=typeset.client())
 
 
-async def extracted(fake: FakeDirectus, typeset: FakeTypeset) -> UUID:
-    finished = await run(fake, typeset)
+async def extracted(
+    fake: FakeDirectus,
+    typeset: FakeTypeset,
+    documents: tuple[UUID, ...] = (DOCUMENT_ID, SCHEME_ID),
+) -> UUID:
+    finished = await run(fake, typeset, documents)
     assert finished.output_id is not None
     return finished.output_id
 
 
 async def test_a_paper_job_writes_the_paper_its_pdfs_and_its_questions() -> None:
-    fake, typeset = seeded(), FakeTypeset()
+    fake, typeset = seeded_with_scheme(), FakeTypeset()
 
     finished = await run(fake, typeset)
 
@@ -135,7 +163,7 @@ async def test_a_paper_job_writes_the_paper_its_pdfs_and_its_questions() -> None
     assert paper["structure"]["questions"][0]["number"] == "1"
     assert paper["mark_scheme"]["questions"][0]["number"] == "1"
     assert paper["generated_from"]["job"] == str(finished.id)
-    assert paper["generated_from"]["documents"] == [str(DOCUMENT_ID)]
+    assert paper["generated_from"]["documents"] == [str(DOCUMENT_ID), str(SCHEME_ID)]
     assert fake.files[paper["rendered_pdf"]][1].startswith(b"%PDF")
     assert fake.files[paper["mark_scheme_pdf"]][1].startswith(b"%PDF")
 
@@ -154,17 +182,16 @@ async def test_a_render_that_fails_still_files_the_paper_and_the_job_succeeds() 
     fake = seeded()
     typeset = FakeTypeset()
 
-    class Failing:
-        model = "fake"
-
+    class Failing(FakePaperExtractor):
         async def extract(
             self,
             document: Document,
-            mark_scheme: Document | None = None,
             *,
+            pages: Sequence[bytes] = (),
+            drawn: Sequence[int] = (),
             usage: UsageTally | None = None,
         ) -> PaperExtraction:
-            extraction = await FakePaperExtractor().extract(document)
+            extraction = await super().extract(document, pages=pages, usage=usage)
             return extraction.model_copy(
                 update={"paper": extraction.paper.model_copy(update={"title": FAIL_MARKER})}
             )
@@ -204,7 +231,7 @@ async def test_a_render_that_fails_still_files_the_paper_and_the_job_succeeds() 
 async def test_a_document_with_no_text_fails_the_job_with_a_sentence_a_tutor_can_act_on() -> None:
     fake = seeded(text="")
 
-    finished = await run(fake, FakeTypeset())
+    finished = await run(fake, FakeTypeset(), (DOCUMENT_ID,))
 
     assert finished.status is JobStatus.FAILED
     assert finished.error == "That document has no text yet, so there is no paper to read."
@@ -225,7 +252,7 @@ async def test_a_job_that_names_no_document_fails_before_anything_is_written() -
 
 
 async def test_rendering_again_replaces_both_pdfs_from_the_stored_structure() -> None:
-    fake = seeded()
+    fake = seeded_with_scheme()
     typeset = FakeTypeset()
     paper_id = await extracted(fake, typeset)
     stored = fake.items[Collection.PAPERS][str(paper_id)]
@@ -244,7 +271,7 @@ async def test_rendering_again_replaces_both_pdfs_from_the_stored_structure() ->
 
 async def test_rendering_a_paper_whose_structure_was_broken_says_which_field() -> None:
     fake = seeded()
-    paper_id = await extracted(fake, FakeTypeset())
+    paper_id = await extracted(fake, FakeTypeset(), (DOCUMENT_ID,))
     fake.items[Collection.PAPERS][str(paper_id)]["structure"]["questions"][0] = {
         "stem": "no number"
     }
@@ -257,7 +284,7 @@ async def test_rendering_a_paper_whose_structure_was_broken_says_which_field() -
 async def test_a_worksheet_takes_the_questions_asked_for_in_the_order_asked() -> None:
     fake = seeded()
     typeset = FakeTypeset()
-    paper_id = await extracted(fake, typeset)
+    paper_id = await extracted(fake, typeset, (DOCUMENT_ID,))
     student = fake.seed(Collection.STUDENTS, {"name": "A. Tutee"})
 
     async with fake.client() as client:
@@ -282,7 +309,7 @@ async def test_a_worksheet_takes_the_questions_asked_for_in_the_order_asked() ->
 async def test_a_worksheet_asking_for_a_question_the_paper_has_not_got_is_refused() -> None:
     fake = seeded()
     typeset = FakeTypeset()
-    paper_id = await extracted(fake, typeset)
+    paper_id = await extracted(fake, typeset, (DOCUMENT_ID,))
 
     async with fake.client() as client:
         with pytest.raises(PaperError, match="no question 9"):
@@ -297,19 +324,28 @@ async def test_the_fake_extractor_produces_a_paper_the_renderer_accepts() -> Non
     )
 
     extraction = await FakePaperExtractor().extract(document)
+    scheme = await FakePaperExtractor().extract_mark_scheme(document, extraction.paper)
 
     assert extraction.paper.title.startswith("[fake]")
     assert [question.number for question in extraction.paper.questions] == ["1", "2"]
-    assert extraction.mark_scheme is not None
+    assert scheme.mark_scheme.title.startswith("[fake]")
     assert CanonicalPaper.model_validate(extraction.paper.model_dump()) == extraction.paper
 
 
 def test_the_tool_schema_asks_for_every_field() -> None:
     schema = strict_schema(PaperExtraction)
 
-    assert schema["required"] == ["paper", "mark_scheme"]
+    assert schema["required"] == ["paper", "figures"]
     question = schema["$defs"]["CanonicalQuestion"]
-    assert question["required"] == ["number", "stem", "marks", "parts", "answer_lines"]
+    assert question["required"] == [
+        "number",
+        "stem",
+        "marks",
+        "parts",
+        "answer_lines",
+        "answer",
+        "blocks",
+    ]
     assert question["additionalProperties"] is False
 
 
@@ -320,13 +356,13 @@ def extractor_for(handler: Handler) -> AnthropicPaperExtractor:
     return AnthropicPaperExtractor(client=client, model="claude-sonnet-5")
 
 
-def message(tool_input: dict[str, Any]) -> dict[str, Any]:
+def message(tool_input: dict[str, Any], *, name: str = PAPER_TOOL) -> dict[str, Any]:
     return {
         "id": "msg_1",
         "type": "message",
         "role": "assistant",
         "model": "claude-sonnet-5",
-        "content": [{"type": "tool_use", "id": "toolu_1", "name": PAPER_TOOL, "input": tool_input}],
+        "content": [{"type": "tool_use", "id": "toolu_1", "name": name, "input": tool_input}],
         "stop_reason": "tool_use",
         "stop_sequence": None,
         "usage": {"input_tokens": 10, "output_tokens": 20},
@@ -342,7 +378,7 @@ def document() -> Document:
     )
 
 
-async def test_one_tool_call_becomes_a_paper_and_its_mark_scheme() -> None:
+async def test_one_tool_call_becomes_a_paper() -> None:
     seen: list[httpx2.Request] = []
 
     def handler(request: httpx2.Request) -> httpx2.Response:
@@ -352,21 +388,60 @@ async def test_one_tool_call_becomes_a_paper_and_its_mark_scheme() -> None:
     extraction = await extractor_for(handler).extract(document())
 
     assert extraction.paper.board == "Edexcel"
-    assert extraction.mark_scheme is not None
-    assert extraction.mark_scheme.questions[0].parts[0].answer == "$3 x^2$"
 
     sent = json.loads(seen[0].content)
     assert sent["tool_choice"] == {"type": "tool", "name": PAPER_TOOL}
     assert sent["tools"][0]["strict"] is True
+    assert sent["tools"][0]["input_schema"] == strict_schema(PaperExtraction)
     assert "numbering" in sent["system"].lower()
     assert "Typst" in sent["system"]
     assert "The curve $C$" in sent["messages"][0]["content"]
 
 
+async def test_the_mark_scheme_is_a_second_tool_call_against_its_own_schema() -> None:
+    seen: list[httpx2.Request] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        seen.append(request)
+        return httpx2.Response(200, json=message(SCHEME_INPUT, name=MARK_SCHEME_TOOL))
+
+    paper = PaperExtraction.model_validate(PAPER_INPUT).paper
+    extraction = await extractor_for(handler).extract_mark_scheme(document(), paper)
+
+    assert extraction.mark_scheme.questions[0].parts[0].answer == "$3 x^2$"
+
+    sent = json.loads(seen[0].content)
+    assert sent["tool_choice"] == {"type": "tool", "name": MARK_SCHEME_TOOL}
+    assert sent["tools"][0]["input_schema"] == strict_schema(MarkSchemeExtraction)
+    assert '<part number="1" label="a" marks="2"/>' in sent["messages"][0]["content"]
+
+
+async def test_a_paper_field_sent_as_json_text_is_parsed_and_logged(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The live failure: an unconstrained tool call returned `paper` as a JSON string."""
+    body = message({"paper": json.dumps(PAPER_INPUT["paper"]), "figures": []})
+
+    with caplog.at_level(logging.WARNING):
+        extraction = await extractor_for(lambda _: httpx2.Response(200, json=body)).extract(
+            document()
+        )
+
+    assert extraction.paper.title == "Pure Mathematics 1"
+    assert "PaperExtraction stringified paper" in caplog.text
+
+
+async def test_a_paper_field_that_is_not_json_is_still_refused() -> None:
+    body = message({"paper": "the paper you asked for", "figures": []})
+
+    with pytest.raises(GenerationError, match="unusable paper"):
+        await extractor_for(lambda _: httpx2.Response(200, json=body)).extract(document())
+
+
 async def test_a_payload_that_does_not_validate_is_asked_for_once_more_with_the_errors() -> None:
     seen: list[httpx2.Request] = []
     replies = [
-        message({"paper": {"title": "x", "questions": [{}]}, "mark_scheme": None}),
+        message({"paper": {"title": "x", "questions": [{}]}}),
         message(PAPER_INPUT),
     ]
 
@@ -384,7 +459,7 @@ async def test_a_payload_that_does_not_validate_is_asked_for_once_more_with_the_
 
 
 async def test_a_second_unusable_payload_is_a_generation_error() -> None:
-    body = message({"paper": {"title": "x", "questions": [{}]}, "mark_scheme": None})
+    body = message({"paper": {"title": "x", "questions": [{}]}})
 
     with pytest.raises(GenerationError, match="unusable paper"):
         await extractor_for(lambda _: httpx2.Response(200, json=body)).extract(document())
@@ -432,34 +507,48 @@ async def test_an_extraction_never_asks_anthropic_for_more_than_it_answers_unstr
     assert json.loads(seen[0].content)["max_tokens"] == NON_STREAMING_MAX_TOKENS
 
 
-SCHEME_ID = UUID("33333333-3333-4333-8333-333333333333")
-
-
-class Recorder:
+class Recorder(FakePaperExtractor):
     """An extractor that says what it was handed, and repairs by dropping the fail marker."""
 
-    model = "fake"
-
     def __init__(self) -> None:
-        self.seen: list[tuple[str, str | None]] = []
+        self.seen: list[str] = []
+        self.schemes: list[tuple[str, str]] = []
         self.repairs: list[str] = []
+        self.scheme_repairs: list[str] = []
         self.fail_once = False
+        self.fail_scheme = False
 
     async def extract(
         self,
         document: Document,
-        mark_scheme: Document | None = None,
         *,
+        pages: Sequence[bytes] = (),
+        drawn: Sequence[int] = (),
         usage: UsageTally | None = None,
     ) -> PaperExtraction:
-        self.seen.append((document.title, None if mark_scheme is None else mark_scheme.title))
+        self.seen.append(document.title)
         if usage is not None:
             usage.record(prompt_tokens=100, completion_tokens=20, reasoning_tokens=5, cost_usd=0.25)
-        extraction = await FakePaperExtractor().extract(document)
+        extraction = await super().extract(document, pages=pages, usage=None)
         if not self.fail_once:
             return extraction
         return extraction.model_copy(
             update={"paper": extraction.paper.model_copy(update={"title": FAIL_MARKER})}
+        )
+
+    async def extract_mark_scheme(
+        self,
+        document: Document,
+        paper: CanonicalPaper,
+        *,
+        usage: UsageTally | None = None,
+    ) -> MarkSchemeExtraction:
+        self.schemes.append((document.title, paper.title))
+        extraction = await super().extract_mark_scheme(document, paper, usage=usage)
+        if not self.fail_scheme:
+            return extraction
+        return extraction.model_copy(
+            update={"mark_scheme": extraction.mark_scheme.model_copy(update={"title": FAIL_MARKER})}
         )
 
     async def repair(
@@ -476,6 +565,22 @@ class Recorder:
             update={
                 "paper": extraction.paper.model_copy(
                     update={"title": extraction.paper.title.replace(FAIL_MARKER, "repaired")}
+                )
+            }
+        )
+
+    async def repair_mark_scheme(
+        self,
+        extraction: MarkSchemeExtraction,
+        diagnostics: str,
+        *,
+        usage: UsageTally | None = None,
+    ) -> MarkSchemeExtraction:
+        self.scheme_repairs.append(diagnostics)
+        return extraction.model_copy(
+            update={
+                "mark_scheme": extraction.mark_scheme.model_copy(
+                    update={"title": extraction.mark_scheme.title.replace(FAIL_MARKER, "repaired")}
                 )
             }
         )
@@ -500,45 +605,59 @@ async def run_with(
         return await run_job(client, with_extractor(extractor), job.id, typeset=typeset.client())
 
 
-def seeded_with_scheme() -> FakeDirectus:
-    fake = seeded()
-    fake.seed(
-        Collection.DOCUMENTS,
-        {
-            "id": str(SCHEME_ID),
-            "title": "Mock paper 1 mark scheme",
-            "kind": "upload",
-            "status": "ready",
-            "text": "1 (a) $3 x^2$ (2)",
-        },
-    )
-    return fake
-
-
 async def test_a_second_document_reaches_the_extractor_as_the_mark_scheme() -> None:
     fake, extractor = seeded_with_scheme(), Recorder()
 
     finished = await run_with(fake, FakeTypeset(), extractor, (DOCUMENT_ID, SCHEME_ID))
 
     assert finished.status is JobStatus.SUCCEEDED
-    assert extractor.seen == [("Mock paper 1", "Mock paper 1 mark scheme")]
+    assert extractor.seen == ["Mock paper 1"]
+    # The paper is read first, and is the context the scheme is read under.
+    assert extractor.schemes == [("Mock paper 1 mark scheme", "[fake] Mock paper 1")]
 
 
-async def test_a_paper_alone_hands_the_extractor_no_mark_scheme() -> None:
+async def test_a_paper_alone_makes_no_mark_scheme_call() -> None:
     fake, extractor = seeded(), Recorder()
 
     await run_with(fake, FakeTypeset(), extractor, (DOCUMENT_ID,))
 
-    assert extractor.seen == [("Mock paper 1", None)]
+    assert extractor.seen == ["Mock paper 1"]
+    assert extractor.schemes == []
 
 
-async def test_source_the_compiler_refuses_is_repaired_against_its_diagnostics() -> None:
+async def test_a_mark_scheme_the_compiler_refuses_is_repaired_on_its_own(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    fake, extractor = seeded_with_scheme(), Recorder()
+    extractor.fail_scheme = True
+
+    with caplog.at_level(logging.WARNING):
+        finished = await run_with(fake, FakeTypeset(), extractor, (DOCUMENT_ID, SCHEME_ID))
+
+    assert finished.status is JobStatus.SUCCEEDED
+    # The log says which document failed: the paper compiled, and only the scheme did not.
+    assert "the mark scheme did not compile" in caplog.text
+    assert "the paper did not compile" not in caplog.text
+    assert extractor.scheme_repairs  # the scheme's own diagnostics
+    assert extractor.repairs == []  # and the paper was never asked for again
+    paper = fake.rows(Collection.PAPERS)[0]
+    assert paper["structure"]["title"] == "[fake] Mock paper 1"
+    assert FAIL_MARKER not in paper["mark_scheme"]["title"]
+    assert paper["rendered_pdf"]
+    assert paper["mark_scheme_pdf"]
+
+
+async def test_source_the_compiler_refuses_is_repaired_against_its_diagnostics(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     fake, extractor = seeded(), Recorder()
     extractor.fail_once = True
 
-    finished = await run_with(fake, FakeTypeset(), extractor, (DOCUMENT_ID,))
+    with caplog.at_level(logging.WARNING):
+        finished = await run_with(fake, FakeTypeset(), extractor, (DOCUMENT_ID,))
 
     assert finished.status is JobStatus.SUCCEEDED
+    assert "the paper did not compile" in caplog.text
     assert len(extractor.repairs) == 1
     assert extractor.repairs[0]  # the compiler's own report, not a summary of it
     paper = fake.rows(Collection.PAPERS)[0]
@@ -581,3 +700,35 @@ async def test_a_render_that_works_clears_an_earlier_failure_warning() -> None:
 
     assert paper.rendered_pdf is not None
     assert "warning" not in (paper.generated_from or {})
+
+
+async def test_an_anthropic_payload_that_fails_validation_logs_the_errors(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The refused attempt is paid for in full, so what was wrong with it must be on record."""
+    seen: list[httpx2.Request] = []
+    replies = [message({"paper": {"title": "x", "questions": [{}]}}), message(PAPER_INPUT)]
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        seen.append(request)
+        return httpx2.Response(200, json=replies[min(len(seen) - 1, len(replies) - 1)])
+
+    with caplog.at_level(logging.WARNING):
+        await extractor_for(handler).extract(document())
+
+    assert "emit_paper returned an unusable paper" in caplog.text
+    assert "number" in caplog.text
+
+
+async def test_an_anthropic_paper_that_omits_figures_drives_the_retry() -> None:
+    seen: list[httpx2.Request] = []
+    replies = [message({"paper": PAPER_INPUT["paper"]}), message(PAPER_INPUT)]
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        seen.append(request)
+        return httpx2.Response(200, json=replies[min(len(seen) - 1, len(replies) - 1)])
+
+    extraction = await extractor_for(handler).extract(document())
+
+    assert extraction.figures == ()
+    assert len(seen) == 2

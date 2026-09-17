@@ -16,6 +16,9 @@ class UsageTally:
     reasoning_tokens: int = 0
     total_tokens: int = 0
     cost_usd: float = 0.0
+    # Page images are part of the prompt and part of the bill.
+    images: int = 0
+    image_tokens: int = 0
     # Not every backend reports a price, and a total that silently means "some calls" is
     # worse than no total.
     costed_calls: int = field(default=0, repr=False)
@@ -30,10 +33,14 @@ class UsageTally:
         total_tokens: int | None = None,
         cost_usd: float | None = None,
         effort: str | None = None,
+        images: int = 0,
+        image_tokens: int = 0,
     ) -> None:
         self.calls += 1
         if effort is not None:
             self.efforts.add(effort)
+        self.images += images
+        self.image_tokens += image_tokens
         self.prompt_tokens += prompt_tokens
         self.completion_tokens += completion_tokens
         self.reasoning_tokens += reasoning_tokens
@@ -56,6 +63,10 @@ class UsageTally:
         }
         if self.reasoning_tokens:
             usage["reasoning_tokens"] = self.reasoning_tokens
+        if self.images:
+            usage["images"] = self.images
+        if self.image_tokens:
+            usage["image_tokens"] = self.image_tokens
         if self.costed_calls == self.calls:
             usage["cost_usd"] = round(self.cost_usd, 6)
         if len(self.efforts) == 1:

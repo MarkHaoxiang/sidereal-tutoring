@@ -22,7 +22,7 @@ async def test_txt_upload() -> None:
 async def test_pdf_upload() -> None:
     draft = await UploadIngester().ingest(str(FIXTURES / "question-bank.pdf"))
 
-    assert draft.text == "Quadratic equations: practice set\nSolve x^2 - 5x + 6 = 0"
+    assert draft.text == "   Quadratic equations: practice set\n   Solve x^2 - 5x + 6 = 0"
     assert draft.metadata["format"] == "pdf"
 
 

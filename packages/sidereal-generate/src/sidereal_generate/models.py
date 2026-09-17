@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import math
 from datetime import date
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sidereal_core.canonical import CanonicalMarkScheme, CanonicalPaper
 from sidereal_core.models import Document, HomeworkFormat, Student
 
@@ -42,13 +43,47 @@ class HomeworkOutput(BaseModel):
     questions: tuple[GeneratedQuestion, ...]
 
 
+class FigureRequest(BaseModel):
+    """Where one drawn thing sits on a page image, and which node of the paper needs it."""
+
+    model_config = _OUTPUT
+
+    page: int
+    # A plain array: a tuple or a length-bounded list carries the array keywords a strict
+    # structured-output schema refuses.
+    bbox: list[float]
+    caption: str | None
+    question_number: str
+    part_label: str | None
+
+    @field_validator("bbox")
+    @classmethod
+    def _is_a_box(cls, value: list[float]) -> list[float]:
+        if len(value) != 4 or not all(math.isfinite(number) for number in value):
+            raise ValueError("bbox: four finite numbers, x0, y0, x1, y1")
+        return value
+
+    @property
+    def region(self) -> tuple[float, float, float, float]:
+        x0, y0, x1, y1 = self.bbox
+        return x0, y0, x1, y1
+
+
 class PaperExtraction(BaseModel):
-    """One ingested paper, read into the canonical structures. No mark scheme is null."""
+    """What the paper call returns. The mark scheme is a call and a schema of its own."""
 
     model_config = _OUTPUT
 
     paper: CanonicalPaper
-    mark_scheme: CanonicalMarkScheme | None
+    # Required like every other output field: an omitted key must be a validation error, never
+    # an empty list a paper with figures is indistinguishable from.
+    figures: tuple[FigureRequest, ...]
+
+
+class MarkSchemeExtraction(BaseModel):
+    model_config = _OUTPUT
+
+    mark_scheme: CanonicalMarkScheme
 
 
 class FeedbackOutput(BaseModel):

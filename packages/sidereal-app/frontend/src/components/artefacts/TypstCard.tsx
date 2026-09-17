@@ -52,7 +52,7 @@ export function TypstCard({ homeworkId, pdfId, pdfName, compileError }: TypstCar
       {pdfId ? (
         <PdfView fileId={pdfId} fallbackName={pdfName} />
       ) : (
-        <p className={styles.status}>There is no PDF yet. Compile the content to make one.</p>
+        <p className={styles.status}>No PDF yet.</p>
       )}
     </section>
   );

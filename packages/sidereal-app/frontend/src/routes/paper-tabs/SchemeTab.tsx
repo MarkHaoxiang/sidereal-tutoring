@@ -1,4 +1,5 @@
 import { MarkSchemeEditor } from "@/components/papers/MarkSchemeEditor";
+import { allQuestions } from "@/components/papers/draft";
 
 import { usePaperTab } from "./context";
 
@@ -8,7 +9,8 @@ export function SchemeTab() {
   return (
     <MarkSchemeEditor
       scheme={draft.scheme}
-      questions={draft.questions}
+      questions={allQuestions(draft)}
+      passages={draft.passages}
       onChange={(scheme) => {
         edit({ scheme });
       }}

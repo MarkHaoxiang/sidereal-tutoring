@@ -38,10 +38,7 @@ export function AppearanceCard() {
             </label>
           ))}
         </div>
-        <p className={styles.hint}>
-          System follows your device. Your choice is saved to your account, so it is the same wherever you sign
-          in.
-        </p>
+        <p className={styles.hint}>System follows your device. Saved to your account.</p>
       </fieldset>
     </Card>
   );

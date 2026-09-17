@@ -4,10 +4,10 @@ import asyncio
 from pathlib import Path
 
 import docx
-import pypdf
 from sidereal_core.models import DocumentDraft, DocumentKind, DocumentStatus
 
 from sidereal_ingest.base import IngestError
+from sidereal_ingest.pdf import layout_text
 
 SUFFIXES = (".txt", ".pdf", ".docx")
 
@@ -42,11 +42,9 @@ def _read_txt(path: Path) -> str:
 
 def _read_pdf(path: Path) -> str:
     try:
-        reader = pypdf.PdfReader(path)
-        pages = [page.extract_text() or "" for page in reader.pages]
-    except pypdf.errors.PyPdfError as exc:
+        return layout_text(path.read_bytes())
+    except IngestError as exc:
         raise IngestError(f"{path.name}: {exc}") from exc
-    return "\n\n".join(page.strip() for page in pages if page.strip())
 
 
 def _read_docx(path: Path) -> str:

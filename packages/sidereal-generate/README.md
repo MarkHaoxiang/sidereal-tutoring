@@ -36,20 +36,41 @@ worksheet = await paper_worksheet(directus, typeset, paper_id, ["1", "4"], stude
 ```
 
 A `paper_extract` job takes one or two document ids and no student: the paper, and its mark
-scheme second when the tutor filed one. It writes a `papers` row from the text, renders the paper
-and its mark scheme, and files one `questions` row per question. Maths is normalised first — inside `$...$`, a
-name Typst does not know becomes quoted text and `dx` becomes `dif x` — and whatever the compiler
-still refuses goes back to the model with its diagnostics, at most twice; what compiles is what is
-stored.
+scheme second when the tutor filed one. The paper is read in one call and the mark scheme in a
+second, under the paper's own numbers and labels. It writes a `papers` row from the text, renders
+the paper and its mark scheme, and files one `questions` row per question. Maths is normalised
+first — inside `$...$`, a name Typst does not know becomes quoted text and `dx` becomes `dif x` —
+and whatever the compiler still refuses goes back to the model with its diagnostics, each document
+on its own and at most twice; what compiles is what is stored.
+
+`JobInput(pages=True)` sends the source PDF's pages to the model as images as well as its text,
+so it can read what the text layer does not carry: ruled answer lines, answer boxes, grids, and
+every diagram, graph and figure. The tutor gets those figures cropped out of the PDF, filed as
+Directus images, and printed in the rendered paper. The request names which of those pages carry
+drawn content; a paper that comes back with no figures at all costs one further call, and
+whatever that answers is taken. `pages=False` reads the text alone, and the
+default decides from the PDF — a paper with images on a fifth of its pages or more gets them.
+Only the `openrouter` backend can see a page image; the others answer with a sentence saying so.
 
 Every job files what its calls cost in `generated_from.usage` — `calls`, `prompt_tokens`,
-`completion_tokens`, `total_tokens`, and `reasoning_tokens`/`cost_usd` when the backend reports
-them. Nothing shows it to a tutor yet.
+`completion_tokens`, `total_tokens`, and `reasoning_tokens`, `images`, `image_tokens` and
+`cost_usd` when there were any and the backend reports them. Nothing shows it to a tutor yet.
 
 `JobInput(format="typst")` makes a homework job produce a Typst source and a compiled PDF instead of
 markdown; `recompile_homework(directus, typeset, id)` compiles an existing row's `content` again.
 
-`FakeGenerator(output)` and `FailingGenerator(error)` stand in for any generator in tests.
+`default_transcriber()` reads handwriting for `sidereal_ingest.ScanIngester`. Only the `openrouter`
+backend can see an image; the others answer with a sentence saying so.
+
+```python
+from sidereal_generate import default_transcriber
+from sidereal_ingest import ScanIngester
+
+scanner = ScanIngester(default_transcriber())
+```
+
+`FakeGenerator(output)` and `FailingGenerator(error)` stand in for any generator in tests, and
+`sidereal_ingest.FakeTranscriber` for the transcriber.
 
 ```sh
 uv run --package sidereal-generate pytest packages/sidereal-generate/tests

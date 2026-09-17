@@ -4,9 +4,10 @@ import { toast } from "sonner";
 
 import { GenerationProgress } from "@/components/artefacts/GenerationProgress";
 import { addedByName } from "@/components/material/authors";
+import { ScanView } from "@/components/material/ScanView";
 import { TopicsField } from "@/components/topics/TopicsField";
 import { taggedTopics } from "@/components/topics/tree";
-import { Button, ConfirmDialog, PageHeader, Spinner, StatusChip } from "@/components/ui";
+import { Button, ConfirmDialog, Field, PageHeader, Select, Spinner, StatusChip } from "@/components/ui";
 import { apiError } from "@/lib/api";
 import { callerRole, useAuth } from "@/lib/auth-context";
 import { formatDateTime } from "@/lib/format";
@@ -22,6 +23,11 @@ import {
 import pageStyles from "./page.module.css";
 import styles from "./MaterialDetailPage.module.css";
 
+// Whether the extractor reads the pages as images; Auto leaves the choice to it.
+type PagesChoice = "auto" | "yes" | "no";
+
+const PAGES: Record<PagesChoice, boolean | null> = { auto: null, yes: true, no: false };
+
 // One page for both ways in: a student's own material, and the shared library.
 export function MaterialDetailPage() {
   const { id, docId } = useParams<{ id: string; docId: string }>();
@@ -34,6 +40,7 @@ export function MaterialDetailPage() {
   const extract = useCreateJob();
   const [confirming, setConfirming] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
+  const [pages, setPages] = useState<PagesChoice>("auto");
 
   const back = id ? { to: `/students/${id}/material`, label: "Material" } : { to: "/library", label: "Library" };
   const fileId = typeof document?.file === "string" ? document.file : (document?.file?.id ?? null);
@@ -49,7 +56,11 @@ export function MaterialDetailPage() {
       return;
     }
     try {
-      const job = await extract.mutateAsync({ kind: "paper_extract", document_ids: [docId] });
+      const job = await extract.mutateAsync({
+        kind: "paper_extract",
+        document_ids: [docId],
+        pages: PAGES[pages],
+      });
       setJobId(job.id);
     } catch (error) {
       toast.error(apiError(error));
@@ -70,7 +81,7 @@ export function MaterialDetailPage() {
     }
     try {
       await retry.mutateAsync(docId);
-      toast.success("Reading this material again");
+      toast.success("Reading again");
     } catch (error) {
       toast.error(apiError(error));
     }
@@ -82,7 +93,7 @@ export function MaterialDetailPage() {
     }
     try {
       await remove.mutateAsync({ id: docId, fileId });
-      toast.success("Material deleted");
+      toast.success("Deleted");
       void navigate(back.to);
     } catch (error) {
       toast.error(apiError(error));
@@ -103,7 +114,6 @@ export function MaterialDetailPage() {
         <>
           <PageHeader
             back={back}
-            eyebrow={inLibrary ? "Library" : "Material"}
             title={document.title ?? "Untitled material"}
             actions={
               document.status === "failed" && canEdit ? (
@@ -117,27 +127,41 @@ export function MaterialDetailPage() {
                   Retry
                 </Button>
               ) : inLibrary && document.status === "ready" ? (
-                <Button
-                  variant="primary"
-                  loading={extract.isPending}
-                  disabled={jobId !== null}
-                  onClick={() => {
-                    void extractPaper();
-                  }}
-                >
-                  Extract as paper
-                </Button>
+                <>
+                  <Field label="Read page images" className={styles.pages}>
+                    <Select
+                      value={pages}
+                      onChange={(event) => {
+                        setPages(event.target.value as PagesChoice);
+                      }}
+                    >
+                      <option value="auto">Auto</option>
+                      <option value="yes">Yes</option>
+                      <option value="no">No</option>
+                    </Select>
+                  </Field>
+                  <Button
+                    variant="primary"
+                    loading={extract.isPending}
+                    disabled={jobId !== null}
+                    onClick={() => {
+                      void extractPaper();
+                    }}
+                  >
+                    Extract as paper
+                  </Button>
+                </>
               ) : null
             }
             meta={
               <>
                 <StatusChip status={document.kind} />
                 <StatusChip status={document.status} />
-                <span>Added {formatDateTime(document.date_created)}</span>
+                <span>{formatDateTime(document.date_created)}</span>
                 {inLibrary ? <span>by {addedByName(document.user_created, user?.id ?? null)}</span> : null}
                 {document.source_url ? (
                   <a className={styles.source} href={document.source_url} target="_blank" rel="noreferrer">
-                    Open the original page
+                    Open original
                   </a>
                 ) : null}
               </>
@@ -168,12 +192,14 @@ export function MaterialDetailPage() {
             }}
           />
 
-          <p className={pageStyles.textBlock}>
-            {document.text ??
-              (document.status === "ready"
-                ? "Nothing could be read from this material."
-                : "Nothing has been read from this yet.")}
-          </p>
+          {document.kind === "scan" ? (
+            <ScanView document={document} />
+          ) : (
+            <p className={pageStyles.textBlock}>
+              {document.text ??
+                (document.status === "ready" ? "Nothing was read." : "Not read yet.")}
+            </p>
+          )}
 
           {canEdit ? (
             <div className={styles.footer}>
@@ -196,8 +222,8 @@ export function MaterialDetailPage() {
             title="Delete this material?"
             message={
               inLibrary
-                ? "It leaves the library for every tutor. Homework, feedback and plans already generated from it stay as they are."
-                : "The material and anything read from it are removed. Homework, feedback and plans already generated from it stay as they are."
+                ? "It leaves the library for every tutor. Work already generated from it stays."
+                : "The material and anything read from it are removed. Work already generated from it stays."
             }
             confirmLabel="Delete"
             danger

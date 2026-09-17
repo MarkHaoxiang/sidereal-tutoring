@@ -34,12 +34,24 @@ async with TypesetClient(typeset_settings().url) as typeset:
 ```
 
 ```python
-from sidereal_core import CanonicalPaper, CanonicalQuestion, RenderKind
+from sidereal_core import (
+    CanonicalAnswer,
+    CanonicalFigureBlock,
+    CanonicalPaper,
+    CanonicalQuestion,
+    RenderKind,
+)
 
+question = CanonicalQuestion(
+    number="1",
+    blocks=(CanonicalFigureBlock(asset="figure-1.png", width_mm=70),),
+    answer=CanonicalAnswer(type="lines", lines=6),
+)
 async with TypesetClient(typeset_settings().url) as typeset:
     pdf = await typeset.render(
         RenderKind.PAPER,
-        CanonicalPaper(title="Pure Mathematics 1", questions=(CanonicalQuestion(number="1"),)),
+        CanonicalPaper(title="Pure Mathematics 1", questions=(question,)),
+        assets={"figure-1.png": png_bytes},
     )
 ```
 

@@ -12,16 +12,23 @@ from typing import Any
 from urllib.parse import urlsplit
 from uuid import UUID
 
+from pydantic import ValidationError
+from sidereal_core.canonical import CanonicalPaper
 from sidereal_core.directus import DirectusClient, DirectusClientError, DirectusError
 from sidereal_core.models import (
     Collection,
     Document,
     DocumentDraft,
     DocumentKind,
+    DocumentPage,
+    DocumentPageDraft,
     DocumentStatus,
+    Paper,
 )
 
 from sidereal_ingest.base import Ingester, IngestError, pick
+from sidereal_ingest.scan import ScanFile, ScanIngester
+from sidereal_ingest.transcribe import PaperQuestion
 from sidereal_ingest.transcript import SUFFIXES as TRANSCRIPT_SUFFIXES
 from sidereal_ingest.upload import SUFFIXES as UPLOAD_SUFFIXES
 
@@ -44,6 +51,14 @@ class FileSource:
 
 
 @dataclass(frozen=True, slots=True)
+class ScanSource:
+    """Handwritten pages, in the order they are to be read, and the paper they answer."""
+
+    file_ids: tuple[UUID, ...]
+    paper_id: UUID | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class UrlSource:
     url: str
 
@@ -60,7 +75,7 @@ class PathSource:
     path: str
 
 
-type Source = FileSource | UrlSource | TextSource | PathSource
+type Source = FileSource | ScanSource | UrlSource | TextSource | PathSource
 
 
 async def create_document(
@@ -74,21 +89,28 @@ async def create_document(
 ) -> Document:
     """Write the pending row. `process_document` is what fills in its text."""
     draft = await _pending(client, source, title, kind)
-    return await client.create_item(
+    document = await client.create_item(
         Collection.DOCUMENTS,
         Document,
         draft.model_copy(update={"student": student, "session": session}),
     )
+    if isinstance(source, ScanSource):
+        await _link_pages(client, document.id, source.file_ids)
+    return document
 
 
 async def process_document(
-    client: DirectusClient, ingesters: Sequence[Ingester], document_id: UUID
+    client: DirectusClient,
+    ingesters: Sequence[Ingester],
+    document_id: UUID,
+    *,
+    scanner: ScanIngester | None = None,
 ) -> Document:
     """Take a row to `ready` or `failed`. Never raises for a source it could not read."""
     document = await client.get_item(Collection.DOCUMENTS, Document, document_id)
     await _patch(client, document_id, {"status": DocumentStatus.PROCESSING.value, "error": None})
     try:
-        draft = await _read(client, ingesters, document)
+        draft = await _read(client, ingesters, document, scanner)
     except Exception as exc:  # noqa: BLE001 - the row carries the failure, it does not raise it.
         return await _patch(
             client,
@@ -115,6 +137,16 @@ async def _pending(
                 file=file_id,
                 metadata={**metadata, "filename": filename},
             )
+        case ScanSource(file_ids=file_ids, paper_id=paper_id):
+            if not file_ids:
+                raise DocumentError("A scan needs at least one page.")
+            filename = (await client.get_file(file_ids[0])).filename_download
+            return DocumentDraft(
+                title=title or Path(filename).stem,
+                kind=kind or DocumentKind.SCAN,
+                paper=paper_id,
+                metadata={**metadata, "filename": filename},
+            )
         case PathSource(path=path):
             return DocumentDraft(
                 title=title or Path(path).stem,
@@ -138,9 +170,14 @@ async def _pending(
 
 
 async def _read(
-    client: DirectusClient, ingesters: Sequence[Ingester], document: Document
+    client: DirectusClient,
+    ingesters: Sequence[Ingester],
+    document: Document,
+    scanner: ScanIngester | None = None,
 ) -> DocumentDraft | None:
     """The draft to fill the row from, or `None` when the row already holds its text."""
+    if document.kind is DocumentKind.SCAN:
+        return await _transcribe(client, scanner, document)
     if document.file is not None:
         # Directus keeps the bytes and the row keeps the text, so the copy only has to
         # live as long as the read.
@@ -155,6 +192,61 @@ async def _read(
     if document.text:
         return None
     raise DocumentError("There is nothing to read here: no file, no link and no text.")
+
+
+async def _transcribe(
+    client: DirectusClient, scanner: ScanIngester | None, document: Document
+) -> DocumentDraft:
+    """A scan's pages, read in order. The bytes never reach the disk."""
+    if scanner is None:
+        raise DocumentError("Handwriting scans are not set up on this server.")
+    files = [
+        ScanFile(*await client.download_file(file_id))
+        for file_id in await _page_files(client, document.id)
+    ]
+    if not files:
+        raise DocumentError("That scan has no pages.")
+    return await scanner.read(files, questions=await _paper_questions(client, document.paper))
+
+
+async def _page_files(client: DirectusClient, document_id: UUID) -> list[UUID]:
+    """The scan's files in the order the tutor put them in."""
+    pages = await client.list_items(
+        Collection.DOCUMENT_PAGES,
+        DocumentPage,
+        filter={"document": {"_eq": str(document_id)}},
+        sort=["sort"],
+    )
+    return [page.file for page in sorted(pages, key=lambda page: page.sort or 0)]
+
+
+async def _paper_questions(
+    client: DirectusClient, paper_id: UUID | None
+) -> tuple[PaperQuestion, ...]:
+    """The numbers and stems a solutions scan is matched against."""
+    if paper_id is None:
+        return ()
+    paper = await client.get_item(Collection.PAPERS, Paper, paper_id)
+    if paper.structure is None:
+        raise DocumentError("That paper has no questions yet, so the pages cannot be matched.")
+    try:
+        structure = CanonicalPaper.model_validate(paper.structure)
+    except ValidationError as exc:
+        raise DocumentError("That paper's questions could not be read.") from exc
+    return tuple(
+        PaperQuestion(number=question.number, stem=question.stem)
+        for question in structure.questions
+    )
+
+
+async def _link_pages(client: DirectusClient, document_id: UUID, file_ids: Sequence[UUID]) -> None:
+    """The junction rows the `pages` alias reads, in the order the pages were given."""
+    for position, file_id in enumerate(file_ids, start=1):
+        await client.create_item(
+            Collection.DOCUMENT_PAGES,
+            DocumentPage,
+            DocumentPageDraft(document=document_id, file=file_id, sort=position),
+        )
 
 
 async def _download(client: DirectusClient, file_id: UUID, directory: Path) -> Path:
@@ -179,6 +271,8 @@ def _extracted(document: Document, draft: DocumentDraft | None) -> dict[str, Any
         return fields
     metadata.update(draft.metadata)
     fields["text"] = draft.text
+    if draft.transcription is not None:
+        fields["transcription"] = draft.transcription
     auto = document.metadata.get(_AUTO_TITLE) == "auto"
     if auto and draft.title and draft.title != document.source_url:
         fields["title"] = draft.title
@@ -189,6 +283,8 @@ def _message(exc: BaseException, document: Document) -> str:
     """What the tutor reads in `error`: what failed, and what they can do about it."""
     match exc:
         case DocumentError():
+            return str(exc)
+        case IngestError() if document.kind is DocumentKind.SCAN:
             return str(exc)
         case IngestError() if document.source_url is not None:
             return (

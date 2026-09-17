@@ -36,7 +36,7 @@ export function StudentHomeworkListPage() {
       <h1 className={styles.heading}>Homework</h1>
 
       {isLoading ? <SkeletonRows count={3} label="Loading your homework" /> : null}
-      {isError ? <p className={styles.status}>Your homework could not be loaded. Try again in a moment.</p> : null}
+      {isError ? <p className={styles.status}>Could not load your homework.</p> : null}
 
       {section("To do", todo)}
       {section("Handed in", done)}

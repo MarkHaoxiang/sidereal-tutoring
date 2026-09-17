@@ -8,8 +8,8 @@ import type { RenderBody } from "@/lib/queries";
 import { EditorTools } from "./EditorTools";
 import { FragmentView } from "./FragmentView";
 import { QuestionFields } from "./QuestionFields";
-import { canonicalQuestion, questionMarks } from "./draft";
-import type { QuestionDraft } from "./draft";
+import { fragmentQuestion, questionMarks } from "./draft";
+import type { PassageDraft, QuestionDraft } from "./draft";
 import styles from "./papers.module.css";
 
 // Long enough that a tutor typing a formula is not compiling on every keystroke, short
@@ -20,6 +20,8 @@ export interface QuestionCardProps {
   question: QuestionDraft;
   index: number;
   count: number;
+  /** The paper's passages, so a `passage_ref` block is chosen rather than typed. */
+  passages: PassageDraft[];
   onChange: (next: QuestionDraft) => void;
   onMove: (delta: -1 | 1) => void;
   onRemove: () => void;
@@ -30,6 +32,7 @@ export function QuestionCard({
   question,
   index,
   count,
+  passages,
   onChange,
   onMove,
   onRemove,
@@ -37,7 +40,7 @@ export function QuestionCard({
   const [editing, setEditing] = useState(false);
 
   const name = `question ${question.number || String(index + 1)}`;
-  const fragment = canonicalQuestion(question, index);
+  const fragment = fragmentQuestion(question, index, passages);
   const body: RenderBody | null =
     fragment === null ? null : { kind: "question", document: fragment, output: "svg" };
   const settled = useDebounced(body, JSON.stringify(body), SETTLE_MS);
@@ -87,9 +90,16 @@ export function QuestionCard({
         <FragmentView
           body={settled}
           label={name}
-          empty="This question needs a number and either a question or a part before it can be set."
+          empty="Needs a number and some text."
         />
-        {editing ? <QuestionFields question={question} name={name} onChange={onChange} /> : null}
+        {editing ? (
+          <QuestionFields
+            question={question}
+            name={name}
+            passages={passages}
+            onChange={onChange}
+          />
+        ) : null}
       </div>
     </div>
   );

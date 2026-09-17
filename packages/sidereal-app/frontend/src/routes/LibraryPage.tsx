@@ -39,7 +39,7 @@ export function LibraryPage() {
     <div>
       <PageHeader
         title="Library"
-        subtitle="Material every tutor can use. Anything not tied to one student lives here."
+        subtitle="Material every tutor can use."
         actions={add}
       />
 
@@ -59,14 +59,14 @@ export function LibraryPage() {
       </div>
 
       {isLoading ? <SkeletonRows count={4} label="Loading the library" /> : null}
-      {isError ? <p className={pageStyles.status}>Could not load the library. Try refreshing the page.</p> : null}
+      {isError ? <p className={pageStyles.status}>Could not load the library.</p> : null}
 
       {data && visible.length === 0 ? (
         <EmptyState
           message={
             search.trim() || topic
-              ? "Nothing in the library matches what you are looking for."
-              : "The library is empty. Add a worksheet, a link or your notes and every tutor can use it."
+              ? "Nothing matches."
+              : "The library is empty."
           }
           action={search.trim() || topic ? null : add}
         />

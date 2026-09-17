@@ -101,6 +101,9 @@ class JobInput(BaseModel):
     period_end: date | None = None
     # Homework only. The app refuses `typst` for any other kind before the job is started.
     format: HomeworkFormat = HomeworkFormat.MARKDOWN
+    # `paper_extract` only: send the source PDF's pages as images too. None decides from the
+    # PDF itself.
+    pages: bool | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -281,6 +284,7 @@ async def _run(
             paper_id,
             provenance,
             mark_scheme_id=scheme_id,
+            pages=job_input.pages,
             usage=usage,
         )
     return await _generate(

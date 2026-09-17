@@ -38,7 +38,11 @@ from sidereal_core.typeset import (
 from sidereal_generate.jobs import default_generators
 from sidereal_generate.papers import PaperError
 from sidereal_generate.typst import NotTypstError
+from sidereal_generate.vision import default_transcriber
 from sidereal_ingest import HttpxFetcher, default_ingesters
+from sidereal_ingest.base import IngestError
+from sidereal_ingest.documents import DocumentError
+from sidereal_ingest.scan import ScanIngester
 
 from sidereal_app.api.errors import (
     DIRECTUS_REJECTED,
@@ -49,6 +53,7 @@ from sidereal_app.api.errors import (
     LOGIN_FAILED,
     LOGIN_MISSING,
     LOGIN_REFUSED,
+    MATERIAL_UNUSABLE,
     PAPER_UNUSABLE,
     STUDENT_NOT_FOUND,
     STUDENT_ROLE_MISSING,
@@ -57,6 +62,7 @@ from sidereal_app.api.errors import (
     TUTOR_REFUSED,
     TUTOR_ROLE_MISSING,
     TYPESET_FAILED,
+    TYPESET_TOO_LARGE,
     TYPESET_UNAVAILABLE,
     WEAK_PASSWORD,
     error_body,
@@ -106,6 +112,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.ingesters = default_ingesters(HttpxFetcher(http_client=web))
         app.state.typeset = TypesetClient(typeset_settings().url, http_client=typeset)
         app.state.generators = default_generators()
+        app.state.scanner = ScanIngester(default_transcriber())
         yield
 
 
@@ -122,6 +129,8 @@ def create_app() -> FastAPI:
     app.add_exception_handler(TypesetError, _typeset_failed)
     app.add_exception_handler(NotTypstError, _not_typst)
     app.add_exception_handler(PaperError, _paper_unusable)
+    app.add_exception_handler(DocumentError, _material_unusable)
+    app.add_exception_handler(IngestError, _material_unusable)
     return app
 
 
@@ -153,6 +162,9 @@ def _typeset_unavailable(request: Request, exc: Exception) -> JSONResponse:
 
 def _typeset_failed(request: Request, exc: Exception) -> JSONResponse:
     """The compiler's own diagnostics: the tutor needs the line, not a summary."""
+    status = exc.status if isinstance(exc, TypesetError) else 422
+    if status == httpx.codes.REQUEST_ENTITY_TOO_LARGE:
+        return JSONResponse(status_code=status, content=error_body(TYPESET_TOO_LARGE, str(exc)))
     diagnostics = exc.diagnostics if isinstance(exc, TypesetError) else ()
     return JSONResponse(
         status_code=422,
@@ -171,6 +183,11 @@ def _not_typst(request: Request, exc: Exception) -> JSONResponse:
 def _paper_unusable(request: Request, exc: Exception) -> JSONResponse:
     """A paper whose structure cannot be rendered. The sentence is the one generate wrote."""
     return JSONResponse(status_code=422, content=error_body(PAPER_UNUSABLE, str(exc)))
+
+
+def _material_unusable(request: Request, exc: Exception) -> JSONResponse:
+    """Material that cannot be read. The sentence is the one ingest wrote."""
+    return JSONResponse(status_code=422, content=error_body(MATERIAL_UNUSABLE, str(exc)))
 
 
 def _login_refused(request: Request, exc: Exception) -> JSONResponse:

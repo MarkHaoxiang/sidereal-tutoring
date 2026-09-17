@@ -52,6 +52,7 @@ app_collections=(
   topics
   homework_questions
   document_topics
+  document_pages
   question_topics
   homework_topics
 )
@@ -342,22 +343,27 @@ if [ "$custom_rules" = true ]; then
   ensure_scoped question_topics \
     "$(jq -nc --argjson q "$questions_read" '{question: $q}')" \
     "$(jq -nc --argjson q "$questions_write" '{question: $q}')"
+  # A scan's pages are reachable exactly as far as the document they belong to.
+  ensure_scoped document_pages \
+    "$(jq -nc --argjson d "$documents_read" '{document: $d}')" \
+    "$(jq -nc --argjson d "$documents_write" '{document: $d}')"
 
   # The topic tree is the practice's shared vocabulary, not any one tutor's data.
   for action in create read update delete; do
     ensure_permission "$policy_id" topics "$action" '["*"]' '{}'
   done
 
-  # Files: their own uploads, plus whatever hangs off their students' homework or documents
-  # through the three o2m aliases on `directus_files`. The create preset is what makes the
+  # Files: their own uploads, plus whatever hangs off their students' homework, documents or
+  # scan pages through the o2m aliases on `directus_files`. The create preset is what makes the
   # first arm true, and delete is needed or deleting the material that owns a file orphans it
   # in storage. Writing is not widened by the library: a tutor reads another tutor's library
   # file and changes neither it nor the document behind it.
-  # The `document_file`, `paper_rendered_pdf` and `paper_mark_scheme_pdf` arms use `_some` and
-  # each stays in an `_or` arm of its own. Under one `_or` — or without `_some` at all — the
-  # null test matches a file with no document at all, which is every file. A paper's own null
-  # test rides the m2o to `document`, so one arm covers both the student-less document and the
-  # paper that has none.
+  # The `document_file`, `document_page`, `paper_rendered_pdf` and `paper_mark_scheme_pdf` arms
+  # use `_some` and each stays in an `_or` arm of its own. Under one `_or` — or without `_some`
+  # at all — the null test matches a file with no document at all, which is every file. A
+  # paper's own null test rides the m2o to `document`, so one arm covers both the student-less
+  # document and the paper that has none, and a scan page's rides the junction's required
+  # `document` the same way.
   tutor_files_write="$(jq -nc --arg u "$current_user" '{_or: [
     {uploaded_by: {_eq: $u}},
     {homework_pdf: {student: {tutor: {_eq: $u}}}},
@@ -367,6 +373,8 @@ if [ "$custom_rules" = true ]; then
     $w._or[],
     {document_file: {_some: {student: {tutor: {_eq: $u}}}}},
     {document_file: {_some: {student: {_null: true}}}},
+    {document_page: {_some: {document: {student: {tutor: {_eq: $u}}}}}},
+    {document_page: {_some: {document: {student: {_null: true}}}}},
     {paper_rendered_pdf: {_some: {document: {student: {tutor: {_eq: $u}}}}}},
     {paper_rendered_pdf: {_some: {document: {student: {_null: true}}}}},
     {paper_mark_scheme_pdf: {_some: {document: {student: {tutor: {_eq: $u}}}}}},
@@ -442,7 +450,7 @@ ensure_filtered_permission "$student_policy_id" sessions read \
   '["id","scheduled_at","duration_minutes","status","student"]' "$via_student"
 
 ensure_filtered_permission "$student_policy_id" homework read \
-  '["id","title","content","format","pdf","compile_error","due_on","status","submission","submission_file","submitted_at","date_created","date_updated","student","questions","topics"]' \
+  '["id","title","content","format","pdf","compile_error","due_on","status","submission","submission_file","submission_transcription","submitted_at","date_created","date_updated","student","questions","topics"]' \
   "$(jq -nc --argjson s "$via_student" \
     '{_and: [$s, {status: {_in: ["assigned", "submitted", "marked"]}}]}')"
 
@@ -451,7 +459,7 @@ ensure_filtered_permission "$student_policy_id" homework read \
 # against the payload alone, so saving a draft answer with no `status` passes and any
 # `status` other than `submitted` fails.
 ensure_filtered_permission "$student_policy_id" homework update \
-  '["submission","submission_file","submitted_at","status"]' \
+  '["submission","submission_file","submission_transcription","submitted_at","status"]' \
   "$(jq -nc --argjson s "$via_student" \
     '{_and: [$s, {status: {_in: ["assigned"]}}]}')" \
   '{"status": {"_eq": "submitted"}}'

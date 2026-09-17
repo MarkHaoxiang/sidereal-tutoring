@@ -143,8 +143,7 @@ export function SchemeFields({ question, name, onChange }: SchemeFieldsProps) {
       </div>
 
       <p className={styles.hint}>
-        Answers and notes are Typst markup too, so <code>$x = 2$</code> sets as maths. Number each
-        one to match the paper.
+        Typst markup here too — number each one to match the paper.
       </p>
     </div>
   );

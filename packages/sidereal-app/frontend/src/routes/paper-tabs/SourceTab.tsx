@@ -11,10 +11,7 @@ export function SourceTab() {
   if (!built.ok) {
     return (
       <>
-        <p className={styles.note}>
-          The file is generated from the structure every time, and there is something in the
-          structure that cannot be set yet.
-        </p>
+        <p className={styles.note}>Something in the structure cannot be set yet.</p>
         <ul className={styles.problems}>
           {built.problems.map((problem) => (
             <li key={problem} className={styles.problem}>

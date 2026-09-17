@@ -51,7 +51,7 @@ export function PasswordCard() {
     setCurrent("");
     setNext("");
     setConfirm("");
-    toast.success("Your password is changed");
+    toast.success("Password changed");
   };
 
   return (
@@ -111,7 +111,7 @@ export function PasswordCard() {
           >
             Change password
           </Button>
-          <p className={styles.hint}>You stay signed in here. Use the new password next time.</p>
+          <p className={styles.hint}>You stay signed in here.</p>
         </div>
       </div>
     </Card>

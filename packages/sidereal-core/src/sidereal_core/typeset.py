@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+import base64
+from collections.abc import Mapping, Sequence
 from datetime import date
 from types import TracebackType
 from typing import Any, Literal, Self, overload
@@ -20,6 +21,10 @@ from sidereal_core.canonical import (
 # The service's own compile timeout is 10s; the client waits longer than the answer can take.
 DEFAULT_TIMEOUT = 30.0
 HOMEWORK_KIND = "homework"
+
+# The service's own asset limits, decoded. Over either is a 413 there, so it is one here.
+MAX_ASSET_BYTES = 2 * 1024 * 1024
+MAX_ASSETS_BYTES = 8 * 1024 * 1024
 
 
 class Diagnostic(BaseModel):
@@ -113,6 +118,7 @@ class TypesetClient:
         document: CanonicalDocument,
         *,
         mark_scheme: CanonicalMarkSchemeQuestion | None = None,
+        assets: Mapping[str, bytes] | None = None,
     ) -> bytes: ...
 
     @overload
@@ -123,6 +129,7 @@ class TypesetClient:
         output: Literal[RenderOutput.PDF],
         *,
         mark_scheme: CanonicalMarkSchemeQuestion | None = None,
+        assets: Mapping[str, bytes] | None = None,
     ) -> bytes: ...
 
     @overload
@@ -133,6 +140,7 @@ class TypesetClient:
         output: Literal[RenderOutput.SVG],
         *,
         mark_scheme: CanonicalMarkSchemeQuestion | None = None,
+        assets: Mapping[str, bytes] | None = None,
     ) -> list[str]: ...
 
     @overload
@@ -143,6 +151,7 @@ class TypesetClient:
         output: Literal[RenderOutput.SOURCE],
         *,
         mark_scheme: CanonicalMarkSchemeQuestion | None = None,
+        assets: Mapping[str, bytes] | None = None,
     ) -> str: ...
 
     async def render(
@@ -152,6 +161,7 @@ class TypesetClient:
         output: RenderOutput = RenderOutput.PDF,
         *,
         mark_scheme: CanonicalMarkSchemeQuestion | None = None,
+        assets: Mapping[str, bytes] | None = None,
     ) -> bytes | list[str] | str:
         """A canonical document in the house style: the structure goes over, never Typst."""
         payload: dict[str, Any] = {
@@ -161,6 +171,8 @@ class TypesetClient:
         }
         if mark_scheme is not None:
             payload["mark_scheme"] = mark_scheme.model_dump(mode="json")
+        if assets:
+            payload["assets"] = _encoded(assets)
         response = await self._send("POST", "/render", payload)
         if output is RenderOutput.PDF:
             return response.content
@@ -211,6 +223,20 @@ class TypesetClient:
         if response.status_code >= httpx.codes.BAD_REQUEST:
             raise TypesetError(response.status_code, *_failure(response))
         return response
+
+
+def _encoded(assets: Mapping[str, bytes]) -> dict[str, str]:
+    """The figure bytes as standard base64, refused here rather than as a 413 there."""
+    total = 0
+    for name, content in assets.items():
+        if len(content) > MAX_ASSET_BYTES:
+            raise TypesetError(
+                413, message=f"asset {name!r} is larger than {MAX_ASSET_BYTES} bytes"
+            )
+        total += len(content)
+    if total > MAX_ASSETS_BYTES:
+        raise TypesetError(413, message=f"the assets are larger than {MAX_ASSETS_BYTES} bytes")
+    return {name: base64.b64encode(content).decode("ascii") for name, content in assets.items()}
 
 
 def _pages(body: dict[str, Any], path: str) -> list[str]:

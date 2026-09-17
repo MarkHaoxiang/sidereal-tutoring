@@ -30,11 +30,7 @@ export function AdminJobsPage() {
 
   return (
     <div>
-      <PageHeader
-        eyebrow="Admin"
-        title="Jobs"
-        subtitle="Every generation run in the practice, newest first. A queued or running one refreshes itself."
-      />
+      <PageHeader title="Jobs" />
 
       <div className={styles.toolbar}>
         <Select
@@ -55,14 +51,12 @@ export function AdminJobsPage() {
       </div>
 
       {isLoading ? <SkeletonRows count={4} variant="line" label="Loading the jobs" /> : null}
-      {isError ? <p className={pageStyles.status}>Could not load the jobs. Try refreshing the page.</p> : null}
+      {isError ? <p className={pageStyles.status}>Could not load the jobs.</p> : null}
 
       {jobs && jobs.length === 0 ? (
         <EmptyState
           message={
-            status === "all"
-              ? "Nothing has been generated yet."
-              : "No jobs with that status right now."
+            status === "all" ? "Nothing generated yet." : "No jobs with that status."
           }
         />
       ) : null}
@@ -106,9 +100,9 @@ export function AdminJobsPage() {
                       <td>
                         <StatusChip status={job.status ?? "queued"} />
                       </td>
-                      <td>{student_name ?? "No student"}</td>
-                      <td className={styles.secondaryCell}>{tutor_email ?? "No tutor"}</td>
-                      <td className={styles.secondaryCell}>{job.model ?? "No model recorded"}</td>
+                      <td>{student_name ?? "—"}</td>
+                      <td className={styles.secondaryCell}>{tutor_email ?? "—"}</td>
+                      <td className={styles.secondaryCell}>{job.model ?? "—"}</td>
                       <td className={styles.secondaryCell}>{formatDateTime(job.date_created ?? null)}</td>
                     </tr>
                     {open ? (
@@ -117,11 +111,11 @@ export function AdminJobsPage() {
                           <div className={styles.detail}>
                             {job.error ? (
                               <>
-                                <p className={styles.detailLabel}>What went wrong</p>
+                                <p className={styles.detailLabel}>Error</p>
                                 <p className={styles.error}>{job.error}</p>
                               </>
                             ) : null}
-                            <p className={styles.detailLabel}>What it was asked for</p>
+                            <p className={styles.detailLabel}>Input</p>
                             <pre className={styles.pre}>{JSON.stringify(job.input ?? {}, null, 2)}</pre>
                           </div>
                         </td>

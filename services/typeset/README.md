@@ -33,10 +33,12 @@ POST /template  {"kind": "homework", "title": "…", "student": "…"|null,
      200  {"source": "…"}  the body wrapped in the house template
 POST /render    {"kind": "paper" | "mark_scheme" | "worksheet" | "question" | "markup",
                  "document": {…}, "mark_scheme": {…}|null,
+                 "assets": {"figure-1.png": "<base64>", …},
                  "output": "pdf" | "svg" | "source"}      output defaults to pdf
      200  application/pdf bytes, {"pages": […]}, or {"source": "…"}
      400  {"message": …}   the body is not JSON
-     413  {"message": …}   the rendered source is over 256 KiB
+     413  {"message": …}   the rendered source is over 256 KiB, one asset over 2 MiB,
+                           or the assets over 8 MiB together
      422  {"errors": [{"path": "questions[2].parts[0].marks", "message": …}, …]}
      422  {"diagnostics": […]}   the rendered source did not compile
 ```
@@ -44,7 +46,8 @@ POST /render    {"kind": "paper" | "mark_scheme" | "worksheet" | "question" | "m
 `line` and `column` are 1-based positions in the submitted source; both are `null` for a
 diagnostic that points at no source. A source the compiler rejects is always a 422 — never a
 500. `#import "@preview/…"` and anything that reads a file (`read`, `include`, `image`) are
-refused the same way, with a diagnostic saying why.
+refused the same way, with a diagnostic saying why — except an `image` of one of the request's
+own assets, which is how a figure is drawn.
 
 ## Rendering a document
 
@@ -53,29 +56,63 @@ helpers in `template/`, so every document of a kind comes out in the same house 
 
 ```
 Paper       { title, source?, board?, year?, time_minutes?, total_marks?, instructions?,
-              questions: [Question] }
-Question    { number: "1", stem?, marks?, answer_lines?, parts: [Part] }
-Part        { label: "a", text, marks?, answer_lines?, parts: [Part] }
-MarkScheme  { title, questions: [{ number, answer?, notes?,
-                                   parts: [{ label, answer, marks?, notes? }] }] }
+              questions: [Question], sections: [Section], passages: [Passage] }
+Section     { title?, instructions?, choose?: int, questions: [Question] }
+Passage     { id, title?, text }
+Question    { number: "1", stem?, marks?, blocks: [Block], answer?: Answer,
+              answer_lines?: int, parts: [Part] }
+Part        { label: "a", text, marks?, blocks: [Block], answer?: Answer,
+              answer_lines?: int, parts: [Part] }
+Answer      { type: "lines" | "box" | "multiple_choice" | "essay" | "grid" | "table" | "none",
+              lines?: int, options?: [{ label?, text }],
+              height_mm?: int, rows?: int, cols?: int }
+Block       { type: "passage",      title?, text }
+            { type: "passage_ref",  id }
+            { type: "code",         language?, text }
+            { type: "table",        caption?, header?: [string], rows: [[string]] }
+            { type: "figure",       asset, caption?, width_mm?: int }
+MarkScheme  { title, questions: [{ number, answer?, notes?, blocks: [Block],
+                                   parts: [{ label, answer, marks?, notes?,
+                                             blocks: [Block] }] }] }
 Worksheet   { title, student?, due?, intro?, questions: [Question] }
 Markup      { text }
 ```
 
 `worksheet` is the structured successor to the `homework` body of `POST /template`; both the
 endpoint and `template/homework.typ` stay as they are. `Part.parts` nests one level only —
-`(a)` then `(i)` — and `answer_lines` is capped at 60. Every other field is optional, and a
-field the structure does not have is a 422 naming its path rather than a silently dropped
-value.
+`(a)` then `(i)`. Every field but the ones shown without a `?` is optional, an absent array is
+an empty one, and a field the structure does not have is a 422 naming its path rather than a
+silently dropped value.
 
-`title`, `source`, `board`, `student`, `due`, `number` and `label` are plain text. `stem`,
-`text`, `instructions`, `intro`, `answer` and `notes` carry Typst markup — `$x^2$`, `*bold*`,
-`_emph_`, lists — but not Typst code: `\`, `#`, `[` and `]` are escaped before the text is
-placed in a helper's content block, and `/` is escaped where it would open a comment. So a
-stray `]` in a question prints as `]` and cannot close the block, and a field can never call a
-function. Markup that is merely wrong — an unclosed `$` — reaches the compiler and comes back
-as a 422 with diagnostics whose line and column point into the rendered source, which
+`title`, `source`, `board`, `student`, `due`, `number`, `label`, `id`, `asset` and `language`
+are plain text. `stem`, `text`, `instructions`, `intro`, `answer`, `notes`, an option's `text`
+and a table's `caption`, `header` and cells carry Typst markup — `$x^2$`, `*bold*`, `_emph_`,
+lists — but not Typst code, and not by accident.
+
+**Prose is prose.** `\`, `#`, `[` and `]` are escaped, so a stray `]` prints as `]` and cannot
+close the block and a field can never call a function. Outside a `$…$` span, so are the
+characters ordinary prose walks into: `<` and `>` (a label — `a <3 b` is an unclosed label and
+`<name>` silently becomes one), `@` (a reference — `email@example.com` names a label that does
+not exist), a backtick (raw text), and `/` where it would open a comment, end one after a `*`,
+or start a term list at the beginning of a line. `*` and `_` are paired the way the compiler
+pairs them — per block, outside maths, and ignoring one inside a word like `snake_case` — and
+any left open or crossed (`*a _b* c_`) is escaped. So `a < b`, `20% * VAT`, `sep_ate*` and
+`/ no colon` all print, and none of them is a compile error.
+
+The cost is that a line may open a list with `- `, `+ ` or `1. ` but not a term list with
+`/ `, and a backtick never opens a raw span — `code` blocks are what listings are for.
+
+Inside `$…$` nothing is touched, because there `<`, `@` and `*` are operators. Maths that is
+merely wrong — an unclosed `$`, an unknown symbol — reaches the compiler and comes back as a
+422 with diagnostics whose line and column point into the rendered source, which
 `"output": "source"` returns.
+
+A markup field keeps its own lines: **one newline is a line break and a blank line is a
+paragraph break**, so a poem, a play extract or a numbered instruction prints as it was
+written. The exception is a line that starts a list, a heading or a term (`- one`, `+ one`,
+`1. one`, `= Heading`, `/ Term: …`) — Typst already sets those on a line of their own, so no
+break is added before one. Text whose indentation matters belongs in a `passage` or `code`
+block, which are set verbatim.
 
 ```sh
 curl -sS localhost:50052/render -H 'content-type: application/json' -o paper.pdf -d '{
@@ -89,14 +126,120 @@ curl -sS localhost:50052/render -H 'content-type: application/json' -o paper.pdf
       "number": "1",
       "stem": "The curve $C$ has equation $y = x^3 - 6x^2 + 9x + 1$.",
       "parts": [
-        { "label": "a", "text": "Find $(d y) / (d x)$.", "marks": 2, "answer_lines": 3 },
+        { "label": "a", "text": "Find $(d y) / (d x)$.", "marks": 2,
+          "answer": { "type": "lines", "lines": 3 } },
         { "label": "b", "text": "Hence find the stationary points of $C$.", "marks": 5,
-          "answer_lines": 6 }
+          "answer": { "type": "lines", "lines": 6 } }
       ]
     }]
   }
 }'
 ```
+
+### Sections and choice
+
+`Paper.sections` is a run of questions under one heading; where it is used `Paper.questions`
+may be empty, and where both are used the loose questions are printed first. A section prints
+its `title`, its own marks total, `Answer N of the following questions.` when `choose` is set,
+and then its `instructions`.
+
+The section's total is the **answerable** one: with `choose`, `choose` × one question's marks,
+and only where every question in the section is worth the same — anything else has no single
+answer and no total is printed. Without `choose` it is the sum. Either way the paper's own
+`total_marks` is printed exactly as it was sent: nothing here adds a total that would
+contradict it.
+
+```json
+{ "title": "Section A: Shakespeare",
+  "instructions": "Answer *one* question in this section.",
+  "choose": 1,
+  "questions": [
+    { "number": "01", "stem": "Explore the presentation of jealousy in *Othello*.", "marks": 25 },
+    { "number": "02", "stem": "Explore the presentation of power in *Othello*.", "marks": 25 }
+  ] }
+```
+
+### Answer types
+
+`Question.answer` and `Part.answer` are the space the student writes in, printed after the
+node's blocks and before its parts. `type` decides which of the other fields are read; the
+rest are ignored.
+
+| `type` | reads | prints |
+| --- | --- | --- |
+| `lines` | `lines` (default 4, at most 60) | ruled lines |
+| `box` | `height_mm` (default 40, at most 250) | a bordered box |
+| `multiple_choice` | `options` (1 to 26) | a lettered list, each option with a lozenge to shade |
+| `essay` | `height_mm` (default 230, at most 250) | a ruled block as tall as it asks for |
+| `grid` | `rows` (≤ 40), `cols` (≤ 26) | squared paper, 5 mm to a cell |
+| `table` | `rows` (≤ 40), `cols` (≤ 12) | an empty table |
+| `none` | — | nothing |
+
+An option's `label` is the letter the paper printed; leave it out and the options are lettered
+A, B, C… in order. The renderer adds no instruction of its own — "shade one lozenge", "circle
+your answer" and the like belong in the stem, where the paper put them.
+
+`answer_lines: n` is the deprecated spelling of `{"type": "lines", "lines": n}` and emits the
+same call; sending both for one node is a 422 at `answer_lines`.
+
+```json
+{ "number": "07", "marks": 1,
+  "stem": "Which quantity has the base unit $k g space m^2 space s^(-2)$?\nShade *one* lozenge.",
+  "answer": { "type": "multiple_choice", "options": [
+    { "text": "kinetic energy" }, { "text": "momentum" },
+    { "text": "the Young modulus" }, { "label": "D", "text": "power" }
+  ] } }
+```
+
+### Content blocks
+
+`Question.blocks` and `Part.blocks` are the material set between the stem and the parts — and
+a `MarkScheme` entry may carry the same blocks, which is where a marking table goes.
+
+- **`passage`** — an extract, set verbatim in a tinted block with a rule down its left. Its
+  `text` is a string, not markup: every line, blank line and leading space survives, and
+  nothing in it is read as Typst.
+- **`code`** — a listing, set in monospace with `language` highlighted if Typst knows it. Its
+  `text` is verbatim too, so a `#` prints as `#`.
+- **`table`** — a Typst table. `header` is one row of column names; every row must have as
+  many cells as the header (or as the first row, when there is no header), or it is a 422 at
+  `blocks[i].rows[j]`.
+- **`figure`** — an image from the request's `assets`, centred, `width_mm` wide or as wide as
+  the column.
+- **`passage_ref`** — a pointer to a `Paper.passages` entry. The passages are printed once, in
+  order, at the start of the paper, just after the instructions; the reference prints a line
+  naming the one this question needs. An id that is in no passage is a 422 at `blocks[i].id`.
+
+```json
+{ "number": "2", "stem": "The program below sums a list.",
+  "blocks": [
+    { "type": "code", "language": "python",
+      "text": "def total(values):\n    return sum(values)" },
+    { "type": "table", "caption": "Table 1: the recorded times.",
+      "header": ["Gate", "Time / $s$"], "rows": [["A", "0.00"], ["B", "0.41"]] },
+    { "type": "figure", "asset": "figure-1.png", "caption": "Figure 1", "width_mm": 70 },
+    { "type": "passage_ref", "id": "ozymandias" }
+  ] }
+```
+
+### Assets
+
+A `figure` block names a file, and `assets` is where the bytes come from: a map of that same
+name to standard base64. Whitespace inside a value and a leading `data:image/png;base64,`
+prefix are ignored.
+
+```json
+{ "kind": "paper", "document": { … },
+  "assets": { "figure-1.png": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB…" } }
+```
+
+The name is a name, never a path: letters, digits, `.`, `-` and `_`, at most 128 characters,
+ending in `.png`, `.jpg`, `.jpeg` or `.svg` — which is how the format is read. The bytes live
+in memory for the length of the one request, are reachable only by that name, and are never
+written anywhere. One asset may be 2 MiB and all of them 8 MiB together, decoded; over either
+is a 413. A `figure` naming an asset that was not sent is a 422 at `blocks[i].asset` before
+the compiler runs. `kind: "question"` takes `assets` too, so the app can show one question with
+its figure.
 
 ## Rendering a fragment
 

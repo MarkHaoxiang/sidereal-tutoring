@@ -22,6 +22,7 @@ class Collection(StrEnum):
     TOPICS = "topics"
     GENERATION_JOBS = "generation_jobs"
     HOMEWORK_QUESTIONS = "homework_questions"
+    DOCUMENT_PAGES = "document_pages"
     DOCUMENT_TOPICS = "document_topics"
     QUESTION_TOPICS = "question_topics"
     HOMEWORK_TOPICS = "homework_topics"
@@ -46,6 +47,7 @@ class DocumentKind(StrEnum):
     WEB_PAGE = "web_page"
     QUESTION_BANK = "question_bank"
     UPLOAD = "upload"
+    SCAN = "scan"
 
 
 class DocumentStatus(StrEnum):
@@ -208,9 +210,25 @@ class DocumentDraft(Draft):
     status: DocumentStatus = DocumentStatus.PENDING
     error: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+    # A scan of handwritten solutions: the paper they answer, and the working read off the
+    # pages question by question. `text` is the whole transcription either way.
+    paper: UUID | None = None
+    transcription: dict[str, Any] | None = None
 
 
 class Document(Record, DocumentDraft):
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+
+class DocumentPageDraft(Draft):
+    """One page of a scan: the file, and where it sits in the document."""
+
+    document: UUID
+    file: UUID
+    sort: int | None = None
+
+
+class DocumentPage(Record, DocumentPageDraft):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
 
@@ -268,6 +286,7 @@ class HomeworkDraft(Draft):
     due_on: date | None = None
     status: HomeworkStatus = HomeworkStatus.DRAFT
     submission: str | None = None
+    submission_transcription: dict[str, Any] | None = None
     submitted_at: datetime | None = None
     generated_from: dict[str, Any] | None = None
 

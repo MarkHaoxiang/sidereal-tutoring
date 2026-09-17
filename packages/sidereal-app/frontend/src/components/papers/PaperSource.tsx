@@ -1,8 +1,9 @@
 import { Copy, Download } from "lucide-react";
+import { useMemo } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui";
-import { useRenderTypst } from "@/lib/queries";
+import { useRenderAssets, useRenderTypst } from "@/lib/queries";
 import type { CanonicalPaper } from "@/lib/schema";
 import { typstProblem } from "@/lib/typeset";
 
@@ -28,7 +29,11 @@ function save(source: string, fileName: string): void {
 
 /** The Typst the renderer writes from the structure, beside the pages it compiles to. */
 export function PaperSource({ structure, fileName }: PaperSourceProps) {
-  const rendered = useRenderTypst({ kind: "paper", document: structure, output: "source" });
+  const asSource = useMemo(
+    () => ({ kind: "paper" as const, document: structure, output: "source" as const }),
+    [structure]
+  );
+  const rendered = useRenderTypst(useRenderAssets(asSource));
   const source = rendered.data?.source ?? null;
   const lines = source === null ? [] : source.split("\n");
 
@@ -38,7 +43,7 @@ export function PaperSource({ structure, fileName }: PaperSourceProps) {
     }
     try {
       await navigator.clipboard.writeText(source);
-      toast.success("The source is on the clipboard");
+      toast.success("Copied");
     } catch {
       toast.error("This browser would not let the page copy it.");
     }
@@ -46,11 +51,6 @@ export function PaperSource({ structure, fileName }: PaperSourceProps) {
 
   return (
     <>
-      <p className={styles.note}>
-        The structure is what is stored; this file is generated from it every time, so edit the
-        questions rather than the Typst.
-      </p>
-
       <div className={styles.sourceGrid}>
         <div className={styles.sourcePane}>
           <div className={styles.sourceActions}>
@@ -98,7 +98,12 @@ export function PaperSource({ structure, fileName }: PaperSourceProps) {
               <pre className={styles.gutter} aria-hidden="true">
                 {lines.map((_, index) => String(index + 1)).join("\n")}
               </pre>
-              <pre className={styles.codeText} aria-label={`${fileName}, as Typst`} tabIndex={0}>
+              <pre
+                className={styles.codeText}
+                aria-label={`${fileName}, as Typst`}
+                title="Generated from the structure every time — edit the questions, not this"
+                tabIndex={0}
+              >
                 {source}
               </pre>
             </div>
@@ -110,7 +115,7 @@ export function PaperSource({ structure, fileName }: PaperSourceProps) {
             <FragmentView
               body={{ kind: "paper", document: structure, output: "svg" }}
               label="the paper"
-              empty="There is nothing to set yet."
+              empty="Nothing to set yet."
             />
           </div>
         </div>

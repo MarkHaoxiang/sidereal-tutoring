@@ -7,7 +7,13 @@ from uuid import UUID
 import httpx
 import pytest
 from fastapi.testclient import TestClient
-from sidereal_app.deps import get_generators, get_http_client, get_ingesters, get_typeset
+from sidereal_app.deps import (
+    get_generators,
+    get_http_client,
+    get_ingesters,
+    get_scanner,
+    get_typeset,
+)
 from sidereal_app.main import create_app
 from sidereal_core.models import Collection
 from sidereal_core.testing import DEFAULT_TOKEN, FakeDirectus, FakeTypeset
@@ -20,6 +26,8 @@ from sidereal_generate.models import (
     PlanOutput,
 )
 from sidereal_ingest.base import Ingester, IngestError
+from sidereal_ingest.scan import ScanIngester
+from sidereal_ingest.transcribe import FakeTranscriber
 from sidereal_ingest.transcript import TranscriptIngester
 from sidereal_ingest.upload import UploadIngester
 from sidereal_ingest.web import WebPageIngester
@@ -69,6 +77,16 @@ def ingesters(fetcher: StubFetcher) -> Sequence[Ingester]:
 
 
 @pytest.fixture
+def transcriber() -> FakeTranscriber:
+    return FakeTranscriber()
+
+
+@pytest.fixture
+def scanner(transcriber: FakeTranscriber) -> ScanIngester:
+    return ScanIngester(transcriber)
+
+
+@pytest.fixture
 def auth() -> dict[str, str]:
     return {"Authorization": f"Bearer {DEFAULT_TOKEN}"}
 
@@ -105,6 +123,7 @@ def client(
     fake_typeset: FakeTypeset,
     generators: Generators,
     ingesters: Sequence[Ingester],
+    scanner: ScanIngester,
 ) -> Iterator[TestClient]:
     """The real auth dependency over a fake Directus: only the transport is substituted."""
     app = create_app()
@@ -113,6 +132,7 @@ def client(
     app.dependency_overrides[get_http_client] = lambda: pool
     app.dependency_overrides[get_generators] = lambda: generators
     app.dependency_overrides[get_ingesters] = lambda: ingesters
+    app.dependency_overrides[get_scanner] = lambda: scanner
     app.dependency_overrides[get_typeset] = lambda: typeset
     with TestClient(app) as test_client:
         yield test_client

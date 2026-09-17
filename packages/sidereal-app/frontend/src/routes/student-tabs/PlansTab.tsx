@@ -22,7 +22,7 @@ export function PlansTab() {
           studentId={studentId}
           kind="plan"
           empty={data.length === 0}
-          emptyMessage="No study plans yet. Generate one from this student's material."
+          emptyMessage="No study plans yet."
         />
       ) : null}
 
@@ -31,12 +31,10 @@ export function PlansTab() {
           {data.map((plan) => (
             <li key={plan.id}>
               <Link to={`/students/${studentId}/plans/${plan.id}`} className={styles.link}>
-                <span className={styles.top}>
-                  <span className={styles.title}>{plan.title ?? "Untitled study plan"}</span>
-                  <StatusChip status={plan.status} />
-                </span>
+                <span className={styles.title}>{plan.title ?? "Untitled study plan"}</span>
+                <StatusChip status={plan.status} />
                 <span className={styles.meta}>
-                  <span>Created {formatDateTime(plan.date_created)}</span>
+                  <span>{formatDateTime(plan.date_created)}</span>
                   {plan.period_start || plan.period_end ? (
                     <span>{`${formatDate(plan.period_start)} – ${formatDate(plan.period_end)}`}</span>
                   ) : null}

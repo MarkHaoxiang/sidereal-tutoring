@@ -38,6 +38,7 @@ export const STATUS_TOKENS: Record<StatusToken, { label: string; tone: StatusTon
   web_page: { label: "Web page", tone: "muted" },
   question_bank: { label: "Question bank", tone: "muted" },
   upload: { label: "Upload", tone: "muted" },
+  scan: { label: "Scan", tone: "muted" },
   pending: { label: "Waiting", tone: "muted" },
   processing: { label: "Processing", tone: "accent" },
   ready: { label: "Ready", tone: "success" },

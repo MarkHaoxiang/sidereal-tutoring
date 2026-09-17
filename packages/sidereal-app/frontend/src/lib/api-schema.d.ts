@@ -295,6 +295,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/homework/{homework_id}/transcribe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Transcribe Homework Submission
+         * @description Read the handed-in photo or PDF into `submission_transcription`, and answer with the row.
+         */
+        post: operations["transcribe_homework_submission_api_homework__homework_id__transcribe_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/papers/{paper_id}/render": {
         parameters: {
             query?: never;
@@ -377,6 +397,11 @@ export interface components {
             /** Tutor Email */
             tutor_email?: string | null;
         };
+        /**
+         * AnswerKind
+         * @enum {string}
+         */
+        AnswerKind: "lines" | "box" | "multiple_choice" | "essay" | "grid" | "table" | "none";
         /** ApiHealth */
         ApiHealth: {
             /**
@@ -392,6 +417,65 @@ export interface components {
          * @enum {string}
          */
         CallerRole: "admin" | "tutor" | "student";
+        /**
+         * CanonicalAnswer
+         * @description The space a student writes in. `type` decides which of the other fields are read.
+         */
+        CanonicalAnswer: {
+            type: components["schemas"]["AnswerKind"];
+            /** Lines */
+            lines?: number | null;
+            /**
+             * Options
+             * @default []
+             */
+            options?: components["schemas"]["CanonicalAnswerOption"][];
+            /** Height Mm */
+            height_mm?: number | null;
+            /** Rows */
+            rows?: number | null;
+            /** Cols */
+            cols?: number | null;
+        };
+        /** CanonicalAnswerOption */
+        CanonicalAnswerOption: {
+            /** Label */
+            label?: string | null;
+            /** Text */
+            text: string;
+        };
+        CanonicalBlock: components["schemas"]["CanonicalPassageBlock"] | components["schemas"]["CanonicalPassageRefBlock"] | components["schemas"]["CanonicalCodeBlock"] | components["schemas"]["CanonicalTableBlock"] | components["schemas"]["CanonicalFigureBlock"];
+        /** CanonicalCodeBlock */
+        CanonicalCodeBlock: {
+            /**
+             * Type
+             * @default code
+             * @constant
+             */
+            type?: "code";
+            /** Language */
+            language?: string | null;
+            /** Text */
+            text: string;
+        };
+        /**
+         * CanonicalFigureBlock
+         * @description `asset` names one of the render request's assets, never a path.
+         */
+        CanonicalFigureBlock: {
+            /**
+             * Type
+             * @default figure
+             * @constant
+             */
+            type?: "figure";
+            /** Asset */
+            asset: string;
+            /** Caption */
+            caption?: string | null;
+            /** Width Mm */
+            width_mm?: number | null;
+        };
         /** CanonicalMarkScheme */
         CanonicalMarkScheme: {
             /** Title */
@@ -412,6 +496,11 @@ export interface components {
             marks?: number | null;
             /** Notes */
             notes?: string | null;
+            /**
+             * Blocks
+             * @default []
+             */
+            blocks?: components["schemas"]["CanonicalBlock"][];
         };
         /** CanonicalMarkSchemeQuestion */
         CanonicalMarkSchemeQuestion: {
@@ -426,6 +515,11 @@ export interface components {
             answer?: string | null;
             /** Notes */
             notes?: string | null;
+            /**
+             * Blocks
+             * @default []
+             */
+            blocks?: components["schemas"]["CanonicalBlock"][];
         };
         /**
          * CanonicalMarkup
@@ -456,8 +550,21 @@ export interface components {
              * @default []
              */
             questions?: components["schemas"]["CanonicalQuestion"][];
+            /**
+             * Sections
+             * @default []
+             */
+            sections?: components["schemas"]["CanonicalSection"][];
+            /**
+             * Passages
+             * @default []
+             */
+            passages?: components["schemas"]["CanonicalPassage"][];
         };
-        /** CanonicalPart */
+        /**
+         * CanonicalPart
+         * @description `(a)` then `(i)`: parts nest one level.
+         */
         CanonicalPart: {
             /** Label */
             label: string;
@@ -467,11 +574,53 @@ export interface components {
             marks?: number | null;
             /** Answer Lines */
             answer_lines?: number | null;
+            answer?: components["schemas"]["CanonicalAnswer"] | null;
+            /**
+             * Blocks
+             * @default []
+             */
+            blocks?: components["schemas"]["CanonicalBlock"][];
             /**
              * Parts
              * @default []
              */
             parts?: components["schemas"]["CanonicalSubPart"][];
+        };
+        /** CanonicalPassage */
+        CanonicalPassage: {
+            /** Id */
+            id: string;
+            /** Title */
+            title?: string | null;
+            /** Text */
+            text: string;
+        };
+        /** CanonicalPassageBlock */
+        CanonicalPassageBlock: {
+            /**
+             * Type
+             * @default passage
+             * @constant
+             */
+            type?: "passage";
+            /** Title */
+            title?: string | null;
+            /** Text */
+            text: string;
+        };
+        /**
+         * CanonicalPassageRefBlock
+         * @description Points at a `CanonicalPaper.passages` entry, printed once at the start of the paper.
+         */
+        CanonicalPassageRefBlock: {
+            /**
+             * Type
+             * @default passage_ref
+             * @constant
+             */
+            type?: "passage_ref";
+            /** Id */
+            id: string;
         };
         /** CanonicalQuestion */
         CanonicalQuestion: {
@@ -488,11 +637,31 @@ export interface components {
             parts?: components["schemas"]["CanonicalPart"][];
             /** Answer Lines */
             answer_lines?: number | null;
+            answer?: components["schemas"]["CanonicalAnswer"] | null;
+            /**
+             * Blocks
+             * @default []
+             */
+            blocks?: components["schemas"]["CanonicalBlock"][];
         };
         /**
-         * CanonicalSubPart
-         * @description `(a)` then `(i)`: parts nest one level, so a part of a part holds none of its own.
+         * CanonicalSection
+         * @description A run of questions under one heading; `choose` is how many the student answers.
          */
+        CanonicalSection: {
+            /** Title */
+            title?: string | null;
+            /** Instructions */
+            instructions?: string | null;
+            /** Choose */
+            choose?: number | null;
+            /**
+             * Questions
+             * @default []
+             */
+            questions?: components["schemas"]["CanonicalQuestion"][];
+        };
+        /** CanonicalSubPart */
         CanonicalSubPart: {
             /** Label */
             label: string;
@@ -502,6 +671,30 @@ export interface components {
             marks?: number | null;
             /** Answer Lines */
             answer_lines?: number | null;
+            answer?: components["schemas"]["CanonicalAnswer"] | null;
+            /**
+             * Blocks
+             * @default []
+             */
+            blocks?: components["schemas"]["CanonicalBlock"][];
+        };
+        /** CanonicalTableBlock */
+        CanonicalTableBlock: {
+            /**
+             * Type
+             * @default table
+             * @constant
+             */
+            type?: "table";
+            /** Caption */
+            caption?: string | null;
+            /** Header */
+            header?: string[] | null;
+            /**
+             * Rows
+             * @default []
+             */
+            rows?: string[][];
         };
         /** CanonicalWorksheet */
         CanonicalWorksheet: {
@@ -560,6 +753,12 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             };
+            /** Paper */
+            paper?: string | null;
+            /** Transcription */
+            transcription?: {
+                [key: string]: unknown;
+            } | null;
             /**
              * Id
              * Format: uuid
@@ -578,7 +777,7 @@ export interface components {
          * DocumentKind
          * @enum {string}
          */
-        DocumentKind: "transcript" | "web_page" | "question_bank" | "upload";
+        DocumentKind: "transcript" | "web_page" | "question_bank" | "upload" | "scan";
         /** DocumentRequest */
         DocumentRequest: {
             /** Student Id */
@@ -589,7 +788,7 @@ export interface components {
             title?: string | null;
             source: components["schemas"]["DocumentSourceRequest"];
         };
-        DocumentSourceRequest: components["schemas"]["FileSourceRequest"] | components["schemas"]["UrlSourceRequest"] | components["schemas"]["TextSourceRequest"];
+        DocumentSourceRequest: components["schemas"]["FileSourceRequest"] | components["schemas"]["ScanSourceRequest"] | components["schemas"]["UrlSourceRequest"] | components["schemas"]["TextSourceRequest"];
         /**
          * DocumentStatus
          * @enum {string}
@@ -716,6 +915,10 @@ export interface components {
             status?: components["schemas"]["HomeworkStatus"];
             /** Submission */
             submission?: string | null;
+            /** Submission Transcription */
+            submission_transcription?: {
+                [key: string]: unknown;
+            } | null;
             /** Submitted At */
             submitted_at?: string | null;
             /** Generated From */
@@ -783,6 +986,8 @@ export interface components {
             period_end?: string | null;
             /** @default markdown */
             format?: components["schemas"]["HomeworkFormat"];
+            /** Pages */
+            pages?: boolean | null;
         };
         /**
          * JobStatus
@@ -804,6 +1009,10 @@ export interface components {
              * @enum {string}
              */
             output?: "svg" | "source";
+            /** Assets */
+            assets?: {
+                [key: string]: string;
+            };
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
@@ -819,6 +1028,10 @@ export interface components {
              * @enum {string}
              */
             output?: "svg" | "source";
+            /** Assets */
+            assets?: {
+                [key: string]: string;
+            };
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
@@ -884,6 +1097,10 @@ export interface components {
              * @enum {string}
              */
             output?: "svg" | "source";
+            /** Assets */
+            assets?: {
+                [key: string]: string;
+            };
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
@@ -909,6 +1126,10 @@ export interface components {
              * @enum {string}
              */
             output?: "svg" | "source";
+            /** Assets */
+            assets?: {
+                [key: string]: string;
+            };
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
@@ -916,6 +1137,21 @@ export interface components {
             kind: "question";
             document: components["schemas"]["CanonicalQuestion"];
             mark_scheme?: components["schemas"]["CanonicalMarkSchemeQuestion"] | null;
+        };
+        /**
+         * ScanSourceRequest
+         * @description Handwritten pages, in reading order, and the paper they answer when they answer one.
+         */
+        ScanSourceRequest: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "scan";
+            /** File Ids */
+            file_ids: string[];
+            /** Paper Id */
+            paper_id?: string | null;
         };
         /** StudentLogin */
         StudentLogin: {
@@ -1041,6 +1277,10 @@ export interface components {
              * @enum {string}
              */
             output?: "svg" | "source";
+            /** Assets */
+            assets?: {
+                [key: string]: string;
+            };
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
@@ -1598,6 +1838,37 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Homework"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    transcribe_homework_submission_api_homework__homework_id__transcribe_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                homework_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };

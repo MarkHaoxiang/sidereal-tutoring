@@ -60,9 +60,7 @@ export function AdminDashboardPage() {
   return (
     <div>
       <PageHeader
-        eyebrow="Admin"
         title="Dashboard"
-        subtitle="What the practice runs on, checked every half minute."
         actions={
           <Button
             loading={isFetching}
@@ -77,7 +75,7 @@ export function AdminDashboardPage() {
 
       {isLoading ? <SkeletonRows count={4} label="Checking the services" /> : null}
       {isError ? (
-        <p className={pageStyles.status}>Could not reach the app. Try refreshing the page.</p>
+        <p className={pageStyles.status}>Could not reach the app.</p>
       ) : null}
 
       {health ? (
@@ -97,7 +95,7 @@ export function AdminDashboardPage() {
             <Tile name="Typesetting" ok={health.typeset.ok}>
               <p className={styles.line}>{health.typeset.url}</p>
               {health.typeset.ok ? null : (
-                <p className={styles.line}>Homework cannot be turned into a PDF until it answers.</p>
+                <p className={styles.line}>No homework PDFs until it answers.</p>
               )}
             </Tile>
 

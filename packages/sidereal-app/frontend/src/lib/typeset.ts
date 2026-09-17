@@ -71,3 +71,24 @@ export function diagnosticPlace(diagnostic: Diagnostic): string | null {
   const line = `Line ${String(diagnostic.line)}`;
   return diagnostic.column === null ? line : `${line}, column ${String(diagnostic.column)}`;
 }
+
+/** Every `figure` block's asset name in a canonical document, in the order they are met. */
+export function figureAssets(value: unknown): string[] {
+  const found: string[] = [];
+  const walk = (node: unknown): void => {
+    if (Array.isArray(node)) {
+      node.forEach(walk);
+      return;
+    }
+    const row = asRecord(node);
+    if (row === undefined) {
+      return;
+    }
+    if (row["type"] === "figure" && typeof row["asset"] === "string") {
+      found.push(row["asset"]);
+    }
+    Object.values(row).forEach(walk);
+  };
+  walk(value);
+  return [...new Set(found)];
+}

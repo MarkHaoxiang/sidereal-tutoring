@@ -60,10 +60,10 @@ export function HomePage() {
   });
   const hasStudents = (students.data ?? []).length > 0;
 
-  const retry = async (id: string, title: string) => {
+  const retry = async (id: string) => {
     try {
       await retryDocument.mutateAsync(id);
-      toast.success(`Reading ${title} again`);
+      toast.success("Reading again");
     } catch (error) {
       toast.error(apiError(error));
     }
@@ -71,11 +71,7 @@ export function HomePage() {
 
   return (
     <div className={pageStyles.stack}>
-      <PageHeader
-        eyebrow="Your week"
-        title="Home"
-        subtitle="What is coming up, what is waiting on you, and what is still being read."
-      />
+      <PageHeader title="Home" />
 
       <Card title="Upcoming sessions">
         {sessions.isLoading ? (
@@ -104,8 +100,8 @@ export function HomePage() {
           <EmptyState
             message={
               hasStudents
-                ? "Nothing in the diary for the next seven days."
-                : "No students yet. Add your first student to start planning lessons."
+                ? "Nothing in the diary this week."
+                : "No students yet."
             }
             action={
               <Button
@@ -114,14 +110,14 @@ export function HomePage() {
                   void navigate("/students");
                 }}
               >
-                {hasStudents ? "Go to students" : "Add your first student"}
+                {hasStudents ? "Go to students" : "Add student"}
               </Button>
             }
           />
         )}
       </Card>
 
-      <Card title="Waiting for your review">
+      <Card title="To review">
         {homework.isLoading || feedback.isLoading || plans.isLoading ? (
           <SkeletonRows count={2} variant="line" label="Loading what is waiting for your review" />
         ) : waiting.length > 0 ? (
@@ -146,7 +142,7 @@ export function HomePage() {
             ))}
           </ul>
         ) : (
-          <EmptyState message="Nothing is waiting for you — the desk is clear." />
+          <EmptyState message="The desk is clear." />
         )}
       </Card>
 
@@ -177,7 +173,7 @@ export function HomePage() {
                         size="sm"
                         loading={retryDocument.isPending && retryDocument.variables === document.id}
                         onClick={() => {
-                          void retry(document.id, title);
+                          void retry(document.id);
                         }}
                       >
                         Try again
@@ -189,7 +185,7 @@ export function HomePage() {
             })}
           </ul>
         ) : (
-          <EmptyState message="Every piece of material has been read and is ready to use." />
+          <EmptyState message="Everything has been read." />
         )}
       </Card>
     </div>

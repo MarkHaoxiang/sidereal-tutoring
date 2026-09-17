@@ -25,7 +25,7 @@ export function PapersPage() {
     <div>
       <PageHeader
         title="Library"
-        subtitle="Material every tutor can use. Anything not tied to one student lives here."
+        subtitle="Material every tutor can use."
       />
 
       <LibraryTabs />
@@ -44,14 +44,14 @@ export function PapersPage() {
       </div>
 
       {isLoading ? <SkeletonRows count={3} label="Loading the papers" /> : null}
-      {isError ? <p className={pageStyles.status}>Could not load the papers. Try refreshing the page.</p> : null}
+      {isError ? <p className={pageStyles.status}>Could not load the papers.</p> : null}
 
       {data && visible.length === 0 ? (
         <EmptyState
           message={
             needle
-              ? "No paper matches what you are looking for."
-              : "No papers yet. Open a piece of material in the library and extract it as a paper."
+              ? "Nothing matches."
+              : "No papers yet — extract one from material in the library."
           }
         />
       ) : null}

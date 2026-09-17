@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import logging
+from collections.abc import Sequence
+from dataclasses import dataclass
+
 from anthropic import AsyncAnthropic
 from anthropic.types import ToolParam, Usage
 from pydantic import BaseModel, ValidationError
+from sidereal_core.canonical import CanonicalPaper
 from sidereal_core.models import Document, HomeworkFormat
 
 from sidereal_generate.base import (
@@ -14,11 +19,13 @@ from sidereal_generate.base import (
     PaperExtractor,
     PlanGenerator,
     strict_schema,
+    unstringify,
 )
 from sidereal_generate.models import (
     FeedbackOutput,
     GenerationRequest,
     HomeworkOutput,
+    MarkSchemeExtraction,
     PaperExtraction,
     PlanOutput,
 )
@@ -28,6 +35,10 @@ from sidereal_generate.prompts import (
     HOMEWORK_PROMPT,
     HOMEWORK_TOOL,
     HOMEWORK_TYPST_PROMPT,
+    MARK_SCHEME_PROMPT,
+    MARK_SCHEME_REPAIR,
+    MARK_SCHEME_RETRY,
+    MARK_SCHEME_TOOL,
     PAPER_PROMPT,
     PAPER_REPAIR,
     PAPER_RETRY,
@@ -36,12 +47,19 @@ from sidereal_generate.prompts import (
     PLAN_TOOL,
     render,
     render_document,
+    render_mark_scheme,
 )
 from sidereal_generate.settings import generate_settings
 from sidereal_generate.usage import UsageTally
 
+logger = logging.getLogger(__name__)
+
 # Above this the SDK refuses a non-streaming request, and nothing here streams yet.
 NON_STREAMING_MAX_TOKENS = 21_333
+NO_PAGES = (
+    "Page images are read by the OpenRouter backend. Ask an administrator to set "
+    "SIDEREAL_GENERATE_BACKEND=openrouter."
+)
 
 
 def _record(spent: Usage, usage: UsageTally | None) -> None:
@@ -116,7 +134,7 @@ class AnthropicGenerator[OutputT: BaseModel]:
 
     def _validate(self, payload: object) -> OutputT:
         try:
-            return self._output_model.model_validate(payload)
+            return self._output_model.model_validate(unstringify(payload, self._output_model))
         except ValidationError as exc:
             raise GenerationError(f"{self._tool_name} returned an unusable payload: {exc}") from exc
 
@@ -150,8 +168,28 @@ def plan_generator(
     return AnthropicGenerator(PlanOutput, PLAN_PROMPT, PLAN_TOOL, client=client, model=model)
 
 
+@dataclass(frozen=True, slots=True)
+class _Call:
+    """What one extraction call is named, and what an unusable answer to it is called."""
+
+    tool: str
+    description: str
+    noun: str
+
+
+_PAPER = _Call(PAPER_TOOL, "Return the paper as structure.", "paper")
+_MARK_SCHEME = _Call(MARK_SCHEME_TOOL, "Return the mark scheme as structure.", "mark scheme")
+
+
+def _validated[M: BaseModel](model: type[M], call: _Call, payload: object) -> M:
+    try:
+        return model.model_validate(unstringify(payload, model))
+    except ValidationError as exc:
+        raise GenerationError(f"{call.tool} returned an unusable {call.noun}: {exc}") from exc
+
+
 class AnthropicPaperExtractor:
-    """A paper read out of one document, through the same forced strict tool call.
+    """A paper, then its mark scheme, each through a forced strict tool call of its own.
 
     A payload the canonical models refuse is asked for once more with the errors appended;
     a second refusal is a `GenerationError`, never a half-read paper.
@@ -176,20 +214,32 @@ class AnthropicPaperExtractor:
     async def extract(
         self,
         document: Document,
-        mark_scheme: Document | None = None,
         *,
+        pages: Sequence[bytes] = (),
+        drawn: Sequence[int] = (),
         usage: UsageTally | None = None,
     ) -> PaperExtraction:
-        prompt = render_document(document, mark_scheme)
-        payload = await self._call(PAPER_PROMPT, prompt, usage)
-        try:
-            return PaperExtraction.model_validate(payload)
-        except ValidationError as first:
-            payload = await self._call(PAPER_PROMPT, f"{prompt}\n\n{PAPER_RETRY}\n{first}", usage)
-        try:
-            return PaperExtraction.model_validate(payload)
-        except ValidationError as exc:
-            raise GenerationError(f"{PAPER_TOOL} returned an unusable paper: {exc}") from exc
+        if pages:
+            raise GenerationError(NO_PAGES)
+        return await self._extracted(
+            PaperExtraction, _PAPER, PAPER_PROMPT, render_document(document), PAPER_RETRY, usage
+        )
+
+    async def extract_mark_scheme(
+        self,
+        document: Document,
+        paper: CanonicalPaper,
+        *,
+        usage: UsageTally | None = None,
+    ) -> MarkSchemeExtraction:
+        return await self._extracted(
+            MarkSchemeExtraction,
+            _MARK_SCHEME,
+            MARK_SCHEME_PROMPT,
+            render_mark_scheme(document, paper),
+            MARK_SCHEME_RETRY,
+            usage,
+        )
 
     async def repair(
         self,
@@ -198,41 +248,84 @@ class AnthropicPaperExtractor:
         *,
         usage: UsageTally | None = None,
     ) -> PaperExtraction:
-        payload = await self._call(
-            PAPER_REPAIR, f"{extraction.model_dump_json()}\n\n{diagnostics}", usage
+        return await self._repaired(
+            PaperExtraction, _PAPER, PAPER_REPAIR, extraction, diagnostics, usage
         )
-        try:
-            return PaperExtraction.model_validate(payload)
-        except ValidationError as exc:
-            raise GenerationError(f"{PAPER_TOOL} returned an unusable paper: {exc}") from exc
 
-    async def _call(self, system: str, prompt: str, usage: UsageTally | None = None) -> object:
+    async def repair_mark_scheme(
+        self,
+        extraction: MarkSchemeExtraction,
+        diagnostics: str,
+        *,
+        usage: UsageTally | None = None,
+    ) -> MarkSchemeExtraction:
+        return await self._repaired(
+            MarkSchemeExtraction, _MARK_SCHEME, MARK_SCHEME_REPAIR, extraction, diagnostics, usage
+        )
+
+    async def _extracted[M: BaseModel](
+        self,
+        model: type[M],
+        call: _Call,
+        system: str,
+        prompt: str,
+        retry: str,
+        usage: UsageTally | None,
+    ) -> M:
+        payload = await self._ask(model, call, system, prompt, usage)
+        try:
+            return model.model_validate(unstringify(payload, model))
+        except ValidationError as first:
+            logger.warning(
+                "%s returned an unusable %s, asking once more: %s", call.tool, call.noun, first
+            )
+            payload = await self._ask(model, call, system, f"{prompt}\n\n{retry}\n{first}", usage)
+        return _validated(model, call, payload)
+
+    async def _repaired[M: BaseModel](
+        self,
+        model: type[M],
+        call: _Call,
+        system: str,
+        extraction: M,
+        diagnostics: str,
+        usage: UsageTally | None,
+    ) -> M:
+        prompt = f"{extraction.model_dump_json()}\n\n{diagnostics}"
+        return _validated(model, call, await self._ask(model, call, system, prompt, usage))
+
+    async def _ask(
+        self,
+        model: type[BaseModel],
+        call: _Call,
+        system: str,
+        prompt: str,
+        usage: UsageTally | None = None,
+    ) -> object:
+        tool: ToolParam = {
+            "name": call.tool,
+            "description": call.description,
+            "input_schema": strict_schema(model),
+            "strict": True,
+        }
         response = await self._anthropic().messages.create(
             model=self._model,
             max_tokens=self._max_tokens,
             system=system,
             messages=[{"role": "user", "content": prompt}],
-            tools=[self._tool()],
-            tool_choice={"type": "tool", "name": PAPER_TOOL},
+            tools=[tool],
+            tool_choice={"type": "tool", "name": call.tool},
         )
         _record(response.usage, usage)
         for block in response.content:
-            if block.type == "tool_use" and block.name == PAPER_TOOL:
+            if block.type == "tool_use" and block.name == call.tool:
                 return block.input
-        raise GenerationError(f"{self._model} did not call {PAPER_TOOL}")
+        raise GenerationError(f"{self._model} did not call {call.tool}")
 
     def _anthropic(self) -> AsyncAnthropic:
         if self._client is None:
             self._client = AsyncAnthropic()
         return self._client
-
-    def _tool(self) -> ToolParam:
-        return {
-            "name": PAPER_TOOL,
-            "description": "Return the paper, and its mark scheme when the source carries one.",
-            "input_schema": strict_schema(PaperExtraction),
-            "strict": True,
-        }
 
 
 def paper_extractor(

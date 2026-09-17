@@ -22,7 +22,7 @@ export function HomeworkTab() {
           studentId={studentId}
           kind="homework"
           empty={data.length === 0}
-          emptyMessage="No homework yet. Generate a set from this student's material."
+          emptyMessage="No homework yet."
         />
       ) : null}
 
@@ -31,12 +31,10 @@ export function HomeworkTab() {
           {data.map((item) => (
             <li key={item.id}>
               <Link to={`/students/${studentId}/homework/${item.id}`} className={styles.link}>
-                <span className={styles.top}>
-                  <span className={styles.title}>{item.title ?? "Untitled homework"}</span>
-                  <StatusChip status={item.status} />
-                </span>
+                <span className={styles.title}>{item.title ?? "Untitled homework"}</span>
+                <StatusChip status={item.status} />
                 <span className={styles.meta}>
-                  <span>Created {formatDateTime(item.date_created)}</span>
+                  <span>{formatDateTime(item.date_created)}</span>
                   {item.due_on ? <span>Due {formatDate(item.due_on)}</span> : null}
                 </span>
               </Link>
