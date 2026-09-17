@@ -256,6 +256,13 @@ MARK_SCHEME_MISSING = (
     "question the paper asks, so an entry you did not find is one to look for again — it may be "
     "printed under a heading, in a table, or on a later page than the questions around it."
 )
+MARK_SCHEME_PARTS_MISSING = (
+    "Your previous answer left {named} unanswered. Answer this call again with one `parts` entry "
+    "per label the list below prints under a question, under the label the list prints, and with "
+    "`answer` on the entry itself for a question the list prints no labels for. An answer you did "
+    "not find is one to look for again — it may be printed in a table, under a heading, or on a "
+    "later page than the answers around it."
+)
 FIGURE_WORDING = (
     "Your previous answer left {named} with a figure and no wording at all. Answer this call "
     "again with every question and part transcribed in full. A question's wording is printed on "

@@ -667,7 +667,9 @@ async def test_a_sub_part_carries_its_own_answer_block_and_scheme_label() -> Non
                     ]
                 }
             ],
-            MARK_SCHEME_TOOL: [answers("1")],
+            MARK_SCHEME_TOOL: [
+                {"questions": [{"number": "1", "parts": [{"label": "a(i)", "answer": "m/s"}]}]}
+            ],
         }
     )
 
@@ -884,4 +886,124 @@ async def test_a_run_that_answered_every_number_is_asked_nothing_more() -> None:
 
     await reader.extract_mark_scheme(document(), paper)
 
+    assert len(caller.asked(MARK_SCHEME_TOOL)) == 1
+
+
+def parted(*labels: str) -> dict[str, Any]:
+    """One question with parts the shape did not name: the batch is what prints them."""
+    return {
+        "questions": [
+            {
+                "number": "1",
+                "stem": "Stem 1",
+                "parts": [{"label": label, "text": f"Part {label}."} for label in labels],
+            }
+        ],
+        "figures": [],
+    }
+
+
+def part_answers(*answered: tuple[str, str]) -> dict[str, Any]:
+    return {
+        "questions": [
+            {
+                "number": "1",
+                "parts": [{"label": label, "answer": answer} for label, answer in answered],
+            }
+        ]
+    }
+
+
+async def test_a_mark_scheme_run_that_left_a_part_unanswered_is_asked_once_more() -> None:
+    """The live question 01 carried one part where the paper prints five, and it passed."""
+    caller, reader = extractor(
+        {
+            SKELETON_TOOL: [shape(questions=[stub("1")])],
+            QUESTIONS_TOOL: [parted("a", "b")],
+            MARK_SCHEME_TOOL: [
+                part_answers(("a", "$3 x^2$")),
+                part_answers(("a", "reread"), ("b", "$6 x$")),
+            ],
+        }
+    )
+    paper = (await reader.extract(document())).paper
+
+    scheme = await reader.extract_mark_scheme(document(), paper)
+
+    asked = caller.asked(MARK_SCHEME_TOOL)
+    assert len(asked) == 2
+    assert "question 1 part b" in asked[1].prompt
+    # Only the gap is taken from the second answer: the first read part a already.
+    assert [(part.label, part.answer) for part in scheme.mark_scheme.questions[0].parts] == [
+        ("a", "$3 x^2$"),
+        ("b", "$6 x$"),
+    ]
+
+
+async def test_a_part_still_unanswered_after_the_retry_is_named_in_the_refusal() -> None:
+    caller, reader = extractor(
+        {
+            SKELETON_TOOL: [shape(questions=[stub("1")])],
+            QUESTIONS_TOOL: [parted("a", "b")],
+            MARK_SCHEME_TOOL: [part_answers(("a", "$3 x^2$"))],
+        }
+    )
+    paper = (await reader.extract(document())).paper
+
+    with pytest.raises(GenerationError, match="no answer under question 1 part b"):
+        await reader.extract_mark_scheme(document(), paper)
+
+    assert len(caller.asked(MARK_SCHEME_TOOL)) == 2
+
+
+async def test_a_question_with_no_parts_is_answered_by_one_answer_of_its_own() -> None:
+    """Every Section B multiple choice: one answer on the entry, and no part list to fill."""
+    caller, reader = extractor(
+        {
+            SKELETON_TOOL: [shape(questions=[stub("1")])],
+            QUESTIONS_TOOL: [batch("1")],
+            MARK_SCHEME_TOOL: [answers("1")],
+        }
+    )
+    paper = (await reader.extract(document())).paper
+
+    scheme = await reader.extract_mark_scheme(document(), paper)
+
+    assert scheme.mark_scheme.questions[0].answer == "Answer 1"
+    assert len(caller.asked(MARK_SCHEME_TOOL)) == 1
+
+
+async def test_a_sub_parted_part_is_answered_under_its_own_label_or_each_sub_label() -> None:
+    """A mark scheme part carries no parts, so `a(i)` is one label and `a` marks the whole."""
+    caller, reader = extractor(
+        {
+            SKELETON_TOOL: [shape(questions=[stub("1")])],
+            QUESTIONS_TOOL: [
+                {
+                    "questions": [
+                        {
+                            "number": "1",
+                            "parts": [
+                                {
+                                    "label": "a",
+                                    "text": "Consider the table.",
+                                    "parts": [
+                                        {"label": "i", "text": "State the units."},
+                                        {"label": "ii", "text": "Explain why."},
+                                    ],
+                                }
+                            ],
+                        }
+                    ],
+                    "figures": [],
+                }
+            ],
+            MARK_SCHEME_TOOL: [part_answers(("a", "Both marks together."))],
+        }
+    )
+    paper = (await reader.extract(document())).paper
+
+    scheme = await reader.extract_mark_scheme(document(), paper)
+
+    assert scheme.mark_scheme.questions[0].parts[0].label == "a"
     assert len(caller.asked(MARK_SCHEME_TOOL)) == 1

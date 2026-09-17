@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Awaitable, Callable, Container, Iterator, Sequence
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import Any
 from uuid import UUID
 
@@ -13,6 +13,7 @@ from sidereal_core.canonical import (
     MAX_FIGURE_WIDTH_MM,
     CanonicalFigureBlock,
     CanonicalMarkScheme,
+    CanonicalMarkSchemeQuestion,
     CanonicalPaper,
     CanonicalPart,
     CanonicalQuestion,
@@ -46,7 +47,7 @@ from sidereal_generate.base import GenerationError, PaperExtractor
 from sidereal_generate.models import FigureRequest, MarkSchemeExtraction, PaperExtraction
 from sidereal_generate.typst import upload_pdf
 from sidereal_generate.typst_maths import normalise_model
-from sidereal_generate.usage import UsageTally
+from sidereal_generate.usage import UsageTally, summed
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +68,8 @@ FIGURE_TYPE = "image/jpeg"
 # The service refuses an asset name that is not a file name, so the file id carries a suffix.
 FIGURE_SUFFIX = ".jpg"
 FIGURE_BLOCK = "figure"
+# What a `generated_from.reruns` entry says it read again.
+RERUN_MARK_SCHEME = "mark_scheme"
 
 
 class PaperError(Exception):
@@ -157,19 +160,23 @@ async def extract_paper_mark_scheme(
     paper = await client.get_item(Collection.PAPERS, Paper, paper_id)
     structure = _canonical(CanonicalPaper, paper.structure, "This paper has no structure.")
     document = await _readable(client, document_id, NO_SCHEME_TEXT)
-    marks = normalise_model(await extractor.extract_mark_scheme(document, structure, usage=usage))
+    # The re-run's own tally, so what it files is its spend and not the extraction's.
+    spent = UsageTally()
+    marks = normalise_model(await extractor.extract_mark_scheme(document, structure, usage=spent))
     marks, rendered = await _with_repairs(
         "mark scheme",
         marks,
         lambda scheme: _render(client, typeset, RenderKind.MARK_SCHEME, scheme.mark_scheme),
-        lambda scheme, diagnostics: extractor.repair_mark_scheme(scheme, diagnostics, usage=usage),
+        lambda scheme, diagnostics: extractor.repair_mark_scheme(scheme, diagnostics, usage=spent),
     )
-    generated_from = dict(paper.generated_from or {})
+    if usage is not None:
+        usage.add(spent)
+    generated_from = _rerun(paper.generated_from, document_id, extractor.model, spent)
     generated_from["mark_scheme_document"] = str(document_id)
     # The scheme was read, so a warning that it could not be is no longer true of this row.
     if generated_from.get("warning") == SCHEME_WARNING:
         del generated_from["warning"]
-    return await client.update_item(
+    updated = await client.update_item(
         Collection.PAPERS,
         Paper,
         paper_id,
@@ -179,6 +186,8 @@ async def extract_paper_mark_scheme(
             "generated_from": generated_from,
         },
     )
+    await _refresh_questions(client, paper_id, marks)
+    return updated
 
 
 async def rerender_paper(
@@ -256,6 +265,61 @@ async def paper_worksheet(
     return WorksheetResult(
         source=source, pdf_file_id=await upload_pdf(client, worksheet.title, pdf)
     )
+
+
+def _rerun(
+    generated_from: dict[str, Any] | None, document_id: UUID, model: str, spent: UsageTally
+) -> dict[str, Any]:
+    """This run appended to the row's own record. `usage` stays the extraction's, always.
+
+    A run whose backend recorded no call files `usage` null: nothing measured is not nothing
+    spent, and a zero would read as a measurement.
+    """
+    provenance = dict(generated_from or {})
+    filed = provenance.get("reruns")
+    reruns = [*filed] if isinstance(filed, list) else []
+    reruns.append(
+        {
+            "kind": RERUN_MARK_SCHEME,
+            "document": str(document_id),
+            "model": model,
+            "at": datetime.now(UTC).isoformat(),
+            "usage": spent.provenance(),
+        }
+    )
+    provenance["reruns"] = reruns
+    total = summed([provenance.get("usage"), *(rerun.get("usage") for rerun in reruns)])
+    if total is not None:
+        provenance["usage_total"] = total
+    return provenance
+
+
+async def _refresh_questions(
+    client: DirectusClient, paper_id: UUID, marks: MarkSchemeExtraction
+) -> None:
+    """The derived rows brought up to the new scheme by number, each patched where it stands."""
+    scheme = _slices(marks)
+    rows = await client.list_items(
+        Collection.QUESTIONS, Question, filter={"paper": {"_eq": str(paper_id)}}
+    )
+    refreshed: set[str] = set()
+    for row in rows:
+        answer = scheme.get(row.number or "")
+        if answer is None:
+            logger.warning(
+                "question row %s is numbered %s, which the new mark scheme has not",
+                row.id,
+                row.number,
+            )
+            continue
+        refreshed.add(answer.number)
+        await client.update_item(
+            Collection.QUESTIONS, Question, row.id, {"mark_scheme": _dump(answer)}
+        )
+    for number in scheme.keys() - refreshed:
+        logger.warning(
+            "the mark scheme answers question %s, which this paper has no row for", number
+        )
 
 
 async def _mark_scheme(
@@ -403,10 +467,7 @@ async def _write_questions(
     marks: MarkSchemeExtraction | None,
 ) -> None:
     """One row per top-level question, each carrying its own slice of the structure."""
-    scheme = {
-        question.number: question
-        for question in (() if marks is None else marks.mark_scheme.questions)
-    }
+    scheme = _slices(marks)
     for question in _questions(extraction.paper):
         await client.create_item(
             Collection.QUESTIONS,
@@ -422,6 +483,14 @@ async def _write_questions(
                 document=document_id,
             ),
         )
+
+
+def _slices(marks: MarkSchemeExtraction | None) -> dict[str, CanonicalMarkSchemeQuestion]:
+    """A question row's share of the scheme, by the number the row is filed under."""
+    return {
+        question.number: question
+        for question in (() if marks is None else marks.mark_scheme.questions)
+    }
 
 
 def _text(question: CanonicalQuestion) -> str:

@@ -85,6 +85,11 @@ export interface WorksheetInput {
   due?: string | null;
 }
 
+export interface ExtractMarkSchemeInput {
+  paperId: string;
+  document_id: string;
+}
+
 export function usePapers() {
   return useQuery({ queryKey: paperKeys.list(), queryFn: fetchPapers });
 }
@@ -141,6 +146,24 @@ export function useWorksheet() {
           body,
         })
       ),
+  });
+}
+
+/** Reads a mark scheme document against the paper's stored structure. The paper itself,
+ * its questions and its rendered PDF are left as they are. */
+export function useExtractMarkScheme() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ paperId, document_id }: ExtractMarkSchemeInput) =>
+      unwrap(
+        await api.POST("/api/papers/{paper_id}/extract_mark_scheme", {
+          params: { path: { paper_id: paperId } },
+          body: { document_id },
+        })
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: paperKeys.all });
+    },
   });
 }
 

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 
 import { Provenance } from "@/components/artefacts/Provenance";
 import { addedByName } from "@/components/material/authors";
+import { MarkSchemeDialog } from "@/components/papers/MarkSchemeDialog";
 import { WorksheetDialog } from "@/components/papers/WorksheetDialog";
 import { buildPatch, paperDraft, structureQuestions } from "@/components/papers/draft";
 import type { PaperDraft } from "@/components/papers/draft";
@@ -31,6 +32,7 @@ import {
 } from "@/lib/queries";
 import type { PaperStatus } from "@/lib/schema";
 
+import { needsMarkScheme } from "./paper-tabs/context";
 import type { PaperTabContext } from "./paper-tabs/context";
 import pageStyles from "./page.module.css";
 import styles from "@/components/papers/papers.module.css";
@@ -59,6 +61,7 @@ export function PaperDetailPage() {
   const [renaming, setRenaming] = useState(false);
   const [problems, setProblems] = useState<string[]>([]);
   const [asking, setAsking] = useState(false);
+  const [extracting, setExtracting] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const loaded = useRef<string | null>(null);
 
@@ -174,6 +177,9 @@ export function PaperDetailPage() {
           },
           makeWorksheet: () => {
             setAsking(true);
+          },
+          extractScheme: () => {
+            setExtracting(true);
           },
         }
       : null;
@@ -322,6 +328,15 @@ export function PaperDetailPage() {
             paperId={paper.id}
             paperTitle={paper.title}
             questions={structureQuestions(paper.structure)}
+          />
+
+          <MarkSchemeDialog
+            open={extracting}
+            onClose={() => {
+              setExtracting(false);
+            }}
+            paperId={paper.id}
+            rerun={!needsMarkScheme(paper)}
           />
 
           <ConfirmDialog

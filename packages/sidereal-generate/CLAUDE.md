@@ -51,8 +51,9 @@ Sits above sidereal-ingest. Imports core and ingest only.
   never loses a working handout to a bad edit.
 - A paper's `structure` is the source of truth. Its PDFs are renderings of it and can be made again;
   nothing is read back out of a PDF.
-- A paper's `questions` rows are derived from the same structure: an extract writes them, and they
-  are never merged into by hand. Re-extracting a document writes a new paper with its own rows.
+- A paper's `questions` rows are derived from the same structure: an extract writes them and a
+  scheme re-run refreshes their `mark_scheme` in place, and they are never merged into by hand.
+  Re-extracting a document writes a new paper with its own rows.
 - Extraction is transcription, not generation, and it is chunked: a shape call, then the
   questions in runs of `BATCH_QUESTIONS`, then a block call for the questions the shape flagged,
   then the mark scheme in the same runs. One schema over a whole paper is a grammar the provider
@@ -80,10 +81,15 @@ Sits above sidereal-ingest. Imports core and ingest only.
 - A stemless question's lone unlabelled part is its stem: its text, answer and blocks come up with
   it and its own parts become the question's. A labelled part, or a second one, is left alone, and
   a question that got its stem this way is not wordless.
-- A mark-scheme run is checked against the numbers it was asked for and asked once more naming the
-  ones it answered nothing under; only those gaps are taken from the second answer.
-- A scheme still missing entries is a `GenerationError` naming them, and one that answered none of
-  the paper says that instead. A scheme covering part of a paper is never stored.
+- A mark-scheme run is checked against the numbers and the part labels it was asked for, and asked
+  once more naming the ones it answered nothing under; only those gaps are taken from the second
+  answer.
+- A scheme entry answers every label its question prints: a part with sub-parts under each `a(i)`,
+  or under `a` where the scheme marks it as a whole; a question with parts under each of its own
+  labels, or under a non-blank whole `answer` where the entry carries no parts; a question with no
+  parts by an `answer` of its own.
+- A scheme still missing entries or labels is a `GenerationError` naming them, and one that answered
+  none of the paper says that instead. A scheme covering part of a paper is never stored.
 - A sectioned paper's top-level `questions` stays empty. That is the paper's shape, not a loss.
 - The merged result is validated as a whole `CanonicalPaper`; one that will not validate is a
   `GenerationError` and no half paper is written.
@@ -137,7 +143,9 @@ Sits above sidereal-ingest. Imports core and ingest only.
 - A mark scheme that cannot be completed does the same: the paper is stored with `mark_scheme` null,
   a `generated_from.warning` and a succeeded job, never lost with the scheme.
 - `extract_paper_mark_scheme` reads the scheme alone against a stored paper's structure, files the
-  document it read under `generated_from`, and clears that warning when it succeeds.
+  document it read under `generated_from`, and clears that warning when it succeeds. It then
+  PATCHes each `questions` row's `mark_scheme` by number: a row or an entry the other has not is
+  logged, never raised, and no row is deleted or rewritten whole.
 - `paper_extract` carries one document and no student, or two with the mark scheme second; every
   other kind carries a student. Either mismatch is a `JobInputError` whose sentence the tutor reads.
 - Maths is normalised before any compile and after every repair: inside `$...$`, a name Typst does
@@ -153,6 +161,10 @@ Sits above sidereal-ingest. Imports core and ingest only.
 - A job files what its calls cost in `generated_from.usage`, summed over every call it made — the
   shape, every run, the blocks, the mark scheme, each retry and each repair. A price is filed only
   when every call in the job carried one.
+- `usage` stays the extraction's own cost. A re-run appends one `generated_from.reruns` entry — its
+  kind, the document it read, its own usage, the model and an aware UTC timestamp — and never
+  replaces an earlier one; `generated_from.usage_total` is the sum across the extraction and every
+  re-run. A re-run whose backend recorded no call files `usage` null, never a zero.
 - Transcription asks for little thinking: an extraction and a repair send
   `SIDEREAL_GENERATE_REASONING` (`low` by default) and file the effort they used, because reasoning
   is spent from the same budget as the answer. Writing homework, feedback or a plan sends no effort

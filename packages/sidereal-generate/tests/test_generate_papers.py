@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import Callable, Sequence
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -17,6 +18,7 @@ from sidereal_core.models import (
     GenerationJob,
     GenerationKind,
     JobStatus,
+    Paper,
     PaperStatus,
 )
 from sidereal_core.testing import FAIL_MARKER, FakeDirectus, FakeTypeset
@@ -28,6 +30,7 @@ from sidereal_generate.claude import (
     paper_extractor,
 )
 from sidereal_generate.fake import (
+    FAKE_MODEL,
     FakeFeedbackGenerator,
     FakeHomeworkGenerator,
     FakePaperExtractor,
@@ -799,3 +802,161 @@ async def test_reading_the_mark_scheme_again_needs_a_document_with_text() -> Non
                 paper_id,
                 UUID(empty["id"]),
             )
+
+
+class SchemeSpender(FakePaperExtractor):
+    """A re-run that costs something, so what it files can be told from the extraction's."""
+
+    def __init__(self, cost: float) -> None:
+        self.cost = cost
+
+    async def extract_mark_scheme(
+        self,
+        document: Document,
+        paper: CanonicalPaper,
+        *,
+        usage: UsageTally | None = None,
+    ) -> MarkSchemeExtraction:
+        if usage is not None:
+            usage.record(prompt_tokens=200, completion_tokens=40, cost_usd=self.cost)
+        return await super().extract_mark_scheme(document, paper, usage=None)
+
+
+async def extracted_with_usage(fake: FakeDirectus, typeset: FakeTypeset) -> UUID:
+    """A paper filed on its own, so the row carries the extraction's `usage` and no scheme."""
+    finished = await run_with(fake, typeset, Recorder(), (DOCUMENT_ID,))
+    assert finished.output_id is not None
+    return finished.output_id
+
+
+async def rerun(fake: FakeDirectus, typeset: FakeTypeset, paper_id: UUID, cost: float) -> Paper:
+    async with fake.client() as client:
+        return await extract_paper_mark_scheme(
+            client, SchemeSpender(cost), typeset.client(), paper_id, SCHEME_ID
+        )
+
+
+async def test_a_mark_scheme_rerun_files_its_own_usage_beside_the_extractions() -> None:
+    fake, typeset = seeded_with_scheme(), FakeTypeset()
+    paper_id = await extracted_with_usage(fake, typeset)
+    extraction = fake.items[Collection.PAPERS][str(paper_id)]["generated_from"]["usage"]
+    assert "reruns" not in fake.items[Collection.PAPERS][str(paper_id)]["generated_from"]
+
+    paper = await rerun(fake, typeset, paper_id, 0.3467)
+
+    generated_from = paper.generated_from or {}
+    # The extraction's own cost is what `usage` means, and a re-run does not touch it.
+    assert generated_from["usage"] == extraction
+    filed = generated_from["reruns"]
+    assert len(filed) == 1
+    assert filed[0]["kind"] == "mark_scheme"
+    assert filed[0]["document"] == str(SCHEME_ID)
+    assert filed[0]["model"] == FAKE_MODEL
+    assert datetime.fromisoformat(filed[0]["at"]).tzinfo is not None
+    assert filed[0]["usage"] == {
+        "calls": 1,
+        "prompt_tokens": 200,
+        "completion_tokens": 40,
+        "total_tokens": 240,
+        "cost_usd": 0.3467,
+    }
+    assert generated_from["usage_total"] == {
+        "calls": 2,
+        "prompt_tokens": 300,
+        "completion_tokens": 60,
+        "total_tokens": 360,
+        "reasoning_tokens": 5,
+        "cost_usd": 0.5967,
+    }
+
+
+async def test_a_second_rerun_appends_to_the_record_rather_than_replacing_it() -> None:
+    fake, typeset = seeded_with_scheme(), FakeTypeset()
+    paper_id = await extracted_with_usage(fake, typeset)
+    first = ((await rerun(fake, typeset, paper_id, 0.3467)).generated_from or {})["reruns"][0]
+
+    paper = await rerun(fake, typeset, paper_id, 0.5)
+
+    generated_from = paper.generated_from or {}
+    filed = generated_from["reruns"]
+    assert len(filed) == 2
+    assert filed[0] == first
+    assert filed[1]["usage"]["cost_usd"] == 0.5
+    assert generated_from["usage_total"]["calls"] == 3
+    assert generated_from["usage_total"]["cost_usd"] == 1.0967
+
+
+async def test_a_rerun_patches_each_question_rows_mark_scheme_by_number() -> None:
+    fake, typeset = seeded_with_scheme(), FakeTypeset()
+    paper_id = await extracted_with_usage(fake, typeset)
+    before = {row["number"]: row["id"] for row in fake.rows(Collection.QUESTIONS)}
+    assert all("mark_scheme" not in row for row in fake.rows(Collection.QUESTIONS))
+
+    await rerun(fake, typeset, paper_id, 0.3467)
+
+    rows = {row["number"]: row for row in fake.rows(Collection.QUESTIONS)}
+    # The rows are patched where they stand: other rows reference these ids.
+    assert {number: row["id"] for number, row in rows.items()} == before
+    assert rows["1"]["mark_scheme"]["parts"][0]["answer"] == "$1 + 1 = 2$"
+    assert rows["2"]["mark_scheme"]["answer"] == "$(dif y) / (dif x) = 2 x$"
+
+
+async def test_a_question_row_the_new_scheme_does_not_answer_is_logged_not_raised(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    fake, typeset = seeded_with_scheme(), FakeTypeset()
+    paper_id = await extracted_with_usage(fake, typeset)
+    # A tutor renumbered a question after the extraction, so the two no longer line up.
+    stale = fake.rows(Collection.QUESTIONS)[0]
+    stale["number"] = "9"
+
+    with caplog.at_level(logging.WARNING):
+        await rerun(fake, typeset, paper_id, 0.3467)
+
+    assert "is numbered 9, which the new mark scheme has not" in caplog.text
+    assert "answers question 1, which this paper has no row for" in caplog.text
+    assert "mark_scheme" not in stale
+
+
+async def test_a_rerun_records_its_spend_in_a_tally_the_caller_kept_too() -> None:
+    fake, typeset = seeded_with_scheme(), FakeTypeset()
+    paper_id = await extracted_with_usage(fake, typeset)
+    usage = UsageTally()
+
+    async with fake.client() as client:
+        paper = await extract_paper_mark_scheme(
+            client, SchemeSpender(0.25), typeset.client(), paper_id, SCHEME_ID, usage=usage
+        )
+
+    assert usage.calls == 1
+    assert usage.cost_usd == 0.25
+    # The row files the run's own spend whoever else is counting it.
+    assert ((paper.generated_from or {})["reruns"][0]["usage"] or {})["cost_usd"] == 0.25
+
+
+class SilentScheme(FakePaperExtractor):
+    """A backend that reports no usage at all: nothing measured is not nothing spent."""
+
+    async def extract_mark_scheme(
+        self,
+        document: Document,
+        paper: CanonicalPaper,
+        *,
+        usage: UsageTally | None = None,
+    ) -> MarkSchemeExtraction:
+        return await super().extract_mark_scheme(document, paper, usage=None)
+
+
+async def test_a_rerun_that_recorded_no_call_files_no_usage_rather_than_a_zero() -> None:
+    fake, typeset = seeded_with_scheme(), FakeTypeset()
+    paper_id = await extracted_with_usage(fake, typeset)
+    extraction = fake.items[Collection.PAPERS][str(paper_id)]["generated_from"]["usage"]
+
+    async with fake.client() as client:
+        paper = await extract_paper_mark_scheme(
+            client, SilentScheme(), typeset.client(), paper_id, SCHEME_ID
+        )
+
+    generated_from = paper.generated_from or {}
+    assert generated_from["reruns"][0]["usage"] is None
+    assert generated_from["usage_total"] == extraction

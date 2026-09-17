@@ -43,9 +43,10 @@ name Typst does not know becomes quoted text and `dx` becomes `dif x` — and wh
 still refuses goes back to the model with its diagnostics, each document on its own and at most
 twice; what compiles is what is stored.
 
-A mark-scheme run that answers fewer questions than it was asked about is asked once more, and a
-scheme still short of the paper is refused: the paper is filed with `mark_scheme` null and a
-warning, and `extract_paper_mark_scheme` reads the scheme again on its own.
+A mark-scheme run that answers fewer questions, or fewer of a question's parts, than it was asked
+about is asked once more, and a scheme still short of the paper is refused: the paper is filed with
+`mark_scheme` null and a warning, and `extract_paper_mark_scheme` reads the scheme again on its own
+and brings the paper's `questions` rows up to it.
 
 The paper is read in several calls rather than one, because a schema over a whole paper is a
 grammar the provider will not compile: its shape (metadata, sections, passages and a stub per
@@ -64,7 +65,10 @@ decides from the PDF — a paper with images on a fifth of its pages or more get
 
 Every job files what its calls cost in `generated_from.usage` — `calls`, `prompt_tokens`,
 `completion_tokens`, `total_tokens`, and `reasoning_tokens`, `images`, `image_tokens` and
-`cost_usd` when there were any and the backend reports them. Nothing shows it to a tutor yet.
+`cost_usd` when there were any and the backend reports them. `usage` stays the extraction's own:
+reading the mark scheme again appends its `kind`, `document`, `model`, `at` and `usage` to
+`generated_from.reruns` and files the sum of them all in `generated_from.usage_total`. Nothing
+shows any of it to a tutor yet.
 
 `JobInput(format="typst")` makes a homework job produce a Typst source and a compiled PDF instead of
 markdown; `recompile_homework(directus, typeset, id)` compiles an existing row's `content` again.

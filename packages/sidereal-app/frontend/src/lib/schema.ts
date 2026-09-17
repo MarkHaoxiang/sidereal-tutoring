@@ -267,6 +267,22 @@ export interface Question extends AuditFields {
   topics: string[] | QuestionTopic[];
 }
 
+// Written by `UsageTally.provenance()`: present only for the calls it actually priced.
+export interface GenerationUsage {
+  calls: number;
+  cost_usd?: number;
+}
+
+// A paper's own field, appended to by `extract_paper_mark_scheme` alone: what a re-run
+// read, and what it cost. `usage` is null when its backend recorded no call.
+export interface GenerationRerun {
+  kind: string;
+  document: string;
+  model: string;
+  at: string;
+  usage: GenerationUsage | null;
+}
+
 // Written by `sidereal_generate.jobs`: ids as strings, `questions` on homework only.
 export interface GenerationProvenance {
   job: string;
@@ -275,6 +291,14 @@ export interface GenerationProvenance {
   questions?: string[];
   /** Written when the artefact was filed but something after it did not run. */
   warning?: string;
+  /** What this run's calls cost, filed only when every one of them priced. */
+  usage?: GenerationUsage;
+  /** The extraction's `usage` summed with every rerun's, once there has been one. */
+  usage_total?: GenerationUsage;
+  /** A paper's own field: the document its mark scheme was last read from. */
+  mark_scheme_document?: string;
+  /** A paper's own field: every later read of its mark scheme, oldest first. */
+  reruns?: GenerationRerun[];
 }
 
 export interface Paper extends AuditFields {

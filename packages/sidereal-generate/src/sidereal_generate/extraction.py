@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any, Protocol
 
@@ -30,14 +30,17 @@ from sidereal_generate.chunks import (
     as_batch,
     as_scheme_batch,
     block_batches,
+    filled,
     images,
     merge,
     merge_scheme,
+    named_gaps,
     question_batches,
     question_runs,
     reconciled,
     repaired,
     repaired_scheme,
+    scheme_gaps,
     scheme_runs,
     wordless,
 )
@@ -49,6 +52,7 @@ from sidereal_generate.prompts import (
     BLOCKS_TOOL,
     FIGURE_WORDING,
     MARK_SCHEME_MISSING,
+    MARK_SCHEME_PARTS_MISSING,
     MARK_SCHEME_PROMPT,
     MARK_SCHEME_REPAIR,
     MARK_SCHEME_TOOL,
@@ -161,7 +165,7 @@ class ChunkedPaperExtractor:
         run: Sequence[CanonicalQuestion],
         usage: UsageTally | None,
     ) -> list[CanonicalMarkSchemeQuestion]:
-        """One run, and one more for the numbers it answered nothing under."""
+        """One run, and one more for the numbers and the labels it answered nothing under."""
         wanted = tuple(question.number for question in run)
         named = f"the mark scheme for questions {_listed(wanted)}"
         prompt = render_mark_scheme(document, run)
@@ -176,23 +180,32 @@ class ChunkedPaperExtractor:
             )
         )
         missing = tuple(number for number in wanted if number not in answered)
-        if not missing:
+        gaps = scheme_gaps(run, answered)
+        if not missing and not gaps:
             return list(answered.values())
-        listed = _listed(missing)
-        logger.warning("%s came back with no answer under %s, asking once more", named, listed)
+        if missing:
+            logger.warning(
+                "%s came back with no answer under %s, asking once more", named, _listed(missing)
+            )
+        if gaps:
+            logger.warning("%s left %s unanswered, asking once more", named, named_gaps(gaps))
         again = _answers(
             await self._read(
                 MarkSchemeBatch,
                 system=MARK_SCHEME_PROMPT,
-                prompt=f"{prompt}\n\n{MARK_SCHEME_MISSING.format(named=listed)}",
+                prompt=_again(prompt, missing, gaps),
                 tool=MARK_SCHEME_TOOL,
                 named=named,
                 usage=usage,
             )
         )
         # Only the gaps are taken from the second answer: the first read the rest already.
-        filled = {number: again[number] for number in missing if number in again}
-        return list((answered | filled).values())
+        answers = answered | {number: again[number] for number in missing if number in again}
+        for question in run:
+            second = again.get(question.number)
+            if question.number in gaps and second is not None:
+                answers[question.number] = filled(question, answers[question.number], second)
+        return list(answers.values())
 
     async def repair(
         self,
@@ -350,6 +363,16 @@ class ChunkedPaperExtractor:
             except ValidationError as second:
                 logger.warning("%s did not fit a second time: %s", named, second)
                 raise GenerationError(UNREADABLE.format(named=named.capitalize())) from second
+
+
+def _again(prompt: str, missing: Sequence[str], gaps: Mapping[str, Sequence[str]]) -> str:
+    """The run asked again, naming the numbers and the labels the first answer left out."""
+    asked = [prompt]
+    if missing:
+        asked.append(MARK_SCHEME_MISSING.format(named=_listed(missing)))
+    if gaps:
+        asked.append(MARK_SCHEME_PARTS_MISSING.format(named=named_gaps(gaps)))
+    return "\n\n".join(asked)
 
 
 def _answers(batch: MarkSchemeBatch) -> dict[str, CanonicalMarkSchemeQuestion]:

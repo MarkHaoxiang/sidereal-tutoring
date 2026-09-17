@@ -450,3 +450,111 @@ def test_a_complete_mark_scheme_comes_back_in_the_papers_own_order(
     assert scheme.title == "Physics Paper 1: mark scheme"
     assert [question.number for question in scheme.questions] == ["01", "02"]
     assert "the mark scheme answered question 9" in caplog.text
+
+
+def parted(number: str, *labels: str) -> CanonicalPaper:
+    return CanonicalPaper.model_validate(
+        {
+            "title": "Physics Paper 1",
+            "questions": [
+                {
+                    "number": number,
+                    "parts": [{"label": label, "text": f"Part {label}."} for label in labels],
+                }
+            ],
+        }
+    )
+
+
+def test_a_scheme_that_answers_a_question_under_too_few_labels_is_refused() -> None:
+    """Question 01 came back carrying one part where the paper prints five."""
+    answered = CanonicalMarkSchemeQuestion.model_validate(
+        {"number": "01", "parts": [{"label": "a", "answer": "$3 x^2$"}]}
+    )
+
+    with pytest.raises(GenerationError) as raised:
+        merge_scheme(parted("01", "a", "b", "c"), [answered])
+
+    assert "no answer under question 01 parts b, c" in str(raised.value)
+
+
+def test_a_scheme_answering_every_label_the_paper_prints_is_merged() -> None:
+    answered = CanonicalMarkSchemeQuestion.model_validate(
+        {"number": "01", "parts": [{"label": "a", "answer": "A"}, {"label": "b", "answer": "B"}]}
+    )
+
+    scheme = merge_scheme(parted("01", "a", "b"), [answered])
+
+    assert [part.label for part in scheme.questions[0].parts] == ["a", "b"]
+
+
+def test_a_question_with_no_parts_and_no_answer_of_its_own_is_refused() -> None:
+    entry = CanonicalMarkSchemeQuestion.model_validate(
+        {"number": "01", "notes": "allow ecf", "answer": "  "}
+    )
+
+    with pytest.raises(GenerationError) as raised:
+        merge_scheme(sectioned("01"), [entry])
+
+    assert "no answer under question 01 itself" in str(raised.value)
+
+
+def test_a_parted_question_answered_as_a_whole_merges_rather_than_refusing() -> None:
+    """The same accommodation `_covered` gives a bare part label, one level up."""
+    answered = CanonicalMarkSchemeQuestion.model_validate({"number": "01", "answer": "3x^2"})
+
+    scheme = merge_scheme(parted("01", "a", "b"), [answered])
+
+    assert scheme.questions[0].answer == "3x^2"
+    assert scheme.questions[0].parts == ()
+
+
+def test_a_parted_question_with_a_blank_whole_answer_and_no_parts_is_still_a_gap() -> None:
+    entry = CanonicalMarkSchemeQuestion.model_validate({"number": "01", "answer": "  "})
+
+    with pytest.raises(GenerationError) as raised:
+        merge_scheme(parted("01", "a", "b"), [entry])
+
+    assert "no answer under question 01 parts a, b" in str(raised.value)
+
+
+def test_a_scheme_carrying_some_but_not_all_of_a_questions_parts_is_still_refused() -> None:
+    """The live fault: question 01 came back with one part where the paper prints five."""
+    answered = CanonicalMarkSchemeQuestion.model_validate(
+        {"number": "01", "parts": [{"label": "1", "answer": "A"}]}
+    )
+
+    with pytest.raises(GenerationError) as raised:
+        merge_scheme(parted("01", "1", "2", "3", "4", "5"), [answered])
+
+    assert "no answer under question 01 parts 2, 3, 4, 5" in str(raised.value)
+
+
+def test_a_sub_part_covered_by_its_parts_whole_answer_is_unchanged() -> None:
+    paper = CanonicalPaper.model_validate(
+        {
+            "title": "Physics Paper 1",
+            "questions": [
+                {
+                    "number": "01",
+                    "parts": [
+                        {
+                            "label": "a",
+                            "text": "Part a.",
+                            "parts": [
+                                {"label": "i", "text": "Part a(i)."},
+                                {"label": "ii", "text": "Part a(ii)."},
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+    )
+    answered = CanonicalMarkSchemeQuestion.model_validate(
+        {"number": "01", "parts": [{"label": "a", "answer": "A"}]}
+    )
+
+    scheme = merge_scheme(paper, [answered])
+
+    assert [part.label for part in scheme.questions[0].parts] == ["a"]

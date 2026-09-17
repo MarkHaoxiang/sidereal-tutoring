@@ -7,7 +7,8 @@
 //             useUploadMaterialFile(file) · useUploadScanPages(files) · useRetryDocument ·
 //             useDeleteDocument({id,fileId})
 //   papers    usePapers() (the library's papers) · usePaper(id) · useSavePaper({id,patch}) ·
-//             useSetPaperStatus · useRenderPaper(id) · useWorksheet · useDeletePaper(id)
+//             useSetPaperStatus · useRenderPaper(id) · useWorksheet ·
+//             useExtractMarkScheme({paperId,document_id}) · useDeletePaper(id)
 //             (it clears the paper's questions rows first)
 //   homework  useHomeworkList({studentId?,status?,limit?}) · useHomework(id) · useGeneratedQuestions(ids) · useUpdateHomework · useTranscribeSubmission(id) · useDeleteHomework
 //   feedback  useFeedbackList({...}) · useFeedback(id) · useUpdateFeedback · useDeleteFeedback

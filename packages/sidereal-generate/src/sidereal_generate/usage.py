@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
+
+# The counts every `provenance()` carries, whether or not they were spent.
+ALWAYS = ("calls", "prompt_tokens", "completion_tokens", "total_tokens")
+COUNTED = (*ALWAYS, "reasoning_tokens", "images", "image_tokens")
 
 
 @dataclass(slots=True)
@@ -51,6 +56,19 @@ class UsageTally:
             self.cost_usd += cost_usd
             self.costed_calls += 1
 
+    def add(self, other: UsageTally) -> None:
+        """Another tally folded in, so a run kept on its own is still the caller's spend."""
+        self.calls += other.calls
+        self.prompt_tokens += other.prompt_tokens
+        self.completion_tokens += other.completion_tokens
+        self.reasoning_tokens += other.reasoning_tokens
+        self.total_tokens += other.total_tokens
+        self.cost_usd += other.cost_usd
+        self.images += other.images
+        self.image_tokens += other.image_tokens
+        self.costed_calls += other.costed_calls
+        self.efforts |= other.efforts
+
     def provenance(self) -> dict[str, Any] | None:
         """The `generated_from.usage` shape, or nothing when no call was recorded."""
         if not self.calls:
@@ -72,3 +90,21 @@ class UsageTally:
         if len(self.efforts) == 1:
             usage["reasoning_effort"] = next(iter(self.efforts))
         return usage
+
+
+def summed(usages: Iterable[Mapping[str, Any] | None]) -> dict[str, Any] | None:
+    """Several `provenance()` shapes added up. A run that recorded nothing adds nothing."""
+    counted = [usage for usage in usages if usage]
+    if not counted:
+        return None
+    total: dict[str, Any] = {}
+    for key in COUNTED:
+        spent = sum(int(usage.get(key, 0)) for usage in counted)
+        if spent or key in ALWAYS:
+            total[key] = spent
+    if all("cost_usd" in usage for usage in counted):
+        total["cost_usd"] = round(sum(float(usage["cost_usd"]) for usage in counted), 6)
+    efforts = {str(usage["reasoning_effort"]) for usage in counted if "reasoning_effort" in usage}
+    if len(efforts) == 1:
+        total["reasoning_effort"] = efforts.pop()
+    return total

@@ -7,7 +7,7 @@ carries a narrower shape of its own and the paper is rebuilt here.
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Container, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 
 from pydantic import BaseModel, ConfigDict
@@ -47,6 +47,10 @@ UNANSWERED = (
 NOTHING_ANSWERED = (
     "That mark scheme answers none of this paper's questions. Check it is the scheme for this "
     "paper, then read it again."
+)
+UNANSWERED_PARTS = (
+    "The mark scheme has no answer under {gaps}, so it covers only part of the paper. Read the "
+    "mark scheme again."
 )
 
 _BATCH = ConfigDict(frozen=True, extra="forbid")
@@ -348,7 +352,8 @@ def merge_scheme(
     paper: CanonicalPaper, answered: Sequence[CanonicalMarkSchemeQuestion]
 ) -> CanonicalMarkScheme:
     """The paper's questions, each under the answer read for it. A gap is refused, never stored."""
-    wanted = tuple(question.number for question in _asked(paper))
+    asked = _asked(paper)
+    wanted = tuple(question.number for question in asked)
     answers = {answer.number: answer for answer in answered}
     for number in sorted(set(answers) - set(wanted)):
         logger.warning("the mark scheme answered question %s, which the paper has not", number)
@@ -357,10 +362,94 @@ def merge_scheme(
         raise GenerationError(NOTHING_ANSWERED)
     if missing:
         raise GenerationError(UNANSWERED.format(numbers=", ".join(missing)))
+    gaps = scheme_gaps(asked, answers)
+    if gaps:
+        raise GenerationError(UNANSWERED_PARTS.format(gaps=named_gaps(gaps)))
     return CanonicalMarkScheme(
         title=f"{paper.title}: mark scheme",
         questions=tuple(answers[number] for number in wanted),
     )
+
+
+def scheme_labels(question: CanonicalQuestion) -> tuple[str, ...]:
+    """Every label a scheme answers this question under, as the paper's numbering prints them.
+
+    A part with sub-parts is printed one label per sub-part — `a(i)` — because a mark scheme
+    part carries no parts of its own.
+    """
+    labels: list[str] = []
+    for part in question.parts:
+        if part.parts:
+            labels.extend(f"{part.label}({sub.label})" for sub in part.parts)
+        else:
+            labels.append(part.label)
+    return tuple(labels)
+
+
+def scheme_gaps(
+    questions: Sequence[CanonicalQuestion], answers: Mapping[str, CanonicalMarkSchemeQuestion]
+) -> dict[str, tuple[str, ...]]:
+    """What each answered question left unanswered: its labels, or `()` for its own answer.
+
+    A part the paper prints sub-parts under is answered by each of their labels, or by the
+    part's own label where the scheme marks it as a whole. A question the paper prints parts
+    under is answered the same way one level up: by each of its labels, or by a non-blank
+    whole `answer` where the entry carries no parts at all.
+    """
+    gaps: dict[str, tuple[str, ...]] = {}
+    for question in questions:
+        answer = answers.get(question.number)
+        if answer is None:
+            continue
+        if not question.parts:
+            if not (answer.answer or "").strip():
+                gaps[question.number] = ()
+            continue
+        if not answer.parts and (answer.answer or "").strip():
+            continue
+        given = {part.label for part in answer.parts if part.answer.strip()}
+        missing = tuple(label for label in scheme_labels(question) if not _covered(label, given))
+        if missing:
+            gaps[question.number] = missing
+    return gaps
+
+
+def named_gaps(gaps: Mapping[str, Sequence[str]]) -> str:
+    """The gaps as a model and a tutor read them: `question 01 parts b, c; question 05 itself`."""
+    return "; ".join(
+        f"question {number} {'part' if len(labels) == 1 else 'parts'} {', '.join(labels)}"
+        if labels
+        else f"question {number} itself"
+        for number, labels in gaps.items()
+    )
+
+
+def filled(
+    question: CanonicalQuestion,
+    first: CanonicalMarkSchemeQuestion,
+    second: CanonicalMarkSchemeQuestion,
+) -> CanonicalMarkSchemeQuestion:
+    """The gaps in `first` taken from `second`: what was already answered stands."""
+    given = {part.label for part in first.parts if part.answer.strip()}
+    taken = {
+        part.label: part for part in second.parts if part.label not in given and part.answer.strip()
+    }
+    order = {label: place for place, label in enumerate(scheme_labels(question))}
+    parts = sorted(
+        (*(part for part in first.parts if part.label not in taken), *taken.values()),
+        key=lambda part: order.get(part.label, len(order)),
+    )
+    return first.model_copy(
+        update={
+            "answer": first.answer if (first.answer or "").strip() else second.answer,
+            "parts": tuple(parts),
+        }
+    )
+
+
+def _covered(label: str, given: Container[str]) -> bool:
+    """`a(i)` is answered under its own label, or under the `a` the scheme marked as a whole."""
+    return label in given or label.partition("(")[0] in given
 
 
 def reconciled(skeleton: PaperSkeleton, answered: Mapping[str, BatchQuestion]) -> PaperSkeleton:
