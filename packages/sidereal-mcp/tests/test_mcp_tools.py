@@ -11,7 +11,9 @@ from sidereal_core.models import (
     DocumentKind,
     DocumentStatus,
     HomeworkFormat,
+    HomeworkStatus,
     JobStatus,
+    MarkedQuestion,
     StudentStatus,
 )
 from sidereal_core.students import StudentNotVisibleError
@@ -179,3 +181,54 @@ async def test_nothing_is_filed_against_a_student_the_token_cannot_see() -> None
 
     assert fake.rows(Collection.DOCUMENTS) == []
     assert fake.rows(Collection.GENERATION_JOBS) == []
+
+
+async def test_marking_sums_the_totals_and_takes_the_row_to_marked() -> None:
+    fake = FakeDirectus()
+    student_id = seed_student(fake)
+    homework = fake.seed(
+        Collection.HOMEWORK,
+        {"student": str(student_id), "title": "Moments", "content": "", "status": "submitted"},
+    )
+
+    marked = await tools.mark(
+        build_services(fake),
+        UUID(homework["id"]),
+        [
+            MarkedQuestion(number="1", marks_awarded=3, marks_available=3),
+            MarkedQuestion(number="2", marks_awarded=1, marks_available=3),
+        ],
+        "Name the pivot.",
+    )
+
+    assert marked.status is HomeworkStatus.MARKED
+    assert (marked.marking or {})["total_awarded"] == 4
+    assert (marked.marking or {})["comment"] == "Name the pivot."
+
+
+async def test_feedback_is_filed_against_the_hand_in_it_is_about() -> None:
+    fake = FakeDirectus()
+    student_id = seed_student(fake)
+    homework = fake.seed(
+        Collection.HOMEWORK,
+        {"student": str(student_id), "title": "Moments", "content": "", "status": "marked"},
+    )
+
+    job = await tools.generate_feedback(
+        build_services(fake), student_id, homework_ids=[UUID(homework["id"])]
+    )
+
+    assert job.status is JobStatus.SUCCEEDED
+    assert fake.rows(Collection.FEEDBACK)[0]["homework"] == homework["id"]
+
+
+async def test_archiving_and_deleting_a_student_go_through_core() -> None:
+    fake = FakeDirectus()
+    student_id = seed_student(fake)
+    services = build_services(fake)
+
+    assert (await tools.archive(services, student_id)).status is StudentStatus.ARCHIVED
+    assert (await tools.unarchive(services, student_id)).status is StudentStatus.ACTIVE
+    await tools.remove_student(services, student_id)
+
+    assert not fake.rows(Collection.STUDENTS)

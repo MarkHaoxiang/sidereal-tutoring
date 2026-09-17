@@ -56,6 +56,22 @@ async with TypesetClient(typeset_settings().url) as typeset:
 ```
 
 ```python
+from sidereal_core import HomeworkMarking, MarkedQuestion, mark_homework, plain_text
+
+plain_text("A uniform plank $A B$ has length $4.0$ m")  # "A uniform plank AB has length 4.0 m"
+
+async with DirectusClient(settings.url, settings.token) as client:
+    await mark_homework(
+        client,
+        homework_id,
+        HomeworkMarking.over([MarkedQuestion(number="1", marks_awarded=3, marks_available=3)]),
+    )
+```
+
+`packages/sidereal-core/tests/fixtures/typst_text.json` holds the vectors `plain_text` shares with
+the frontend's `lib/typstText.ts`; both are tested against it.
+
+```python
 from sidereal_core.tutors import admin_health, list_tutors
 
 async with DirectusClient(settings.url, settings.token) as client:

@@ -8,7 +8,8 @@ Generates homework, feedback and study plans from a student and their documents.
 |---|---|---|
 | `SIDEREAL_GENERATE_BACKEND` | `claude` | `claude` calls Anthropic, `openrouter` calls OpenRouter; `fake` calls nothing and returns `[fake]` artefacts. |
 | `SIDEREAL_GENERATE_MODEL` | `claude-sonnet-5` | Model id the `claude` backend calls. |
-| `SIDEREAL_GENERATE_MAX_TOKENS` | `16000` | Output cap per request. Reasoning is spent from it too. |
+| `SIDEREAL_GENERATE_MAX_TOKENS` | `16000` | Output cap per request. Reasoning is spent from it too. A cut-off answer is asked for once more with twice this. |
+| `SIDEREAL_GENERATE_PLAN_MAX_TOKENS` | `32000` | The same cap for a study plan, which writes a whole period in one answer. |
 | `SIDEREAL_GENERATE_EXTRACT_MAX_TOKENS` | `48000` | Output cap for a paper extraction, the longest answer asked for. The `claude` backend takes at most 21,333 of it without streaming. |
 | `SIDEREAL_GENERATE_REASONING` | `low` | How much thinking an extraction or a repair asks for: `low`, `medium` or `high`. Homework, feedback and plans leave it to the model. |
 | `ANTHROPIC_API_KEY` | unset | Read by the Anthropic SDK on first call. |

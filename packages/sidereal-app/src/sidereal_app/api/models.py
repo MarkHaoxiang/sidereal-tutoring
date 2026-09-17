@@ -15,6 +15,7 @@ from sidereal_core.canonical import (
     RenderKind,
     RenderOutput,
 )
+from sidereal_core.logins import AccountStatus
 from sidereal_core.models import HomeworkFormat
 from sidereal_core.tutors import TutorStatus
 from sidereal_ingest.documents import FileSource, ScanSource, TextSource, UrlSource
@@ -25,12 +26,26 @@ class Health(BaseModel):
     status: Literal["ok"]
 
 
+class EmailRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: str
+
+
+class AccountState(BaseModel):
+    """All anyone refused at sign-in is told: whether that account may sign in at all."""
+
+    status: AccountStatus
+
+
 class JobRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     # `paper_extract` is the one kind with no student: a paper is library material.
     student_id: UUID | None = None
     document_ids: list[UUID] = []
+    # Feedback only: the hand-ins it is about, questions, answers and marks included.
+    homework_ids: list[UUID] = []
     instructions: str | None = None
     period_start: date | None = None
     period_end: date | None = None

@@ -1,21 +1,14 @@
 import { Link } from "react-router-dom";
 
 import { GenerateSection } from "@/components/artefacts/GenerateSection";
+import { JobsPanel } from "@/components/artefacts/JobsPanel";
 import styles from "@/components/artefacts/artefacts.module.css";
 import { SkeletonRows, StatusChip } from "@/components/ui";
+import { feedbackTitle } from "@/lib/feedback";
 import { formatDateTime } from "@/lib/format";
 import { useFeedbackList } from "@/lib/queries";
 
 import { useStudentTab } from "./context";
-
-/** Feedback has no title, so its first written line names the row. */
-function firstLine(content: string | null): string {
-  const line = (content ?? "")
-    .split("\n")
-    .map((part) => part.replace(/^#+\s*/, "").trim())
-    .find((part) => part.length > 0);
-  return line ?? "Untitled feedback";
-}
 
 export function FeedbackTab() {
   const { studentId } = useStudentTab();
@@ -35,12 +28,14 @@ export function FeedbackTab() {
         />
       ) : null}
 
+      <JobsPanel studentId={studentId} kind="feedback" />
+
       {data && data.length > 0 ? (
         <ul className={styles.list}>
           {data.map((item) => (
             <li key={item.id}>
               <Link to={`/students/${studentId}/feedback/${item.id}`} className={styles.link}>
-                <span className={styles.title}>{firstLine(item.content)}</span>
+                <span className={styles.title}>{feedbackTitle(item)}</span>
                 <StatusChip status={item.status} />
                 <span className={styles.meta}>{formatDateTime(item.date_created)}</span>
               </Link>

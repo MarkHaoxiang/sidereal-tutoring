@@ -77,6 +77,7 @@ class FakeDirectus:
         *,
         file_id: str | None = None,
         media_type: str = "text/plain",
+        uploaded_by: str | None = None,
     ) -> str:
         """An uploaded asset: its `/files/{id}` row and the bytes `/assets/{id}` returns."""
         identifier = file_id or str(uuid4())
@@ -88,6 +89,7 @@ class FakeDirectus:
                 "title": Path(filename).stem,
                 "type": media_type,
                 "filesize": len(content),
+                "uploaded_by": uploaded_by or str(self.user["id"]),
             },
             content,
         )
@@ -131,14 +133,24 @@ class FakeDirectus:
                 expanded[name] = {leaf: expanded[name]}
         return expanded
 
-    def _file(self, route: str, file_id: str) -> httpx.Response:
+    def _file(self, route: str, file_id: str, request: httpx.Request) -> httpx.Response:
         stored = self.files.get(file_id)
         if stored is None:
             return _error(404, f"File {file_id} not found", "FORBIDDEN")
         row, content = stored
-        if route == "files":
+        if route == "assets":
+            return _file_response(row["filename_download"], content, str(row["type"]))
+        if request.method == "PATCH":
+            row.update(_payload(request))
             return httpx.Response(200, json={"data": row})
-        return _file_response(row["filename_download"], content, str(row["type"]))
+        if request.method == "DELETE":
+            del self.files[file_id]
+            return httpx.Response(204)
+        return httpx.Response(200, json={"data": row})
+
+    def _uploader(self, user_id: str) -> bool:
+        """Directus's own `directus_files_uploaded_by_foreign`, which no snapshot can loosen."""
+        return any(row.get("uploaded_by") == user_id for row, _ in self.files.values())
 
     def handle(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
@@ -168,8 +180,11 @@ class FakeDirectus:
             return httpx.Response(200, json={"data": self.licence})
         if parts == ["files"] and request.method == "POST":
             return self._upload(request)
+        if parts == ["files"] and request.method == "GET":
+            listing = [row for row, _ in self.files.values()]
+            return httpx.Response(200, json={"data": _query(listing, request.url)})
         if parts[0] in ("files", "assets") and len(parts) == 2:
-            return self._file(parts[0], parts[1])
+            return self._file(parts[0], parts[1], request)
         if parts[0] in SYSTEM_ROUTES and len(parts) in (1, 2):
             parts = ["items", SYSTEM_ROUTES[parts[0]], *parts[1:]]
         if parts[0] != "items" or len(parts) not in (2, 3):
@@ -199,6 +214,13 @@ class FakeDirectus:
             row["date_updated"] = _now()
             return httpx.Response(200, json={"data": self._expand(row, request.url)})
         if request.method == "DELETE":
+            if collection == "directus_users" and self._uploader(parts[2]):
+                return _error(
+                    500,
+                    'update or delete on table "directus_users" violates foreign key constraint '
+                    '"directus_files_uploaded_by_foreign" on table "directus_files"',
+                    "INTERNAL_SERVER_ERROR",
+                )
             del rows[parts[2]]
             return httpx.Response(204)
         return _error(405, f"{request.method} not allowed", "METHOD_NOT_ALLOWED")

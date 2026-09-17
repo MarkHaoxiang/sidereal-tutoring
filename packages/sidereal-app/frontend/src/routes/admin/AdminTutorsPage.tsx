@@ -6,16 +6,20 @@ import { Button, ConfirmDialog, EmptyState, PageHeader, SkeletonRows } from "@/c
 import { apiError } from "@/lib/api";
 import { cx } from "@/lib/cx";
 import { formatDateTime } from "@/lib/format";
-import { tutorName, useRemoveTutor, useSetTutorStatus, useTutors } from "@/lib/queries";
+import { useMediaQuery } from "@/lib/media";
+import { isServiceAccount, tutorName, useRemoveTutor, useSetTutorStatus, useTutors } from "@/lib/queries";
 import type { TutorAccount } from "@/lib/queries";
 
 import pageStyles from "../page.module.css";
 import styles from "./table.module.css";
 
+const WIDE = "(min-width: 40rem)";
+
 export function AdminTutorsPage() {
   const { data: tutors, isLoading, isError } = useTutors();
   const setStatus = useSetTutorStatus();
   const removeTutor = useRemoveTutor();
+  const wide = useMediaQuery(WIDE);
   const [adding, setAdding] = useState(false);
   const [resetting, setResetting] = useState<TutorAccount | null>(null);
   const [removing, setRemoving] = useState<TutorAccount | null>(null);
@@ -67,7 +71,7 @@ export function AdminTutorsPage() {
         />
       ) : null}
 
-      {tutors && tutors.length > 0 ? (
+      {tutors && tutors.length > 0 && wide ? (
         <div className={styles.scroller} tabIndex={0} role="region" aria-label="Tutors">
           <table className={styles.table}>
             <thead>
@@ -86,6 +90,7 @@ export function AdminTutorsPage() {
             <tbody>
               {tutors.map((tutor) => {
                 const suspended = tutor.status === "suspended";
+                const service = isServiceAccount(tutor);
                 return (
                   <tr key={tutor.user_id}>
                     <td>
@@ -99,45 +104,122 @@ export function AdminTutorsPage() {
                         {suspended ? "Suspended" : "Active"}
                       </span>
                     </td>
-                    <td className={styles.numeric}>{tutor.students ?? 0}</td>
+                    <td className={styles.numeric}>
+                      {service ? (
+                        <span className={styles.secondaryCell}>Service account</span>
+                      ) : (
+                        tutor.students ?? 0
+                      )}
+                    </td>
                     <td className={styles.secondaryCell}>
                       {tutor.last_access ? formatDateTime(tutor.last_access) : "Never"}
                     </td>
                     <td>
-                      <div className={styles.actions}>
-                        <Button
-                          size="sm"
-                          onClick={() => {
-                            setResetting(tutor);
-                          }}
-                        >
-                          Reset password
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => {
-                            void toggleStatus(tutor);
-                          }}
-                        >
-                          {suspended ? "Reactivate" : "Suspend"}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => {
-                            setRemoving(tutor);
-                          }}
-                        >
-                          Remove
-                        </Button>
-                      </div>
+                      {service ? null : (
+                        <div className={styles.actions}>
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              setResetting(tutor);
+                            }}
+                          >
+                            Reset password
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              void toggleStatus(tutor);
+                            }}
+                          >
+                            {suspended ? "Reactivate" : "Suspend"}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setRemoving(tutor);
+                            }}
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
+        </div>
+      ) : null}
+
+      {tutors && tutors.length > 0 && !wide ? (
+        <div className={styles.cards} role="list" aria-label="Tutors">
+          {tutors.map((tutor) => {
+            const suspended = tutor.status === "suspended";
+            const service = isServiceAccount(tutor);
+            return (
+              <article key={tutor.user_id} className={styles.card} role="listitem">
+                <div className={styles.cardHeader}>
+                  <div>
+                    <span className={styles.primary}>{tutorName(tutor)}</span>
+                    {tutor.email && tutor.email !== tutorName(tutor) ? (
+                      <span className={styles.secondary}>{tutor.email}</span>
+                    ) : null}
+                  </div>
+                  <span className={cx(styles.chip, suspended ? styles.chipDanger : styles.chipOk)}>
+                    {suspended ? "Suspended" : "Active"}
+                  </span>
+                </div>
+
+                {service ? (
+                  <p className={styles.cardNote}>Service account</p>
+                ) : (
+                  <div className={styles.cardField}>
+                    <span className={styles.cardFieldLabel}>Students</span>
+                    <span>{tutor.students ?? 0}</span>
+                  </div>
+                )}
+
+                <div className={styles.cardField}>
+                  <span className={styles.cardFieldLabel}>Last signed in</span>
+                  <span>{tutor.last_access ? formatDateTime(tutor.last_access) : "Never"}</span>
+                </div>
+
+                {service ? null : (
+                  <div className={styles.cardActions}>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        setResetting(tutor);
+                      }}
+                    >
+                      Reset password
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        void toggleStatus(tutor);
+                      }}
+                    >
+                      {suspended ? "Reactivate" : "Suspend"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setRemoving(tutor);
+                      }}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                )}
+              </article>
+            );
+          })}
         </div>
       ) : null}
 

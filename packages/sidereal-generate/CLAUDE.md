@@ -27,15 +27,33 @@ Sits above sidereal-ingest. Imports core and ingest only.
   above which its SDK demands streaming, which nothing here does yet.
 - Every model call leaves one INFO line carrying `finish_reason` and `usage`: a paid call says what it
   cost without anyone raising the log level.
+- A cut-off answer is asked for once more with twice the budget, and a second cut-off is the
+  tutor's failure: `finish_reason: length` on OpenRouter and `stop_reason: max_tokens` on Claude
+  are the same `GenerationTruncatedError` either way. A plan starts from
+  `SIDEREAL_GENERATE_PLAN_MAX_TOKENS`, above every other kind, because it covers a whole period in
+  one answer; the `claude` backend clamps both the start and the doubling to
+  `NON_STREAMING_MAX_TOKENS`.
 - A reply with no tool call, or one that fails validation, raises `GenerationError`. A half-filled
   artefact is never returned.
 - Prompts are module-level constants in `prompts.py`, not built at call time.
+- Every kind is given today's date and the date of the student's next scheduled lesson, and every
+  date in a prompt is printed with its weekday beside it: a model left to work one out names the
+  wrong day, and the weekday names are a constant here rather than the locale's `strftime`.
+- A feedback job is given the hand-ins it is about: each homework's questions as text, the
+  student's typed answers, the transcription of their photographed working and the tutor's marks.
+  A hand-in with nothing on it says so in words rather than going quiet — silence is what let
+  feedback praise working it had never seen. The row is filed against the first of them
+  (`feedback.homework`), and `generated_from.homework` carries them all.
+- `retry_job` starts a new job from a failed one's own input. The row that failed is never
+  rewritten: it is the history.
 - Generators return pydantic outputs only. `jobs.py` is the one place a generated artefact is written
   back to Directus, and the one place that knows the provenance shape (`job`, `model`, `documents`).
 - `run_job` never raises for a generation failure: the job row carries the outcome, so every failure is
   visible to the tutor and to an agent.
-- A job's `error` is one plain sentence a tutor can act on. The exception behind it is logged at error
-  level, never stored.
+- A job's `error` is one plain sentence a tutor can act on, and the exception behind it is logged
+  at error level, never stored — except a `GenerationError`, whose own sentence is carried too,
+  clipped to `ERROR_DETAIL`: "the generated result could not be used" alone told an admin nothing
+  about which question an extraction could not read.
 - A homework job writes the generated questions as `questions` rows, links each to the homework with a
   `homework_questions` row sorted from 1 in the order generated, and records their ids in
   `generated_from`.
@@ -136,6 +154,14 @@ Sits above sidereal-ingest. Imports core and ingest only.
   goes to render and kept in the stored structure, so a later render with room still prints it.
 - A worksheet's PDF is rendered, not compiled from its source: `/compile` carries no assets, so
   an `image()` in the source resolves to nothing.
+- A worksheet carries each chosen question's own blocks, and a `passage_ref` is printed inline from
+  the paper's `passages`: a worksheet has none of its own, so a reference left as one renders as
+  nothing. A reference the paper cannot resolve is dropped and logged.
+- A worksheet made for a student also becomes a draft homework — `typst`, the rendered source as
+  `content`, the filed PDF, the due date, and `homework_questions` to the paper's own question rows
+  in the order chosen — and `WorksheetResult.homework_id` is how the caller finds it. A number the
+  paper has no row for is logged, never raised. Such a row is re-rendered rather than recompiled:
+  its `content` names figure assets `/compile` cannot carry.
 - `questions` rows are written for every question the paper asks, a section's as well as a
   top-level one, and a worksheet may take either.
 - A render that fails leaves the row, a `generated_from.warning` and a succeeded job — the structure

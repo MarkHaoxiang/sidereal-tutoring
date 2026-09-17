@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import Any
 from uuid import UUID
 
@@ -23,6 +23,7 @@ from openai import PermissionDeniedError as OpenAIPermissionDeniedError
 from openai import RateLimitError as OpenAIRateLimitError
 from pydantic import BaseModel, ConfigDict
 from sidereal_core.directus import DirectusClient, DirectusError, DirectusUnavailableError
+from sidereal_core.homework import ordered_questions
 from sidereal_core.models import (
     Collection,
     Document,
@@ -40,6 +41,8 @@ from sidereal_core.models import (
     PlanDraft,
     Question,
     QuestionDraft,
+    Session,
+    SessionStatus,
     Student,
 )
 from sidereal_core.typeset import TypesetClient, TypesetError, TypesetUnavailableError
@@ -69,6 +72,7 @@ from sidereal_generate.models import (
     FeedbackOutput,
     GenerationRequest,
     HomeworkOutput,
+    MarkedHomework,
     PlanOutput,
 )
 from sidereal_generate.openrouter import feedback_generator as openrouter_feedback_generator
@@ -82,6 +86,10 @@ from sidereal_generate.usage import UsageTally
 
 logger = logging.getLogger(__name__)
 MATERIAL_GONE = (401, 403, 404)
+# How much of the generate layer's own sentence a job's `error` carries.
+ERROR_DETAIL = 400
+# Far enough ahead to find the next lesson without reading a term's worth of them.
+SESSION_LOOKAHEAD = 50
 
 
 class JobInputError(Exception):
@@ -96,6 +104,8 @@ class JobInput(BaseModel):
     # A paper is library material, so `paper_extract` carries one document and no student.
     student: UUID | None = None
     documents: tuple[UUID, ...] = ()
+    # Feedback only: the hand-ins it is about. The first is what the row is filed under.
+    homework: tuple[UUID, ...] = ()
     instructions: str | None = None
     period_start: date | None = None
     period_end: date | None = None
@@ -169,6 +179,14 @@ async def start_job(
     )
 
 
+async def retry_job(client: DirectusClient, generators: Generators, job_id: UUID) -> GenerationJob:
+    """A new job carrying the old one's input. The row that failed stays as the history."""
+    job = await client.get_item(Collection.GENERATION_JOBS, GenerationJob, job_id)
+    return await start_job(
+        client, job.kind, JobInput.model_validate(job.input), model=generators.for_kind(job.kind)
+    )
+
+
 async def run_job(
     client: DirectusClient, generators: Generators, job_id: UUID, *, typeset: TypesetClient
 ) -> GenerationJob:
@@ -228,9 +246,17 @@ def _message(exc: BaseException) -> str:
         case GenerationTruncatedError():
             return "The answer was cut off before it was finished. Try again with less material."
         case GenerationError():
-            return "The generated result could not be used. Try again."
+            return _unusable(str(exc))
         case _:
             return "Generation failed unexpectedly."
+
+
+def _unusable(sentence: str) -> str:
+    """The generate layer's own words, so a failed extraction says what it could not read."""
+    if not sentence.strip():
+        return "The generated result could not be used. Try again."
+    clipped = sentence if len(sentence) <= ERROR_DETAIL else f"{sentence[:ERROR_DETAIL]}…"
+    return f"The generated result could not be used: {clipped}"
 
 
 def _spent(provenance: dict[str, Any], usage: UsageTally) -> dict[str, Any]:
@@ -251,14 +277,44 @@ async def _load(client: DirectusClient, job_input: JobInput) -> GenerationReques
         await client.get_item(Collection.DOCUMENTS, Document, document_id)
         for document_id in job_input.documents
     ]
+    handed_in = [await _handed_in(client, homework_id) for homework_id in job_input.homework]
+    today = datetime.now(UTC).date()
     return GenerationRequest(
         student=student,
         documents=tuple(documents),
+        homework=tuple(handed_in),
         instructions=job_input.instructions,
         period_start=job_input.period_start,
         period_end=job_input.period_end,
+        today=today,
+        session_date=await _next_session(client, student.id, today),
         format=job_input.format,
     )
+
+
+async def _handed_in(client: DirectusClient, homework_id: UUID) -> MarkedHomework:
+    """The hand-in as the generator reads it: the questions as set, beside what came back."""
+    homework = await client.get_item(Collection.HOMEWORK, Homework, homework_id)
+    return MarkedHomework(
+        homework=homework, questions=tuple(await ordered_questions(client, homework_id))
+    )
+
+
+async def _next_session(client: DirectusClient, student_id: UUID, today: date) -> date | None:
+    """The student's next scheduled lesson, so nothing in the writing has to guess a weekday."""
+    sessions = await client.list_items(
+        Collection.SESSIONS,
+        Session,
+        filter={"student": {"_eq": str(student_id)}, "status": {"_eq": SessionStatus.SCHEDULED}},
+        sort=["scheduled_at"],
+        limit=SESSION_LOOKAHEAD,
+    )
+    upcoming = [
+        session.scheduled_at.date()
+        for session in sessions
+        if session.scheduled_at is not None and session.scheduled_at.date() >= today
+    ]
+    return upcoming[0] if upcoming else None
 
 
 async def _run(
@@ -332,7 +388,7 @@ async def _generate(
         case GenerationKind.FEEDBACK:
             feedback = await generators.feedback.generate(request, usage=usage)
             return Collection.FEEDBACK, await _write_feedback(
-                client, request.student.id, feedback, _spent(provenance, usage)
+                client, request.student.id, job_input, feedback, _spent(provenance, usage)
             )
         case GenerationKind.PLAN:
             plan = await generators.plan.generate(request, usage=usage)
@@ -410,13 +466,23 @@ async def _link_questions(
 async def _write_feedback(
     client: DirectusClient,
     student_id: UUID,
+    job_input: JobInput,
     output: FeedbackOutput,
     provenance: dict[str, Any],
 ) -> UUID:
+    """Feedback about a hand-in is filed against it, so both views name the other."""
+    homework = job_input.homework[0] if job_input.homework else None
     feedback = await client.create_item(
         Collection.FEEDBACK,
         Feedback,
-        FeedbackDraft(student=student_id, content=output.content, generated_from=provenance),
+        FeedbackDraft(
+            student=student_id,
+            homework=homework,
+            content=output.content,
+            generated_from={**provenance, "homework": [str(h) for h in job_input.homework]}
+            if job_input.homework
+            else provenance,
+        ),
     )
     return feedback.id
 

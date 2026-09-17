@@ -1,0 +1,131 @@
+.total {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0;
+  color: var(--color-fg-muted);
+}
+
+.totalLabel {
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+}
+
+.totalValue {
+  font-family: var(--font-serif);
+  font-optical-sizing: auto;
+  font-size: var(--font-size-h1);
+  line-height: var(--line-height-h1);
+  font-weight: 600;
+  letter-spacing: var(--tracking-display);
+  color: var(--color-gold-bright);
+  white-space: nowrap;
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem 1rem;
+  align-items: start;
+  padding: 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-bg);
+}
+
+.head {
+  display: flex;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.number {
+  color: var(--color-gold-bright);
+  font-weight: 600;
+}
+
+/* Two lines of the question, so the tutor knows which one they are marking; the
+   whole of it is still in the page and in the tooltip. */
+.text {
+  min-width: 0;
+  margin: 0;
+  color: var(--color-fg-muted);
+  line-height: var(--line-height-small);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.marks {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.marks .mark {
+  width: 4.5rem;
+}
+
+.slash {
+  color: var(--color-fg-muted);
+}
+
+.row .comment {
+  grid-column: 1 / -1;
+  min-height: 2.25rem;
+}
+
+.solo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.solo > * {
+  flex: 1 1 8rem;
+}
+
+.overall {
+  margin-top: 0.75rem;
+}
+
+.problem {
+  margin: 0.75rem 0 0;
+  color: var(--color-danger);
+  text-wrap: pretty;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.75rem;
+}
+
+.hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (max-width: 40rem) {
+  .row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

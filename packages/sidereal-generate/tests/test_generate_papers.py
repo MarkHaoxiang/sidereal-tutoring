@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import Callable, Sequence
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 from uuid import UUID
 
@@ -960,3 +960,66 @@ async def test_a_rerun_that_recorded_no_call_files_no_usage_rather_than_a_zero()
     generated_from = paper.generated_from or {}
     assert generated_from["reruns"][0]["usage"] is None
     assert generated_from["usage_total"] == extraction
+
+
+async def test_a_worksheet_for_a_student_becomes_a_draft_homework_of_its_questions() -> None:
+    fake = seeded()
+    typeset = FakeTypeset()
+    paper_id = await extracted(fake, typeset, (DOCUMENT_ID,))
+    student = fake.seed(Collection.STUDENTS, {"name": "A. Tutee"})
+
+    async with fake.client() as client:
+        result = await paper_worksheet(
+            client,
+            typeset.client(),
+            paper_id,
+            ["2", "1"],
+            student_id=UUID(student["id"]),
+            due=date(2026, 9, 24),
+        )
+
+    assert result.homework_id is not None
+    homework = fake.items[Collection.HOMEWORK][str(result.homework_id)]
+    assert homework["format"] == "typst"
+    assert homework["status"] == "draft"
+    assert homework["due_on"] == "2026-09-24"
+    assert homework["content"] == result.source
+    assert homework["pdf"] == str(result.pdf_file_id)
+    numbers = {
+        row["id"]: row["number"] for row in fake.rows(Collection.QUESTIONS) if row.get("paper")
+    }
+    links = sorted(fake.rows(Collection.HOMEWORK_QUESTIONS), key=lambda row: row["sort"])
+    assert [numbers[link["question"]] for link in links] == ["2", "1"]
+
+
+async def test_a_worksheet_with_no_student_sets_no_homework() -> None:
+    fake = seeded()
+    typeset = FakeTypeset()
+    paper_id = await extracted(fake, typeset, (DOCUMENT_ID,))
+
+    async with fake.client() as client:
+        result = await paper_worksheet(client, typeset.client(), paper_id, ["1"])
+
+    assert result.homework_id is None
+    assert not fake.rows(Collection.HOMEWORK)
+
+
+async def test_a_worksheet_prints_the_passage_its_question_only_points_at() -> None:
+    """A worksheet has no `passages` of its own, so a reference would render as nothing."""
+    fake = seeded()
+    typeset = FakeTypeset()
+    paper_id = await extracted(fake, typeset, (DOCUMENT_ID,))
+    stored = fake.items[Collection.PAPERS][str(paper_id)]
+    stored["structure"]["passages"] = [
+        {"id": "source-a", "title": "Source A", "text": "Two lines."}
+    ]
+    stored["structure"]["questions"][0]["blocks"] = [
+        {"type": "passage_ref", "id": "source-a"},
+        {"type": "passage_ref", "id": "gone"},
+    ]
+
+    async with fake.client() as client:
+        await paper_worksheet(client, typeset.client(), paper_id, ["1"])
+
+    blocks = typeset.rendered[-1]["document"]["questions"][0]["blocks"]
+    assert blocks == [{"type": "passage", "title": "Source A", "text": "Two lines."}]

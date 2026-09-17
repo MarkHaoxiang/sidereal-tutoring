@@ -10,7 +10,11 @@ DEFAULT_MODEL = "claude-sonnet-5"
 # answer alone: a 36-page paper spent 20,000 without finishing. A cap bills nothing
 # until it is used.
 DEFAULT_MAX_TOKENS = 16000
+# A term's plan is six weeks of sessions, and a plan that stops in week one is no plan.
+DEFAULT_PLAN_MAX_TOKENS = 32000
 DEFAULT_EXTRACT_MAX_TOKENS = 48000
+# A cut-off answer is asked for once more with this much of the budget again.
+TRUNCATION_FACTOR = 2
 DEFAULT_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 DEFAULT_OPENROUTER_MODEL = "anthropic/claude-sonnet-5"
 
@@ -44,6 +48,8 @@ class OpenRouterSettings:
 class GenerateSettings:
     model: str
     max_tokens: int
+    # A plan covers a whole period in one answer, so it starts from more than the rest.
+    plan_max_tokens: int
     # A whole exam paper, transcribed, is the longest answer anything here asks for.
     extract_max_tokens: int
     backend: GenerateBackend
@@ -62,10 +68,12 @@ class GenerateSettings:
 def generate_settings(env: Mapping[str, str] | None = None) -> GenerateSettings:
     source = os.environ if env is None else env
     raw = source.get("SIDEREAL_GENERATE_MAX_TOKENS")
+    plan = source.get("SIDEREAL_GENERATE_PLAN_MAX_TOKENS")
     extract = source.get("SIDEREAL_GENERATE_EXTRACT_MAX_TOKENS")
     return GenerateSettings(
         model=source.get("SIDEREAL_GENERATE_MODEL") or DEFAULT_MODEL,
         max_tokens=int(raw) if raw else DEFAULT_MAX_TOKENS,
+        plan_max_tokens=int(plan) if plan else DEFAULT_PLAN_MAX_TOKENS,
         extract_max_tokens=int(extract) if extract else DEFAULT_EXTRACT_MAX_TOKENS,
         backend=_backend(source.get("SIDEREAL_GENERATE_BACKEND")),
         extract_reasoning=_effort(source.get("SIDEREAL_GENERATE_REASONING")),

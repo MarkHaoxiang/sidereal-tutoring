@@ -32,6 +32,22 @@ Bottom layer. Imports no other workspace package.
   tutor accounts.
 - A tutor is a `directus_users` row in the `Tutor` role, found by name. A tutor who still has
   students cannot be removed; reassigning them comes first.
+- Archiving a student suspends their login and unarchiving reactivates it. `students.py` is the
+  only place either happens, and a student with no login is archived without a user being touched.
+- Deleting a student deletes their login first, then the row: sessions, homework, feedback and
+  plans cascade; their documents and their generation jobs are `SET NULL` and stay.
+- `release_uploads` runs before any `directus_users` row is deleted. `directus_files.uploaded_by`
+  is `SET NULL`, and a tutor's write rule on a file is that column, so a file left unhanded is one
+  only an administrator can maintain. A caller a rule refuses is a file released to nobody, never
+  a failed deletion.
+- `homework.marking` is `HomeworkMarking`: marks awarded and available per question, an optional
+  comment on each and on the whole. `HomeworkMarking.over` is what sums the totals, and
+  `mark_homework` writes them and takes the row to `marked` in one PATCH.
+- `account_status` is the only thing that tells a suspended account from a wrong password:
+  Directus answers `INVALID_CREDENTIALS` for both.
+- `plain_text` turns Typst maths into readable inline text for a list preview.
+  `tests/fixtures/typst_text.json` is the contract it shares with the frontend's
+  `lib/typstText.ts`; changing either implementation means changing both against that file.
 - `admin_health` never raises: a service it cannot reach is `ok: false`, and every probe is capped
   at `PROBE_TIMEOUT`.
 - A listing never asks per row: ids are gathered and looked up with one `_in` query, and counts come
@@ -64,6 +80,9 @@ Bottom layer. Imports no other workspace package.
 - `render` sends the structure and never Typst: the markup is the service's to write. A figure's
   bytes go as `assets=`, base64 on the wire, under the name the block asked for; over
   `MAX_ASSET_BYTES` or `MAX_ASSETS_BYTES` is refused here rather than as a 413 there.
+- `FakeDirectus` serves `/files` as a listing and a PATCH as well as a read, and refuses to delete
+  a user its files still point at — the constraint unloosened, so the release step cannot be
+  dropped unnoticed.
 - `FakeDirectus.admin` decides what `/users/me` says about the caller's policies; it serves
   `/server/info`, `/license` and `aggregate[count]` the way Directus does.
 - `FakeTypeset` compiles nothing. Source — or a rendered document — carrying `FAIL_MARKER` is its

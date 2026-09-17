@@ -24,6 +24,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read Account Status
+         * @description Why a sign-in was refused, for someone who has just been refused one. No token.
+         */
+        post: operations["read_account_status_api_auth_status_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/me": {
         parameters: {
             query?: never;
@@ -137,6 +157,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/students/{student_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Archive
+         * @description The student is filed away and their login is suspended: archiving revokes access.
+         */
+        post: operations["archive_api_students__student_id__archive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/students/{student_id}/unarchive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Unarchive */
+        post: operations["unarchive_api_students__student_id__unarchive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/students/{student_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Student
+         * @description Their sessions, homework, feedback and plans go; their material joins the library.
+         */
+        delete: operations["remove_student_api_students__student_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/students/{student_id}/login": {
         parameters: {
             query?: never;
@@ -150,7 +227,7 @@ export interface paths {
         post: operations["add_student_login_api_students__student_id__login_post"];
         /**
          * Remove Student Login
-         * @description The login goes; the student's work stays.
+         * @description The login goes; the student's work stays, and their uploads pass to the caller.
          */
         delete: operations["remove_student_login_api_students__student_id__login_delete"];
         options?: never;
@@ -377,6 +454,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/jobs/{job_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Job Again
+         * @description Queue the same input again. The job that failed stays where it is, as the history.
+         */
+        post: operations["run_job_again_api_jobs__job_id__retry_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/jobs/{job_id}": {
         parameters: {
             query?: never;
@@ -398,6 +495,19 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AccountState
+         * @description All anyone refused at sign-in is told: whether that account may sign in at all.
+         */
+        AccountState: {
+            status: components["schemas"]["AccountStatus"];
+        };
+        /**
+         * AccountStatus
+         * @description As much as anyone refused at sign-in is told about why.
+         * @enum {string}
+         */
+        AccountStatus: "active" | "suspended" | "unknown";
         /** AdminHealth */
         AdminHealth: {
             directus: components["schemas"]["DirectusHealth"];
@@ -814,6 +924,11 @@ export interface components {
          * @enum {string}
          */
         DocumentStatus: "pending" | "processing" | "ready" | "failed";
+        /** EmailRequest */
+        EmailRequest: {
+            /** Email */
+            email: string;
+        };
         /** FileSourceRequest */
         FileSourceRequest: {
             /**
@@ -941,6 +1056,10 @@ export interface components {
             } | null;
             /** Submitted At */
             submitted_at?: string | null;
+            /** Marking */
+            marking?: {
+                [key: string]: unknown;
+            } | null;
             /** Generated From */
             generated_from?: {
                 [key: string]: unknown;
@@ -998,6 +1117,11 @@ export interface components {
              * @default []
              */
             document_ids?: string[];
+            /**
+             * Homework Ids
+             * @default []
+             */
+            homework_ids?: string[];
             /** Instructions */
             instructions?: string | null;
             /** Period Start */
@@ -1181,6 +1305,36 @@ export interface components {
             /** Paper Id */
             paper_id?: string | null;
         };
+        /** Student */
+        Student: {
+            /** Name */
+            name: string;
+            /** Level */
+            level?: string | null;
+            /** Subjects */
+            subjects?: string[];
+            /** Notes */
+            notes?: string | null;
+            /** Tutor */
+            tutor?: string | null;
+            /** User */
+            user?: string | null;
+            /** @default active */
+            status?: components["schemas"]["StudentStatus"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Date Created */
+            date_created?: string | null;
+            /** Date Updated */
+            date_updated?: string | null;
+            /** User Created */
+            user_created?: string | null;
+            /** User Updated */
+            user_updated?: string | null;
+        };
         /** StudentLogin */
         StudentLogin: {
             /**
@@ -1191,6 +1345,11 @@ export interface components {
             /** Email */
             email: string;
         };
+        /**
+         * StudentStatus
+         * @enum {string}
+         */
+        StudentStatus: "active" | "paused" | "archived";
         /** TextSourceRequest */
         TextSourceRequest: {
             /**
@@ -1339,6 +1498,8 @@ export interface components {
              * Format: uuid
              */
             pdf_file_id: string;
+            /** Homework Id */
+            homework_id?: string | null;
         };
     };
     responses: never;
@@ -1365,6 +1526,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Health"];
+                };
+            };
+        };
+    };
+    read_account_status_api_auth_status_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmailRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountState"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -1579,6 +1773,97 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AdminJob"][];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    archive_api_students__student_id__archive_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                student_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Student"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unarchive_api_students__student_id__unarchive_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                student_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Student"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_student_api_students__student_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                student_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -2003,6 +2288,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorksheetResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_job_again_api_jobs__job_id__retry_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerationJob"];
                 };
             };
             /** @description Validation Error */

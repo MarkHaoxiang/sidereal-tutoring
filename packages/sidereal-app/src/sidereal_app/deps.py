@@ -22,9 +22,11 @@ from sidereal_app.api.errors import (
     BAD_CREDENTIALS,
     DIRECTUS_UNAVAILABLE,
     NO_CREDENTIALS,
+    SERVICE_TOKEN_MISSING,
     TUTOR_ONLY,
     detail,
 )
+from sidereal_app.api.ratelimit import KeyedLimiter
 
 bearer = HTTPBearer(auto_error=False)
 
@@ -73,6 +75,27 @@ async def get_current_user(
         ) from exc
 
 
+def get_service_client(
+    pool: Annotated[httpx.AsyncClient, Depends(get_http_client)],
+) -> DirectusClient:
+    """The app's own account, and the only place it has one: the sign-in helper has no caller."""
+    settings = directus_settings()
+    if not settings.token:
+        raise HTTPException(
+            status_code=503,
+            detail=detail(
+                SERVICE_TOKEN_MISSING,
+                "This deployment cannot check an account's standing. Ask an administrator.",
+            ),
+        )
+    return DirectusClient(settings.url, settings.token, http_client=pool)
+
+
+def get_login_limiter(request: Request) -> KeyedLimiter:
+    """One bucket table for the process, opened by the lifespan."""
+    return cast("KeyedLimiter", request.app.state.login_limiter)
+
+
 def get_generators(request: Request) -> Generators:
     """Built once by the lifespan: the backend's client and its pool outlive the request."""
     return cast("Generators", request.app.state.generators)
@@ -112,6 +135,8 @@ async def require_admin(
 
 
 CurrentUser = Annotated[DirectusUser, Depends(get_current_user)]
+ServiceDirectus = Annotated[DirectusClient, Depends(get_service_client)]
+LoginLimiter = Annotated[KeyedLimiter, Depends(get_login_limiter)]
 Tutor = Annotated[Identity, Depends(require_tutor)]
 Admin = Annotated[Identity, Depends(require_admin)]
 IngesterSet = Annotated[Sequence[Ingester], Depends(get_ingesters)]

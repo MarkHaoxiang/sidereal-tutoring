@@ -18,9 +18,10 @@
     "noImplicitOverride": true,
     "noUncheckedSideEffectImports": true,
     "verbatimModuleSyntax": true,
+    "resolveJsonModule": true,
     "noUncheckedIndexedAccess": true,
     "baseUrl": ".",
     "paths": { "@/*": ["./src/*"] }
   },
-  "include": ["src"]
+  "include": ["src", "scripts"]
 }

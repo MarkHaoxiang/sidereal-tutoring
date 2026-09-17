@@ -28,3 +28,12 @@ Regenerates `src/lib/api-schema.d.ts` from the FastAPI OpenAPI schema (requires 
 ```sh
 npm run gen-api
 ```
+
+## Check the Typst text helper
+
+Asserts `src/lib/typstText.ts` against `packages/sidereal-core/tests/fixtures/typst_text.json`, the
+vectors `sidereal_core.typst_text` answers:
+
+```sh
+npm run check:typst
+```

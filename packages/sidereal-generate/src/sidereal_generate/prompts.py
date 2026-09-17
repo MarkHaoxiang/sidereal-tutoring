@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 from collections.abc import Iterator, Sequence
+from datetime import date
+from typing import Any
 
 from sidereal_core.canonical import CanonicalQuestion
-from sidereal_core.models import Document
+from sidereal_core.models import Document, Question
+from sidereal_core.typst_text import plain_text
 from sidereal_ingest.transcribe import PaperQuestion
 
 from sidereal_generate.chunks import QuestionStub
-from sidereal_generate.models import GenerationRequest
+from sidereal_generate.models import GenerationRequest, MarkedHomework
 
 _MATHS_HEAD = (
     "Maths is Typst, not LaTeX: `$x^2 - 5x + 6$` inline and `$ ... $` with spaces inside the "
@@ -30,6 +33,11 @@ _AUDIENCE = (
     "than inventing it."
 )
 _MARKDOWN = " Write content as markdown."
+_DATES = (
+    " Every date below is printed with its own weekday. Work 'tomorrow', 'this week' and 'before "
+    "your next lesson' out from those dates and from nothing else, and never name a weekday that "
+    "is not printed beside its date."
+)
 _HOMEWORK_TASK = (
     "You produce a homework assignment for one student from their tutor's source material. "
 )
@@ -38,10 +46,10 @@ _HOMEWORK_CRAFT = (
     "answer the tutor can mark against, and set difficulty from 1 (recap) to 5 (stretch)."
 )
 
-HOMEWORK_PROMPT = f"{_HOMEWORK_TASK}{_AUDIENCE}{_MARKDOWN}{_HOMEWORK_CRAFT}"
+HOMEWORK_PROMPT = f"{_HOMEWORK_TASK}{_AUDIENCE}{_MARKDOWN}{_HOMEWORK_CRAFT}{_DATES}"
 
 HOMEWORK_TYPST_PROMPT = (
-    f"{_HOMEWORK_TASK}{_AUDIENCE}{_HOMEWORK_CRAFT}"
+    f"{_HOMEWORK_TASK}{_AUDIENCE}{_HOMEWORK_CRAFT}{_DATES}"
     " `content` is a Typst document body and nothing else. It is placed inside the tutor's "
     "house template, so write no preamble: no `#import`, no `@preview` package, no `#set` or "
     "`#show` rule, no `#set page`, no title and no student name — the template supplies all of "
@@ -56,13 +64,21 @@ HOMEWORK_TYPST_PROMPT = (
 FEEDBACK_PROMPT = (
     "You produce written feedback on one student's recent work for their tutor to send. "
     f"{_AUDIENCE}{_MARKDOWN} Say what went well before what to work on, name the specific piece "
-    "of work each point refers to, and end with one concrete next step."
+    f"of work each point refers to, and end with one concrete next step.{_DATES}"
+    " Where a hand-in is given below you have the questions as they were set, what the student "
+    "wrote, the transcription of any working they photographed, and the tutor's marks. Work from "
+    "those: quote what the student actually wrote, say which question each point is about, and "
+    "account for the marks the tutor gave. Anything not in the hand-in you did not see — never "
+    "praise or describe working that is not there, and say a question was left blank only when "
+    "the hand-in shows it was."
 )
 
 PLAN_PROMPT = (
     "You produce a study plan for one student over a stated period. "
     f"{_AUDIENCE}{_MARKDOWN} Sequence topics so each builds on the last, and say what the tutor "
-    "should cover in each session rather than listing topics without a schedule."
+    f"should cover in each session rather than listing topics without a schedule.{_DATES}"
+    " Finish the plan: a plan that stops part way through the period is of no use, so keep each "
+    "week short enough that every week of the period is written."
 )
 
 _DRAWN = "a diagram, graph, grid, circuit, map, photograph, or a table printed as an image"
@@ -220,6 +236,17 @@ SCAN_SOLUTIONS_PROMPT = (
     f"`note`. {_TYPST_MATHS} {_TRANSCRIBE_CONFIDENCE} Each question carries its own."
 )
 
+# Named here rather than taken from the locale, which decides what `strftime` writes.
+WEEKDAYS = (
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
+)
+
 HOMEWORK_TOOL = "emit_homework"
 FEEDBACK_TOOL = "emit_feedback"
 PLAN_TOOL = "emit_plan"
@@ -356,11 +383,16 @@ def render(request: GenerationRequest) -> str:
         f"subjects: {', '.join(student.subjects) or 'unstated'}",
         f"notes: {student.notes or 'none'}",
         "</student>",
+        "<dates>",
+        f"today: {dated(request.today, 'unstated')}",
+        f"next lesson: {dated(request.session_date, 'none')}",
+        "</dates>",
     ]
+    parts.extend(render_homework(handed_in) for handed_in in request.homework)
     if request.period_start or request.period_end:
         parts.append(
-            f"<period>{request.period_start or 'unstated'} to "
-            f"{request.period_end or 'unstated'}</period>"
+            f"<period>{dated(request.period_start, 'unstated')} to "
+            f"{dated(request.period_end, 'unstated')}</period>"
         )
     if request.instructions:
         parts.append(f"<instructions>{request.instructions}</instructions>")
@@ -370,3 +402,68 @@ def render(request: GenerationRequest) -> str:
         for document in request.documents
     )
     return "\n".join(parts)
+
+
+def dated(day: date | None, absent: str) -> str:
+    """A date with its weekday printed beside it: a model asked to work one out gets it wrong."""
+    return absent if day is None else f"{day.isoformat()} ({WEEKDAYS[day.weekday()]})"
+
+
+def render_homework(handed_in: MarkedHomework) -> str:
+    """One hand-in: what was set, what the student wrote, and how the tutor marked it."""
+    homework = handed_in.homework
+    due = dated(homework.due_on, "none")
+    lines = [f'<homework title="{homework.title}" status="{homework.status.value}" due="{due}">']
+    if handed_in.questions:
+        lines.append("<questions>")
+        lines.extend(_question(question) for question in handed_in.questions)
+        lines.append("</questions>")
+    lines.append(f"<submission>{homework.submission or 'nothing was typed in'}</submission>")
+    lines.append(_transcription(homework.submission_transcription))
+    lines.append(_marking(homework.marking))
+    lines.append("</homework>")
+    return "\n".join(line for line in lines if line)
+
+
+def _question(question: Question) -> str:
+    number = f' number="{question.number}"' if question.number else ""
+    marks = "" if question.marks is None else f' marks="{question.marks}"'
+    return f"<question{number}{marks}>{plain_text(question.text)}</question>"
+
+
+def _transcription(transcription: dict[str, Any] | None) -> str:
+    """The photographed working, or the sentence that says there is none to read."""
+    text = (transcription or {}).get("text")
+    if not isinstance(text, str) or not text.strip():
+        return "<working>no photograph of working was handed in</working>"
+    confidence = (transcription or {}).get("confidence")
+    read = f' read="{confidence}"' if isinstance(confidence, str) else ""
+    return f"<working{read}>{text}</working>"
+
+
+def _marking(marking: dict[str, Any] | None) -> str:
+    if not marking:
+        return "<marking>the tutor has not marked this yet</marking>"
+    awarded = marking.get("total_awarded")
+    available = marking.get("total_available")
+    questions = marking.get("questions")
+    lines = [f'<marking total="{awarded} out of {available}">']
+    lines.extend(
+        _marked(question)
+        for question in (questions if isinstance(questions, list) else [])
+        if isinstance(question, dict)
+    )
+    comment = marking.get("comment")
+    if isinstance(comment, str) and comment.strip():
+        lines.append(f"<comment>{comment}</comment>")
+    lines.append("</marking>")
+    return "\n".join(lines)
+
+
+def _marked(question: dict[str, Any]) -> str:
+    comment = question.get("comment")
+    return (
+        f'<question number="{question.get("number")}" '
+        f'marks="{question.get("marks_awarded")} out of {question.get("marks_available")}">'
+        f"{comment if isinstance(comment, str) else ''}</question>"
+    )

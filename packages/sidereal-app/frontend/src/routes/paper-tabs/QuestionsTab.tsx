@@ -9,11 +9,15 @@ import { Button } from "@/components/ui";
 import { usePaperTab } from "./context";
 
 export function QuestionsTab() {
-  const { draft, edit } = usePaperTab();
+  const { draft, edit, makeWorksheet } = usePaperTab();
   const grouped = draft.sections.length > 0;
 
   return (
     <div className={styles.stack}>
+      <div className={styles.tabActions}>
+        <Button onClick={makeWorksheet}>Make worksheet</Button>
+      </div>
+
       {grouped && draft.questions.length === 0 ? null : (
         <QuestionsEditor
           questions={draft.questions}

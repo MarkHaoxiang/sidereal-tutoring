@@ -56,3 +56,55 @@ def test_an_unknown_kind_is_rejected_before_directus(
     response = client.post("/api/jobs/quiz", headers=auth, json={"student_id": str(student_id)})
 
     assert response.status_code == 422
+
+
+def test_a_retry_queues_the_same_input_again(
+    client: TestClient, fake_directus: FakeDirectus, student_id: UUID, auth: dict[str, str]
+) -> None:
+    first = client.post(
+        "/api/jobs/feedback", headers=auth, json={"student_id": str(student_id)}
+    ).json()
+
+    response = client.post(f"/api/jobs/{first['id']}/retry", headers=auth)
+
+    assert response.status_code == 202
+    again = response.json()
+    assert again["id"] != first["id"]
+    assert again["input"] == first["input"]
+    assert len(fake_directus.rows(Collection.GENERATION_JOBS)) == 2
+
+
+def test_feedback_takes_the_hand_ins_it_is_about(
+    client: TestClient, fake_directus: FakeDirectus, student_id: UUID, auth: dict[str, str]
+) -> None:
+    homework = fake_directus.seed(
+        Collection.HOMEWORK,
+        {"student": str(student_id), "title": "Moments", "content": "", "status": "submitted"},
+    )
+
+    response = client.post(
+        "/api/jobs/feedback",
+        headers=auth,
+        json={"student_id": str(student_id), "homework_ids": [homework["id"]]},
+    )
+
+    assert response.status_code == 202
+    assert fake_directus.rows(Collection.FEEDBACK)[0]["homework"] == homework["id"]
+
+
+def test_only_feedback_is_written_about_a_hand_in(
+    client: TestClient, fake_directus: FakeDirectus, student_id: UUID, auth: dict[str, str]
+) -> None:
+    homework = fake_directus.seed(
+        Collection.HOMEWORK, {"student": str(student_id), "title": "Moments", "content": ""}
+    )
+
+    response = client.post(
+        "/api/jobs/plan",
+        headers=auth,
+        json={"student_id": str(student_id), "homework_ids": [homework["id"]]},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "homework_unsupported"
+    assert not fake_directus.rows(Collection.GENERATION_JOBS)

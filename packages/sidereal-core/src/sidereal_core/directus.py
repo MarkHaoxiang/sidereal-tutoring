@@ -212,6 +212,22 @@ class DirectusClient:
         data = await self._request("GET", f"/files/{file_id}")
         return DirectusFile.model_validate(data)
 
+    async def list_files(
+        self,
+        *,
+        filter: Mapping[str, Any] | None = None,
+        limit: int | None = None,
+        sort: Sequence[str] | None = None,
+    ) -> list[DirectusFile]:
+        return await self._list("/files", DirectusFile, filter=filter, limit=limit, sort=sort)
+
+    async def update_file(self, file_id: str | UUID, data: Mapping[str, Any]) -> DirectusFile:
+        updated = await self._request("PATCH", f"/files/{file_id}", json=dict(data))
+        return DirectusFile.model_validate(updated)
+
+    async def delete_file(self, file_id: str | UUID) -> None:
+        await self._request("DELETE", f"/files/{file_id}")
+
     async def upload_file(
         self, filename: str, content: bytes, content_type: str, *, title: str | None = None
     ) -> DirectusFile:

@@ -15,6 +15,11 @@ EXPECTED = {
     "create_student_login",
     "reset_student_password",
     "remove_student_login",
+    "archive_student",
+    "unarchive_student",
+    "delete_student",
+    "homework_questions",
+    "mark_homework",
     "list_documents",
     "ingest_source",
     "scan_pages",
@@ -29,6 +34,7 @@ EXPECTED = {
     "generate_feedback",
     "generate_plan",
     "list_generation_jobs",
+    "retry_job",
     "update_generation_job",
     "list_tutors",
     "create_tutor",
@@ -87,6 +93,17 @@ async def test_every_tool_reaches_its_delegate() -> None:
         ("extract_paper", {"document_id": str(document.id)}),
         ("preview_typst", {"source": "= Week 3\n$1 + 1 = 2$\n"}),
         ("compile_homework", {"homework_id": str(homework_id)}),
+        ("homework_questions", {"homework_id": str(homework_id)}),
+        (
+            "mark_homework",
+            {
+                "homework_id": str(homework_id),
+                "questions": [{"number": "1", "marks_awarded": 2, "marks_available": 3}],
+                "comment": "Say which point you take moments about.",
+            },
+        ),
+        ("archive_student", {"student_id": str(student_id)}),
+        ("unarchive_student", {"student_id": str(student_id)}),
         ("generate_feedback", {"student_id": str(student_id)}),
         ("generate_plan", {"student_id": str(student_id)}),
         ("list_generation_jobs", {}),
@@ -105,11 +122,13 @@ async def test_every_tool_reaches_its_delegate() -> None:
         assert not result.is_error
 
     job = fake.rows(Collection.GENERATION_JOBS)[0]
-    updated = await server.call_tool(
-        "update_generation_job", {"job_id": job["id"], "status": "failed", "error": "redo"}
-    )
-    assert isinstance(updated, CallToolResult)
-    assert not updated.is_error
+    for name, arguments in (
+        ("retry_job", {"job_id": job["id"]}),
+        ("update_generation_job", {"job_id": job["id"], "status": "failed", "error": "redo"}),
+    ):
+        answered = await server.call_tool(name, arguments)
+        assert isinstance(answered, CallToolResult)
+        assert not answered.is_error
 
     paper = fake.rows(Collection.PAPERS)[0]
     for name, arguments in (
@@ -123,6 +142,11 @@ async def test_every_tool_reaches_its_delegate() -> None:
         result = await server.call_tool(name, arguments)
         assert isinstance(result, CallToolResult)
         assert not result.is_error
+
+    deleted = await server.call_tool("delete_student", {"student_id": str(student_id)})
+    assert isinstance(deleted, CallToolResult)
+    assert not deleted.is_error
+    assert not fake.rows(Collection.STUDENTS)
 
     tutor = next(row for row in fake.rows(Collection.DIRECTUS_USERS) if row.get("email"))
     for name, arguments in (

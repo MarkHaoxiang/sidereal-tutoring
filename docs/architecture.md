@@ -65,8 +65,8 @@ models, and the frontend's `src/lib/schema.ts`.
 | `papers` | Exam papers from any source, normalised into one canonical structure that Typst templates render | `status`: draft, reviewed, archived |
 | `questions` | Individual questions, extracted or written; shared like documents when no student is behind them | — |
 | `topics` | A free tree of topics the tutor builds | — |
-| `homework` | Homework assigned to a student | `status`: draft, assigned, submitted, marked · `format`: markdown, typst |
-| `feedback` | Written feedback for a student | `status`: draft, sent |
+| `homework` | Homework assigned to a student, the hand-in against it and the tutor's marks | `status`: draft, assigned, submitted, marked · `format`: markdown, typst |
+| `feedback` | Written feedback for a student, optionally about one homework | `status`: draft, sent |
 | `plans` | Teaching plans covering a period | `status`: draft, active, completed |
 | `generation_jobs` | LLM generation runs and their outcome | `kind`: homework, feedback, plan, paper_extract · `status`: queued, running, succeeded, failed |
 | `homework_questions` | Junction, `homework` ↔ `questions` | — |

@@ -3,10 +3,12 @@ import { Link, useParams } from "react-router-dom";
 
 import { AnswerCard } from "@/components/student/AnswerCard";
 import { dueLabel, homeworkQuestions, isOverdue } from "@/components/student/homework";
+import { MarkSheet } from "@/components/student/MarkSheet";
 import { TopicChips } from "@/components/topics/TopicChips";
 import { taggedTopics } from "@/components/topics/tree";
 import { Card, Markdown, PdfView, Spinner, StatusChip } from "@/components/ui";
 import { fileIdOf } from "@/lib/files";
+import { readMarking } from "@/lib/marking";
 import { useMyHomework } from "@/lib/queries";
 import studentStyles from "@/components/student/student.module.css";
 
@@ -27,7 +29,16 @@ export function StudentHomeworkPage() {
             <Spinner /> Loading…
           </p>
         ) : null}
-        {isError ? <p className={styles.status}>Could not load this homework.</p> : null}
+        {isError ? (
+          <Card>
+            <p className={styles.quiet}>Could not load this homework.</p>
+            <p className={styles.line}>
+              <Link to="/me/homework" className={styles.link}>
+                All your homework
+              </Link>
+            </p>
+          </Card>
+        ) : null}
       </div>
     );
   }
@@ -52,6 +63,8 @@ export function StudentHomeworkPage() {
         </p>
       </div>
 
+      <MarkSheet marking={readMarking(homework.marking)} questions={questions} />
+
       {isTypst && pdfId ? (
         <Card>
           <PdfView fileId={pdfId} fallbackName={`${homework.title ?? "homework"}.pdf`} />
@@ -71,19 +84,7 @@ export function StudentHomeworkPage() {
         </Card>
       ) : null}
 
-      {questions.length > 0 ? (
-        <Card title="Questions">
-          <ol className={styles.questions}>
-            {questions.map((question) => (
-              <li key={question.id} className={styles.question}>
-                {question.text}
-              </li>
-            ))}
-          </ol>
-        </Card>
-      ) : null}
-
-      <AnswerCard homework={homework} />
+      <AnswerCard homework={homework} questions={questions} />
     </div>
   );
 }

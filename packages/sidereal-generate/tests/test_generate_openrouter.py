@@ -41,7 +41,7 @@ from sidereal_generate.prompts import (
     SKELETON_PAGES_PROMPT,
     SKELETON_TOOL,
 )
-from sidereal_generate.settings import DEFAULT_EXTRACT_MAX_TOKENS
+from sidereal_generate.settings import DEFAULT_EXTRACT_MAX_TOKENS, generate_settings
 from sidereal_generate.usage import UsageTally
 
 STUDENT_ID = UUID("11111111-1111-4111-8111-111111111111")
@@ -468,7 +468,7 @@ async def test_the_gateway_is_asked_to_price_every_call() -> None:
 
 
 async def test_a_call_that_was_cut_off_still_records_what_it_burned() -> None:
-    """The tokens are spent whether or not an answer comes back."""
+    """The tokens are spent whether or not an answer comes back, and the retry spends more."""
     body = cut_off()
     body["usage"] = {"prompt_tokens": 10, "completion_tokens": 20000, "total_tokens": 20010}
     _, handler = replayer(httpx2.Response(200, json=body))
@@ -477,7 +477,37 @@ async def test_a_call_that_was_cut_off_still_records_what_it_burned() -> None:
     with pytest.raises(GenerationTruncatedError):
         await generator_for(handler).generate(request(), usage=usage)
 
-    assert usage.completion_tokens == 20000
+    assert usage.calls == 2
+    assert usage.completion_tokens == 40000
+
+
+async def test_a_cut_off_answer_is_asked_for_again_with_twice_the_budget() -> None:
+    seen, handler = replayer(
+        httpx2.Response(200, json=cut_off()), httpx2.Response(200, json=answered(HOMEWORK))
+    )
+
+    output = await generator_for(handler).generate(request())
+
+    assert output.title == "Quadratics: week 3"
+    first, second = (json.loads(sent.content)["max_tokens"] for sent in seen)
+    assert second == first * 2
+
+
+async def test_a_second_cut_off_is_the_tutors_failure() -> None:
+    """Two rounds and no more: a third would only spend again on the same answer."""
+    seen, handler = replayer(httpx2.Response(200, json=cut_off()))
+
+    with pytest.raises(GenerationTruncatedError):
+        await generator_for(handler).generate(request())
+
+    assert len(seen) == 2
+
+
+async def test_a_plan_starts_from_a_bigger_budget_than_the_rest() -> None:
+    """A plan covers a whole period in one answer, and week one of six is no plan."""
+    settings = generate_settings()
+
+    assert settings.plan_max_tokens > settings.max_tokens
 
 
 async def test_an_unpriced_call_files_no_price() -> None:

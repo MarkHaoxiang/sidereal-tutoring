@@ -95,7 +95,7 @@ export function AdminNav({ variant }: { variant: "sidebar" | "top" }) {
             onClick={close}
           >
             <Database size={16} aria-hidden="true" />
-            Data model
+            Directus (separate sign-in)
           </a>
         </nav>
 

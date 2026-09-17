@@ -146,13 +146,36 @@ async def test_a_tutor_with_students_cannot_be_removed(fake: FakeDirectus) -> No
     student = fake.seed(Collection.STUDENTS, {"name": "Theirs", "tutor": str(tutor)})
 
     async with fake.client() as client:
-        with pytest.raises(TutorHasStudentsError, match="Reassign"):
+        with pytest.raises(TutorHasStudentsError, match=r"still has 1 student\. Reassign"):
             await remove_tutor(client, tutor)
 
         student["tutor"] = None
         await remove_tutor(client, tutor)
 
     assert fake.rows(Collection.DIRECTUS_USERS) == []
+
+
+async def test_two_students_are_counted_as_students(fake: FakeDirectus) -> None:
+    """The message an admin reads, so it is written for one and for more than one."""
+    tutor = seed_tutor(fake, "tutor@sidereal.example.com")
+    for name in ("Theirs", "Also theirs"):
+        fake.seed(Collection.STUDENTS, {"name": name, "tutor": str(tutor)})
+
+    async with fake.client() as client:
+        with pytest.raises(TutorHasStudentsError, match=r"still has 2 students\. Reassign"):
+            await remove_tutor(client, tutor)
+
+
+async def test_removing_a_tutor_hands_their_material_to_the_admin(fake: FakeDirectus) -> None:
+    tutor = seed_tutor(fake, "tutor@sidereal.example.com")
+    fake.register_file("moments.pdf", b"%PDF", uploaded_by=str(tutor))
+    admin = uuid4()
+
+    async with fake.client() as client:
+        await remove_tutor(client, tutor, uploads_to=admin)
+
+    assert fake.rows(Collection.DIRECTUS_USERS) == []
+    assert [file["uploaded_by"] for file, _ in fake.files.values()] == [str(admin)]
 
 
 async def test_jobs_carry_the_student_and_that_students_tutor(fake: FakeDirectus) -> None:

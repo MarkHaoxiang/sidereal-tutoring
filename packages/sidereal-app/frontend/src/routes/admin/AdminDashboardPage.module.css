@@ -86,8 +86,23 @@
 
 .count {
   display: flex;
+}
+
+/* Reads exactly as the plain number did — the link adds affordance, not decoration. */
+.countLink {
+  display: flex;
   flex-direction: column-reverse;
   gap: 0.25rem;
+  padding: 0.25rem;
+  margin: -0.25rem;
+  border-radius: var(--radius-sm);
+  color: inherit;
+  text-decoration: none;
+}
+
+.countLink:hover .countValue,
+.countLink:hover .countLabel {
+  color: var(--color-accent);
 }
 
 .countValue {

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Awaitable, Callable, Container, Iterator, Sequence
+from collections.abc import Awaitable, Callable, Container, Iterator, Mapping, Sequence
 from datetime import UTC, date, datetime
 from typing import Any
 from uuid import UUID
@@ -11,11 +11,15 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, ValidationError
 from sidereal_core.canonical import (
     MAX_FIGURE_WIDTH_MM,
+    CanonicalBlock,
     CanonicalFigureBlock,
     CanonicalMarkScheme,
     CanonicalMarkSchemeQuestion,
     CanonicalPaper,
     CanonicalPart,
+    CanonicalPassage,
+    CanonicalPassageBlock,
+    CanonicalPassageRefBlock,
     CanonicalQuestion,
     CanonicalSubPart,
     CanonicalWorksheet,
@@ -26,11 +30,18 @@ from sidereal_core.directus import DirectusClient, DirectusClientError
 from sidereal_core.models import (
     Collection,
     Document,
+    Homework,
+    HomeworkDraft,
+    HomeworkFormat,
+    HomeworkQuestion,
+    HomeworkQuestionDraft,
+    HomeworkStatus,
     Paper,
     PaperDraft,
     PaperStatus,
     Question,
     QuestionDraft,
+    Student,
 )
 from sidereal_core.students import visible_student
 from sidereal_core.typeset import (
@@ -83,6 +94,8 @@ class WorksheetResult(BaseModel):
 
     source: str
     pdf_file_id: UUID
+    # Set when the worksheet was made for a student: the draft homework it became.
+    homework_id: UUID | None = None
 
 
 async def extract_paper(
@@ -253,7 +266,7 @@ async def paper_worksheet(
         title=title or structure.title,
         student=None if student is None else student.name,
         due=None if due is None else due.isoformat(),
-        questions=_chosen(structure, question_numbers),
+        questions=_carried(structure, _chosen(structure, question_numbers)),
     )
     # The PDF is rendered rather than compiled from the source: `/compile` carries no assets,
     # so a figure in the source would resolve to nothing.
@@ -262,9 +275,105 @@ async def paper_worksheet(
         RenderKind.WORKSHEET, renderable, RenderOutput.SOURCE, assets=assets
     )
     pdf = await typeset.render(RenderKind.WORKSHEET, renderable, RenderOutput.PDF, assets=assets)
-    return WorksheetResult(
-        source=source, pdf_file_id=await upload_pdf(client, worksheet.title, pdf)
+    pdf_file_id = await upload_pdf(client, worksheet.title, pdf)
+    homework_id = (
+        None
+        if student is None
+        else await _worksheet_homework(
+            client, paper_id, student, worksheet, source, pdf_file_id, question_numbers, due
+        )
     )
+    return WorksheetResult(source=source, pdf_file_id=pdf_file_id, homework_id=homework_id)
+
+
+async def _worksheet_homework(
+    client: DirectusClient,
+    paper_id: UUID,
+    student: Student,
+    worksheet: CanonicalWorksheet,
+    source: str,
+    pdf_file_id: UUID,
+    question_numbers: Sequence[str],
+    due: date | None,
+) -> UUID:
+    """The worksheet as a draft homework, linked to the paper rows its questions came from."""
+    homework = await client.create_item(
+        Collection.HOMEWORK,
+        Homework,
+        HomeworkDraft(
+            student=student.id,
+            title=worksheet.title,
+            content=source,
+            format=HomeworkFormat.TYPST,
+            pdf=pdf_file_id,
+            due_on=due,
+            status=HomeworkStatus.DRAFT,
+            generated_from={"paper": str(paper_id), "questions": list(question_numbers)},
+        ),
+    )
+    rows = await client.list_items(
+        Collection.QUESTIONS, Question, filter={"paper": {"_eq": str(paper_id)}}
+    )
+    by_number = {row.number: row for row in rows if row.number is not None}
+    for position, number in enumerate(question_numbers, start=1):
+        row = by_number.get(number)
+        if row is None:
+            logger.warning("paper %s has no question row numbered %s", paper_id, number)
+            continue
+        await client.create_item(
+            Collection.HOMEWORK_QUESTIONS,
+            HomeworkQuestion,
+            HomeworkQuestionDraft(homework=homework.id, question=row.id, sort=position),
+        )
+    return homework.id
+
+
+def _carried(
+    paper: CanonicalPaper, questions: Sequence[CanonicalQuestion]
+) -> tuple[CanonicalQuestion, ...]:
+    """Each question with its blocks, and every shared passage printed where it is named.
+
+    A worksheet has no `passages` of its own, so a `passage_ref` that stayed one would
+    render to nothing.
+    """
+    passages = {passage.id: passage for passage in paper.passages}
+    return tuple(
+        question.model_copy(
+            update={
+                "blocks": _inlined(question.blocks, passages),
+                "parts": tuple(
+                    part.model_copy(
+                        update={
+                            "blocks": _inlined(part.blocks, passages),
+                            "parts": tuple(
+                                sub.model_copy(update={"blocks": _inlined(sub.blocks, passages)})
+                                for sub in part.parts
+                            ),
+                        }
+                    )
+                    for part in question.parts
+                ),
+            }
+        )
+        for question in questions
+    )
+
+
+def _inlined(
+    blocks: Sequence[CanonicalBlock], passages: Mapping[str, CanonicalPassage]
+) -> tuple[CanonicalBlock, ...]:
+    """A reference the paper cannot resolve is dropped: the service refuses a dangling one."""
+    carried: list[CanonicalBlock] = []
+    for block in blocks:
+        if not isinstance(block, CanonicalPassageRefBlock):
+            carried.append(block)
+            continue
+        passage = passages.get(block.id)
+        if passage is None:
+            logger.warning("a question names passage %s, which this paper has not", block.id)
+            continue
+        carried.append(CanonicalPassageBlock(title=passage.title, text=passage.text))
+    return tuple(carried)
 
 
 def _rerun(

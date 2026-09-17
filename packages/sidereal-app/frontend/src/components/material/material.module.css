@@ -48,6 +48,10 @@
   font-weight: 600;
   letter-spacing: var(--tracking-display);
   overflow-wrap: anywhere;
+  /* A long name wraps within its own column rather than pushing the chips and the date
+     onto a second line, so every row in a list is the same shape. */
+  flex: 1 1 12rem;
+  min-width: 0;
 }
 
 .meta {

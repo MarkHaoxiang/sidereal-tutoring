@@ -5,7 +5,8 @@ Top layer. Imports core, ingest and generate; never sidereal-mcp.
 ## Invariants
 
 - The app holds no Directus credentials. Every request's own bearer token builds the `DirectusClient`,
-  and `/users/me` is what validates it.
+  and `/users/me` is what validates it. `POST /api/auth/status` is the one exception and the reason
+  the app has a `SIDEREAL_DIRECTUS_TOKEN` at all: nobody refused at sign-in has a token to send.
 - Directus unreachable is 503 and a Directus rejection passes on Directus's own status.
 - Every non-2xx body has a `detail`: a `{"code", "message"}` object for the app's own errors, and
   FastAPI's own list for a 422. A client branches on `code`, never on a sentence.
@@ -46,6 +47,21 @@ Top layer. Imports core, ingest and generate; never sidereal-mcp.
   app decodes them and the core client owns both the encoding and the caps.
 - An asset set over those caps is 413 `typeset_too_large`, never `typeset_failed`; a value that
   is not base64 is 422 `asset_unreadable` before any call goes out.
+- `POST /api/auth/status` answers `active`, `suspended` or `unknown` and nothing more, because
+  Directus returns the same `INVALID_CREDENTIALS` for a suspended account as for a wrong password.
+  `unknown` does tell an unauthenticated caller that an address is not registered; a per-IP token
+  bucket is what keeps that from being a way to walk an address book, and the key is
+  `request.client.host`, so a deployment behind a proxy must supply the forwarded address or every
+  caller shares one bucket. No service token is 503 `service_token_missing`; over the limit is 429
+  `too_many_checks`.
+- Archive, unarchive and delete on a student are `require_tutor`: a student is 403 `tutor_only`
+  even on their own row.
+- Deleting any Directus user hands that user's uploads to the caller first — the admin for a tutor,
+  the tutor for a student's login — so no material is left with an owner nobody can be.
+- `POST /api/jobs/feedback` takes `homework_ids`; every other kind carrying them is 422
+  `homework_unsupported` before a job row exists.
+- `POST /api/jobs/{id}/retry` answers 202 with a new queued row and runs it in the background. The
+  job that failed is left as it stands.
 - `POST /api/jobs/paper_extract` takes exactly one document and no student; every other kind takes a
   student. Both are 422 with a `code` before a job row exists.
 - `pages` is on `paper_extract` alone: any other kind carrying it, even `false`, is 422

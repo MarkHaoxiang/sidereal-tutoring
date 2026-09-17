@@ -26,11 +26,14 @@ TUTOR_HAS_STUDENTS = "tutor_has_students"
 TUTOR_REFUSED = "tutor_refused"
 FORMAT_UNSUPPORTED = "format_unsupported"
 PAGES_UNSUPPORTED = "pages_unsupported"
+HOMEWORK_UNSUPPORTED = "homework_unsupported"
 STUDENT_REQUIRED = "student_required"
 DOCUMENT_REQUIRED = "document_required"
 PAPER_UNUSABLE = "paper_unusable"
 MATERIAL_UNUSABLE = "material_unusable"
 GENERATION_NOT_CONFIGURED = "generation_not_configured"
+TOO_MANY_CHECKS = "too_many_checks"
+SERVICE_TOKEN_MISSING = "service_token_missing"  # noqa: S105 - an error code, not a token.
 
 
 def detail(code: str, message: str, **extra: Any) -> dict[str, Any]:

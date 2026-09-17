@@ -1,6 +1,8 @@
 // How a page uses this layer: call a hook, render its `data`/`isLoading`/`isError`,
 // and let mutations invalidate for you — no manual cache writes.
-//   students  useStudents({status?}) · useStudent(id) · useCreateStudent · useUpdateStudent · useDeleteStudent
+//   students  useStudents({status?}) · useStudent(id) · useCreateStudent · useUpdateStudent ·
+//             useArchiveStudent · useUnarchiveStudent · useDeleteStudent (the whole student,
+//             through the app rather than Directus)
 //   sessions  useSessions({studentId?,status?,from?,to?,sort?,limit?}) · useSession(id) · useSessionLinks(studentId) · useCreateSession · useUpdateSession · useDeleteSession
 //   material  useDocuments({studentId?,status?,limit?}) · useLibraryDocuments({status?,limit?})
 //             (the student-less rows every tutor shares) · useDocument(id) · useCreateDocument ·
@@ -10,8 +12,11 @@
 //             useSetPaperStatus · useRenderPaper(id) · useWorksheet ·
 //             useExtractMarkScheme({paperId,document_id}) · useDeletePaper(id)
 //             (it clears the paper's questions rows first)
-//   homework  useHomeworkList({studentId?,status?,limit?}) · useHomework(id) · useGeneratedQuestions(ids) · useUpdateHomework · useTranscribeSubmission(id) · useDeleteHomework
-//   feedback  useFeedbackList({...}) · useFeedback(id) · useUpdateFeedback · useDeleteFeedback
+//   homework  useHomeworkList({studentId?,status?,limit?},enabled?) · useHomework(id) ·
+//             useGeneratedQuestions(ids) · useUpdateHomework · useSaveMarking · useTranscribeSubmission(id) ·
+//             useDeleteHomework
+//   feedback  useFeedbackList({...}) · useFeedback(id) · useFeedbackForHomework(id) ·
+//             useUpdateFeedback · useDeleteFeedback
 //   plans     usePlans({...}) · usePlan(id) · useUpdatePlan · useDeletePlan
 //   topics    useTopics() (the whole tree) · useTopicUsage(id) · useCreateTopic ·
 //             useUpdateTopic · useDeleteTopic · useTagDocument · useTagHomework
@@ -19,18 +24,19 @@
 //             (a canonical document → SVG pages or its Typst, cached by a hash of the
 //             body) · useRenderAssets(body) (the body with every figure's bytes, null
 //             while they load) · useCompileHomework(id)
-//   jobs      useCreateJob() then useJob(jobId) — it polls until succeeded/failed
+//   jobs      useCreateJob() then useJob(jobId) — it polls until succeeded/failed ·
+//             useStudentJobs(studentId,kind) (what is running or failed) · useRetryJob(jobId)
 //   logins    the student's sign-in, through the FastAPI app rather than Directus:
 //             useCreateStudentLogin · useResetStudentPassword · useRemoveStudentLogin
 //   admin     the whole practice, admin only: useAdminHealth · useTutors · useCreateTutor ·
 //             useResetTutorPassword · useSetTutorStatus · useRemoveTutor · useAdminJobs ·
-//             useTutorUsers · useReassignStudent
+//             useTutorUsers · useReassignStudent · isServiceAccount(tutor)
 //   account   the signed-in user's own row, whoever they are: useSaveProfile ·
 //             useSaveAvatar · useRemoveAvatar · useChangePassword · saveAppearance
 //   me        the student view's own hooks, taking no student id (Directus filters to the
 //             caller's own rows): useMyStudent · useMyHomeworkList · useMyHomework(id) ·
-//             useMyFeedbackList · useMyFeedback(id) · useMyPlans · useMySessions ·
-//             useSaveAnswers · useHandInHomework
+//             useMyFeedbackList · useMyFeedback(id) · useMyFeedbackForHomework(id) · useMyPlans ·
+//             useMySessions · useSaveAnswers · useHandInHomework
 // Documents and jobs poll themselves while unsettled (see pollWhile); every update
 // takes `{id, patch}`, and failures are reported through `apiError(err)` from
 // "@/lib/api" in a sonner toast.

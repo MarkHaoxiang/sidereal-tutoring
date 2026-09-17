@@ -12,6 +12,7 @@ from uuid import UUID
 from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from sidereal_core.directus import DirectusError
+from sidereal_core.homework import QuestionText
 from sidereal_core.logins import Identity, StudentLogin
 from sidereal_core.models import (
     Document,
@@ -20,6 +21,7 @@ from sidereal_core.models import (
     Homework,
     HomeworkFormat,
     JobStatus,
+    MarkedQuestion,
     Paper,
     Student,
     StudentStatus,
@@ -111,6 +113,49 @@ def _register(resolve: Resolve) -> MCPServer:
         """Delete a student's login. Their work stays; only the way in goes."""
         async with caller(ctx) as services:
             return await tools.remove_student_login(services, student_id)
+
+    @server.tool()
+    async def archive_student(ctx: Context, student_id: UUID) -> Student:
+        """Archive a student and suspend their login. Their work stays; signing in stops."""
+        async with caller(ctx) as services:
+            return await tools.archive(services, student_id)
+
+    @server.tool()
+    async def unarchive_student(ctx: Context, student_id: UUID) -> Student:
+        """Take a student out of the archive and let their login sign in again."""
+        async with caller(ctx) as services:
+            return await tools.unarchive(services, student_id)
+
+    @server.tool()
+    async def delete_student(ctx: Context, student_id: UUID) -> Student:
+        """Delete a student, their login and everything that hangs off them.
+
+        Sessions, homework, feedback and plans go with the row; their documents are released
+        to the shared library and their generation jobs stay in the history with no student.
+        Nothing here can be undone.
+        """
+        async with caller(ctx) as services:
+            return await tools.remove_student(services, student_id)
+
+    @server.tool()
+    async def homework_questions(ctx: Context, homework_id: UUID) -> list[QuestionText]:
+        """A homework's questions in the order they were set, their maths readable as text."""
+        async with caller(ctx) as services:
+            return await tools.list_homework_questions(services, homework_id)
+
+    @server.tool()
+    async def mark_homework(
+        ctx: Context,
+        homework_id: UUID,
+        questions: Sequence[MarkedQuestion],
+        comment: str | None = None,
+    ) -> Homework:
+        """Mark a hand-in question by question and take it to `marked`.
+
+        The totals are the questions' own. `comment` is the tutor's note on the whole piece.
+        """
+        async with caller(ctx) as services:
+            return await tools.mark(services, homework_id, questions, comment)
 
     @server.tool()
     async def list_documents(
@@ -234,11 +279,19 @@ def _register(resolve: Resolve) -> MCPServer:
         ctx: Context,
         student_id: UUID,
         document_ids: Sequence[UUID] = (),
+        homework_ids: Sequence[UUID] = (),
         instructions: str | None = None,
     ) -> GenerationJob:
-        """Generate feedback for a student. The returned job carries the new row's id."""
+        """Generate feedback for a student. The returned job carries the new row's id.
+
+        `homework_ids` are the hand-ins it is about: the generator is given each one's
+        questions, the student's answers, the transcription of their working and the marks,
+        and the feedback row is filed against the first of them.
+        """
         async with caller(ctx) as services:
-            return await tools.generate_feedback(services, student_id, document_ids, instructions)
+            return await tools.generate_feedback(
+                services, student_id, document_ids, homework_ids, instructions
+            )
 
     @server.tool()
     async def generate_plan(
@@ -262,6 +315,12 @@ def _register(resolve: Resolve) -> MCPServer:
         """List generation jobs, most recent first."""
         async with caller(ctx) as services:
             return await tools.list_generation_jobs(services, status, limit)
+
+    @server.tool()
+    async def retry_job(ctx: Context, job_id: UUID) -> GenerationJob:
+        """Run a job's input again as a new job. The one that failed stays as the history."""
+        async with caller(ctx) as services:
+            return await tools.run_again(services, job_id)
 
     @server.tool()
     async def update_generation_job(

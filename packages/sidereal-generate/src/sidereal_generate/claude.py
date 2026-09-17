@@ -14,6 +14,7 @@ from sidereal_core.models import Document, HomeworkFormat
 from sidereal_generate.base import (
     FeedbackGenerator,
     GenerationError,
+    GenerationTruncatedError,
     HomeworkGenerator,
     PaperExtractor,
     PlanGenerator,
@@ -39,13 +40,15 @@ from sidereal_generate.prompts import (
     PLAN_TOOL,
     render,
 )
-from sidereal_generate.settings import generate_settings
+from sidereal_generate.settings import TRUNCATION_FACTOR, generate_settings
 from sidereal_generate.usage import UsageTally
 
 logger = logging.getLogger(__name__)
 
 # Above this the SDK refuses a non-streaming request, and nothing here streams yet.
 NON_STREAMING_MAX_TOKENS = 21_333
+# Reasoning is spent from the same budget as the answer, so a cut-off answer can be empty.
+CUT_OFF = "ran out of output budget"
 # How much of a raw answer the DEBUG line carries.
 DEBUG_PREFIX = 2000
 NO_PAGES = (
@@ -95,18 +98,37 @@ class AnthropicGenerator[OutputT: BaseModel]:
     async def generate(
         self, request: GenerationRequest, *, usage: UsageTally | None = None
     ) -> OutputT:
+        return self._validate(await self._asked(request, usage, self._max_tokens, retried=False))
+
+    async def _asked(
+        self, request: GenerationRequest, usage: UsageTally | None, budget: int, *, retried: bool
+    ) -> object:
+        """A cut-off answer buys nothing, so it is asked for once more with twice the budget."""
         response = await self._anthropic().messages.create(
             model=self._model,
-            max_tokens=self._max_tokens,
+            max_tokens=budget,
             system=self.system(request),
             messages=[{"role": "user", "content": render(request)}],
             tools=[self._tool()],
             tool_choice={"type": "tool", "name": self._tool_name},
         )
         _record(response.usage, usage)
+        if response.stop_reason == "max_tokens":
+            doubled = min(budget * TRUNCATION_FACTOR, NON_STREAMING_MAX_TOKENS)
+            if retried or doubled <= budget:
+                raise GenerationTruncatedError(
+                    f"{self._model} {CUT_OFF} before finishing {self._tool_name}"
+                )
+            logger.warning(
+                "%s was cut off writing %s; asking again with %d tokens",
+                self._model,
+                self._tool_name,
+                doubled,
+            )
+            return await self._asked(request, usage, doubled, retried=True)
         for block in response.content:
             if block.type == "tool_use" and block.name == self._tool_name:
-                return self._validate(block.input)
+                return block.input
         raise GenerationError(f"{self._model} did not call {self._tool_name}")
 
     def _anthropic(self) -> AsyncAnthropic:
@@ -157,7 +179,14 @@ def feedback_generator(
 def plan_generator(
     *, client: AsyncAnthropic | None = None, model: str | None = None
 ) -> PlanGenerator:
-    return AnthropicGenerator(PlanOutput, PLAN_PROMPT, PLAN_TOOL, client=client, model=model)
+    return AnthropicGenerator(
+        PlanOutput,
+        PLAN_PROMPT,
+        PLAN_TOOL,
+        client=client,
+        model=model,
+        max_tokens=min(generate_settings().plan_max_tokens, NON_STREAMING_MAX_TOKENS),
+    )
 
 
 class _Caller:

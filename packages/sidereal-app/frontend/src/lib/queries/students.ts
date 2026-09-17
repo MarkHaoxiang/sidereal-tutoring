@@ -1,6 +1,7 @@
-import { createItem, deleteItem, readItem, readItems, updateItem } from "@directus/sdk";
+import { createItem, readItem, readItems, updateItem } from "@directus/sdk";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { api, expectNoContent, unwrap } from "@/lib/api";
 import { directus } from "@/lib/directus";
 import type { StudentStatus } from "@/lib/schema";
 
@@ -94,10 +95,45 @@ export function useUpdateStudent() {
   });
 }
 
+/** Archiving takes the student's sign-in away with them; unarchiving gives it back. */
+export function useArchiveStudent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      unwrap(
+        await api.POST("/api/students/{student_id}/archive", { params: { path: { student_id: id } } })
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: studentKeys.all });
+    },
+  });
+}
+
+export function useUnarchiveStudent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      unwrap(
+        await api.POST("/api/students/{student_id}/unarchive", { params: { path: { student_id: id } } })
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: studentKeys.all });
+    },
+  });
+}
+
+/**
+ * The student, their sign-in, their files and everything filed against them. Material they
+ * were given stays, with no student on it: it becomes library material.
+ */
 export function useDeleteStudent() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => directus.request(deleteItem("students", id)),
+    mutationFn: async (id: string) => {
+      expectNoContent(
+        await api.DELETE("/api/students/{student_id}", { params: { path: { student_id: id } } })
+      );
+    },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: studentKeys.all });
     },

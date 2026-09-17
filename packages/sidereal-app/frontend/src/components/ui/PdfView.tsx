@@ -2,6 +2,7 @@ import { Download, ExternalLink } from "lucide-react";
 
 import { cx } from "@/lib/cx";
 import { useFileBlob } from "@/lib/files";
+import { useMediaQuery } from "@/lib/media";
 
 import { Spinner } from "./Spinner";
 import buttonStyles from "./Button.module.css";
@@ -14,7 +15,13 @@ export interface PdfViewProps {
   className?: string;
 }
 
+// An A4 page in a phone-width box is a grey blur, so below this the embed is replaced by the
+// two things that do work there: opening it full screen, and saving it.
+const ROOM_FOR_A_PAGE = "(min-width: 40rem)";
+
 const buttonClass = cx(buttonStyles.button, buttonStyles.secondary, buttonStyles.sm, styles.link);
+const openClass = cx(buttonStyles.button, buttonStyles.primary, styles.link, styles.open);
+const downloadClass = cx(buttonStyles.button, buttonStyles.secondary, styles.link, styles.open);
 
 /**
  * A Directus PDF, shown in place. The bytes are fetched with the caller's token and held as an
@@ -22,6 +29,7 @@ const buttonClass = cx(buttonStyles.button, buttonStyles.secondary, buttonStyles
  */
 export function PdfView({ fileId, fallbackName, className }: PdfViewProps) {
   const { url, name, isLoading, error } = useFileBlob(fileId, fallbackName);
+  const roomForAPage = useMediaQuery(ROOM_FOR_A_PAGE);
 
   if (isLoading) {
     return (
@@ -33,6 +41,21 @@ export function PdfView({ fileId, fallbackName, className }: PdfViewProps) {
 
   if (error !== null || url === null) {
     return <p className={styles.error}>{error ?? "This PDF could not be opened."}</p>;
+  }
+
+  if (!roomForAPage) {
+    return (
+      <div className={cx(styles.view, styles.phone, className)}>
+        <a className={openClass} href={url} target="_blank" rel="noreferrer">
+          <ExternalLink size={16} aria-hidden="true" />
+          Open PDF
+        </a>
+        <a className={downloadClass} href={url} download={name}>
+          <Download size={16} aria-hidden="true" />
+          Download
+        </a>
+      </div>
+    );
   }
 
   return (

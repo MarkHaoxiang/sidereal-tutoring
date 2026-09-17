@@ -8,10 +8,17 @@
   would normalise differently make the next round-trip a spurious diff.
 - Snapshots carry collections, fields and relations only. Roles, policies, permissions and the
   agent service account live in `scripts/directus-bootstrap.sh` and are created by running it.
-- A relation is only ever created or changed with its `meta` and `schema` together: a meta-only
-  `PATCH /relations/<collection>/<field>` drops the foreign key, and the snapshot then loses
-  that relation's `schema` block — which a fresh instance silently recreates as
-  `on_delete: NO ACTION`. Delete and recreate the relation with both halves to repair one.
+- A relation is only ever created or changed with its `meta` and `schema` together, and a
+  `PATCH /relations/<collection>/<field>` must carry the whole relation — `collection`, `field`,
+  `related_collection` and the full `schema`. A partial patch, `schema` alone included, answers
+  `204` and drops the foreign key; the snapshot then loses that relation's `schema` block, which
+  a fresh instance silently recreates as `on_delete: NO ACTION`. Delete and recreate an app
+  relation with both halves to repair one; a system relation, which cannot be deleted, is
+  repaired by the whole-body patch.
+- A schema snapshot carries no system relation, so the `on_delete` of one is set by
+  `scripts/directus-bootstrap.sh` and nowhere else. `directus_files.uploaded_by` and
+  `.modified_by` ship as `NO ACTION`: deleting any user who has uploaded or edited a file fails
+  on the foreign key until the bootstrap sets both to `SET NULL`.
 - Status/kind values are the lowercase tokens from the domain vocabulary
   (`active`/`paused`/`archived`, `scheduled`/`completed`/`cancelled`,
   `transcript`/`web_page`/`question_bank`/`upload`/`scan`,
@@ -24,6 +31,14 @@
   (`date_created`, `date_updated`, `user_created`, `user_updated`).
 - `homework` ↔ `questions` is m2m through `homework_questions`; nothing writes that junction's
   rows by hand except through the m2m alias fields.
+- `feedback.homework` is the hand-in the feedback is about: a nullable m2o, `SET NULL`, with no
+  reverse alias, so a homework's feedback is found by filtering `feedback` on it.
+- Deleting a `students` row takes `sessions`, `homework`, `feedback` and `plans` with it, and
+  `homework_questions` and `homework_topics` behind the homework. `documents` and
+  `generation_jobs` are `SET NULL` and survive as library and history; so do the `questions`,
+  `papers`, `document_pages` and topic junctions hanging off those documents. The student's
+  `directus_users` row and every file they or their tutor uploaded survive too, and are the
+  caller's to delete.
 - `topics` is a free tree the tutor builds: no fixed subject list and no syllabus behind it.
   `parent` is a nullable self-m2o, `SET NULL` on delete, so deleting a topic promotes its
   children rather than losing them. Nothing enforces a depth or a root set.
@@ -55,7 +70,8 @@
   `submission_transcription`, `submitted_at`, `status`, on rows still `assigned`, with `status`
   allowed to become `submitted` and nothing else — `directus_files` create for the hand-in
   itself, `directus_files` delete of their own uploads, and their own account. The row filter is
-  what stops a second hand-in. `submission_transcription` is in their read list too.
+  what stops a second hand-in. `submission_transcription` and `marking` are in their read list
+  and in no write list of theirs; `homework` is in their `feedback` read list.
 - `topics` is the one collection a student reads unfiltered: it is a shared vocabulary, not
   anyone's data. The junctions are still scoped to their own homework, and `document_topics`
   is not granted at all because a student reaches no `documents` row.
@@ -116,6 +132,15 @@
   answers `{app_access, admin_access, enforce_tfa}` for the caller, whoever they are.
 - `app_access: true` does not supply a readable `directus_roles` or `directus_users` in
   Directus 12; a tutor's grants on both are explicit.
+- `POST /auth/login` answers every refusal with `401 INVALID_CREDENTIALS` / "Invalid user
+  credentials.": a `suspended`, `inactive` or `archived` user, a wrong password and an unknown
+  address are indistinguishable from the response. Telling a suspended user so means reading
+  their `status` server-side, never the login error.
+- The admin app authenticates by the `directus_session_token` cookie alone, which only
+  `POST /auth/login` with `mode: "session"` issues. A json-mode token buys nothing there:
+  `?access_token=` on an `/admin` route is ignored, and `POST /auth/refresh` with
+  `mode: "session"` refuses a refresh token in the payload. The app's own session cannot be
+  handed to it without a second login.
 - A policy may hold more than one permission row for the same collection and action, and
   Directus evaluates each row on its own: one row's field list never widens another's. Both
   policies carry a self-service `directus_users` update row — `{id: {_eq: "$CURRENT_USER"}}`

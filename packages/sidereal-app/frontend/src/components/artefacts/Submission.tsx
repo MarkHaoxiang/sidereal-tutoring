@@ -8,6 +8,7 @@ import { useFileBlob } from "@/lib/files";
 import { formatDateTime } from "@/lib/format";
 import { useTranscribeSubmission } from "@/lib/queries";
 import type { Transcription } from "@/lib/schema";
+import { plainText } from "@/lib/typstText";
 
 import styles from "./artefacts.module.css";
 
@@ -97,7 +98,7 @@ export function Submission({
         </span>
       </div>
       {submission ? (
-        <Markdown>{submission}</Markdown>
+        <Markdown>{plainText(submission)}</Markdown>
       ) : (
         <p className={styles.status}>Nothing written.</p>
       )}
@@ -108,7 +109,7 @@ export function Submission({
             <span className={styles.status}>From the photo</span>
             {transcription.confidence ? <ConfidenceChip confidence={transcription.confidence} /> : null}
           </div>
-          <Markdown transcribed>{transcription.text}</Markdown>
+          <Markdown transcribed>{plainText(transcription.text)}</Markdown>
         </div>
       ) : null}
     </section>

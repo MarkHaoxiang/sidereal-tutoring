@@ -154,28 +154,9 @@
   font-weight: 600;
 }
 
-.questions {
-  display: flex;
-  flex-direction: column;
-  gap: 0.875rem;
-  padding: 0;
-  margin: 0;
-  list-style: none;
-  counter-reset: question;
-}
-
-.question {
-  padding-left: 1.75rem;
-  text-indent: -1.75rem;
-  overflow-wrap: anywhere;
-  line-height: var(--line-height-body);
-}
-
-.question::before {
-  counter-increment: question;
-  content: counter(question) ". ";
-  color: var(--color-gold-bright);
-  font-weight: 600;
+.link {
+  color: var(--color-accent);
+  text-underline-offset: 0.25em;
 }
 
 .past {

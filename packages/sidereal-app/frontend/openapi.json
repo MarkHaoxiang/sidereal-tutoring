@@ -24,6 +24,45 @@
         }
       }
     },
+    "/api/auth/status": {
+      "post": {
+        "summary": "Read Account Status",
+        "description": "Why a sign-in was refused, for someone who has just been refused one. No token.",
+        "operationId": "read_account_status_api_auth_status_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountState"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/me": {
       "get": {
         "summary": "Me",
@@ -345,6 +384,136 @@
         }
       }
     },
+    "/api/students/{student_id}/archive": {
+      "post": {
+        "summary": "Archive",
+        "description": "The student is filed away and their login is suspended: archiving revokes access.",
+        "operationId": "archive_api_students__student_id__archive_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "student_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Student Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Student"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/students/{student_id}/unarchive": {
+      "post": {
+        "summary": "Unarchive",
+        "operationId": "unarchive_api_students__student_id__unarchive_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "student_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Student Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Student"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/students/{student_id}": {
+      "delete": {
+        "summary": "Remove Student",
+        "description": "Their sessions, homework, feedback and plans go; their material joins the library.",
+        "operationId": "remove_student_api_students__student_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "student_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Student Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/students/{student_id}/login": {
       "post": {
         "summary": "Add Student Login",
@@ -401,7 +570,7 @@
       },
       "delete": {
         "summary": "Remove Student Login",
-        "description": "The login goes; the student's work stays.",
+        "description": "The login goes; the student's work stays, and their uploads pass to the caller.",
         "operationId": "remove_student_login_api_students__student_id__login_delete",
         "security": [
           {
@@ -994,6 +1163,52 @@
         }
       }
     },
+    "/api/jobs/{job_id}/retry": {
+      "post": {
+        "summary": "Run Job Again",
+        "description": "Queue the same input again. The job that failed stays where it is, as the history.",
+        "operationId": "run_job_again_api_jobs__job_id__retry_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationJob"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/jobs/{job_id}": {
       "get": {
         "summary": "Read Job",
@@ -1042,6 +1257,29 @@
   },
   "components": {
     "schemas": {
+      "AccountState": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/AccountStatus"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "AccountState",
+        "description": "All anyone refused at sign-in is told: whether that account may sign in at all."
+      },
+      "AccountStatus": {
+        "type": "string",
+        "enum": [
+          "active",
+          "suspended",
+          "unknown"
+        ],
+        "title": "AccountStatus",
+        "description": "As much as anyone refused at sign-in is told about why."
+      },
       "AdminHealth": {
         "properties": {
           "directus": {
@@ -2336,6 +2574,20 @@
         ],
         "title": "DocumentStatus"
       },
+      "EmailRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "title": "Email"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "title": "EmailRequest"
+      },
       "FileSourceRequest": {
         "properties": {
           "type": {
@@ -2687,6 +2939,18 @@
             ],
             "title": "Submitted At"
           },
+          "marking": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Marking"
+          },
           "generated_from": {
             "anyOf": [
               {
@@ -2865,6 +3129,15 @@
             },
             "type": "array",
             "title": "Document Ids",
+            "default": []
+          },
+          "homework_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Homework Ids",
             "default": []
           },
           "instructions": {
@@ -3386,6 +3659,130 @@
         "title": "ScanSourceRequest",
         "description": "Handwritten pages, in reading order, and the paper they answer when they answer one."
       },
+      "Student": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level"
+          },
+          "subjects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Subjects"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "tutor": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tutor"
+          },
+          "user": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User"
+          },
+          "status": {
+            "$ref": "#/components/schemas/StudentStatus",
+            "default": "active"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "date_created": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Created"
+          },
+          "date_updated": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Updated"
+          },
+          "user_created": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Created"
+          },
+          "user_updated": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Updated"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "id"
+        ],
+        "title": "Student"
+      },
       "StudentLogin": {
         "properties": {
           "user_id": {
@@ -3404,6 +3801,15 @@
           "email"
         ],
         "title": "StudentLogin"
+      },
+      "StudentStatus": {
+        "type": "string",
+        "enum": [
+          "active",
+          "paused",
+          "archived"
+        ],
+        "title": "StudentStatus"
       },
       "TextSourceRequest": {
         "properties": {
@@ -3798,6 +4204,18 @@
             "type": "string",
             "format": "uuid",
             "title": "Pdf File Id"
+          },
+          "homework_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Homework Id"
           }
         },
         "additionalProperties": false,

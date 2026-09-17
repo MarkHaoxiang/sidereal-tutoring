@@ -1,4 +1,4 @@
-import { formatDate } from "@/lib/format";
+import { relativeDay } from "@/lib/format";
 import type { HomeworkStatus } from "@/lib/schema";
 
 // What the student view needs to say about a piece of homework: when it is due, whether
@@ -31,7 +31,7 @@ export function isOverdue(homework: DueHomework): boolean {
 }
 
 export function dueLabel(dueOn: string | null): string {
-  return dueOn ? `Due ${formatDate(dueOn)}` : "No due date";
+  return dueOn ? `Due ${relativeDay(dueOn)}` : "No due date";
 }
 
 /** Soonest first, with the undated ones after everything that has a date. */

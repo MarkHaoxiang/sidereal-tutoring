@@ -108,6 +108,29 @@ else
   custom_rules=false
 fi
 
+# --- system relations ------------------------------------------------------------------------
+# `directus_files.uploaded_by` and `.modified_by` ship as NO ACTION, so deleting a user who ever
+# uploaded or edited a file fails on the foreign key. A schema snapshot carries no system
+# relation, which is why the repair lives here. The PATCH must carry the whole relation: a
+# schema-only PATCH answers 204 and drops the constraint outright.
+ensure_file_user_set_null() {
+  # ensure_file_user_set_null <field>
+  local field="$1" current
+  current="$(
+    api GET /relations/directus_files |
+      jq -r --arg f "$field" '.data[] | select(.field == $f) | .schema.on_delete // empty'
+  )"
+  if [ "$current" != "SET NULL" ]; then
+    api PATCH "/relations/directus_files/$field" "$(jq -nc --arg f "$field" '{
+      collection: "directus_files", field: $f, related_collection: "directus_users",
+      schema: {on_delete: "SET NULL", on_update: "NO ACTION"}
+    }')" >/dev/null
+    echo "directus_files.$field now SET NULL on user delete"
+  fi
+}
+ensure_file_user_set_null uploaded_by
+ensure_file_user_set_null modified_by
+
 # --- policies, roles, access ----------------------------------------------------------------
 ensure_policy() {
   # ensure_policy <name> <icon> <description> <app-access> -> echoes the policy id
@@ -450,7 +473,7 @@ ensure_filtered_permission "$student_policy_id" sessions read \
   '["id","scheduled_at","duration_minutes","status","student"]' "$via_student"
 
 ensure_filtered_permission "$student_policy_id" homework read \
-  '["id","title","content","format","pdf","compile_error","due_on","status","submission","submission_file","submission_transcription","submitted_at","date_created","date_updated","student","questions","topics"]' \
+  '["id","title","content","format","pdf","compile_error","due_on","status","submission","submission_file","submission_transcription","submitted_at","marking","date_created","date_updated","student","questions","topics"]' \
   "$(jq -nc --argjson s "$via_student" \
     '{_and: [$s, {status: {_in: ["assigned", "submitted", "marked"]}}]}')"
 
@@ -510,7 +533,7 @@ ensure_filtered_permission "$student_policy_id" directus_files delete \
   '["*"]' "$(jq -nc --arg u "$current_user" '{uploaded_by: {_eq: $u}}')"
 
 ensure_filtered_permission "$student_policy_id" feedback read \
-  '["id","content","status","date_created","student"]' \
+  '["id","content","status","date_created","student","homework"]' \
   "$(jq -nc --argjson s "$via_student" '{_and: [$s, {status: {_eq: "sent"}}]}')"
 
 ensure_filtered_permission "$student_policy_id" plans read \

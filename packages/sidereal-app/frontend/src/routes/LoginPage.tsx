@@ -5,6 +5,7 @@ import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { Constellation } from "@/components/Mark";
 import { Wordmark } from "@/components/Wordmark";
 import { Button, Field, Input } from "@/components/ui";
+import { accountStatus } from "@/lib/api";
 import { homePath, useAuth } from "@/lib/auth-context";
 
 import styles from "./LoginPage.module.css";
@@ -30,7 +31,13 @@ export function LoginPage() {
       // Three surfaces, one form: where they land is what /api/me says they are.
       void navigate(homePath(await login(email, password)), { replace: true });
     } catch {
-      setError("Could not sign in. Check the email and password.");
+      // Directus answers a suspended account exactly as it answers a wrong password, so the
+      // app is asked which it was rather than telling everyone to check their typing.
+      setError(
+        (await accountStatus(email)) === "suspended"
+          ? "This account is suspended. Ask whoever set it up to reactivate it."
+          : "Could not sign in. Check the email and password."
+      );
     } finally {
       setIsSubmitting(false);
     }

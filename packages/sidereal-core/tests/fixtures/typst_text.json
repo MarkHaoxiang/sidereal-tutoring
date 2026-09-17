@@ -1,0 +1,104 @@
+{
+  "vectors": [
+    {
+      "typst": "A uniform plank $A B$ has length $4.0$ m and weight $150$ N",
+      "text": "A uniform plank AB has length 4.0 m and weight 150 N"
+    },
+    {
+      "typst": "at an angle of $30°$ to the beam",
+      "text": "at an angle of 30° to the beam"
+    },
+    {
+      "typst": "Two stable isotopes of helium are $\"\"^4_2\"He\"$ and $\"\"^3_2\"He\"$.",
+      "text": "Two stable isotopes of helium are ⁴₂He and ³₂He."
+    },
+    {
+      "typst": "$beta^-$ decay",
+      "text": "β⁻ decay"
+    },
+    {
+      "typst": "$5.2 times 10^(-7)$ m",
+      "text": "5.2 × 10⁻⁷ m"
+    },
+    {
+      "typst": "$frac(a, b)$",
+      "text": "a/b"
+    },
+    {
+      "typst": "$dif x$",
+      "text": "dx"
+    },
+    {
+      "typst": "$pi r^2$",
+      "text": "πr²"
+    },
+    {
+      "typst": "$sqrt(2)$",
+      "text": "√2"
+    },
+    {
+      "typst": "$x^2 - 5x + 6$",
+      "text": "x² - 5x + 6"
+    },
+    {
+      "typst": "Moment $= F x d = 12 x 0.4 = 4.8$ N m",
+      "text": "Moment = Fxd = 12 x 0.4 = 4.8 N m"
+    },
+    {
+      "typst": "$P Q$ is a chord",
+      "text": "PQ is a chord"
+    },
+    {
+      "typst": "The answer is $2$.",
+      "text": "The answer is 2."
+    },
+    {
+      "typst": "no maths here",
+      "text": "no maths here"
+    },
+    {
+      "typst": "$\"speed\" = frac(\"distance\", \"time\")$",
+      "text": "speed = distance/time"
+    },
+    {
+      "typst": "$\"PQ\"$",
+      "text": "PQ"
+    },
+    {
+      "typst": "$Delta E = m c^2$",
+      "text": "ΔE = mc²"
+    },
+    {
+      "typst": "$a_1 + a_2$",
+      "text": "a₁ + a₂"
+    },
+    {
+      "typst": "$H_2 O$",
+      "text": "H₂O"
+    },
+    {
+      "typst": "$x^(10) + y_(12)$",
+      "text": "x¹⁰ + y₁₂"
+    },
+    {
+      "typst": "$f^prime$",
+      "text": "f^prime"
+    },
+    {
+      "typst": "",
+      "text": ""
+    },
+    {
+      "typst": "$",
+      "text": "$"
+    },
+    {
+      "typst": "costs $5 and $10",
+      "text": "costs 5 and 10"
+    },
+    {
+      "typst": "$integral f(x) dif x$",
+      "text": "∫ f(x) dx"
+    }
+  ]
+}

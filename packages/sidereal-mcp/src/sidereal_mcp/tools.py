@@ -10,6 +10,7 @@ from typing import Any
 from uuid import UUID
 
 from sidereal_core import logins, tutors
+from sidereal_core.homework import QuestionText, mark_homework, question_texts
 from sidereal_core.logins import Identity, StudentLogin
 from sidereal_core.models import (
     Collection,
@@ -19,14 +20,21 @@ from sidereal_core.models import (
     GenerationKind,
     Homework,
     HomeworkFormat,
+    HomeworkMarking,
     JobStatus,
+    MarkedQuestion,
     Paper,
     Student,
     StudentStatus,
 )
-from sidereal_core.students import visible_student
+from sidereal_core.students import (
+    archive_student,
+    delete_student,
+    unarchive_student,
+    visible_student,
+)
 from sidereal_core.tutors import AdminHealth, AdminJob, TutorAccount, TutorStatus
-from sidereal_generate.jobs import JobInput, run_job, start_job
+from sidereal_generate.jobs import JobInput, retry_job, run_job, start_job
 from sidereal_generate.papers import (
     WorksheetResult,
     extract_paper_mark_scheme,
@@ -80,7 +88,36 @@ async def reset_student_password(
 
 
 async def remove_student_login(services: Services, student_id: UUID) -> Student:
-    return await logins.remove_login(services.directus, student_id)
+    return await logins.remove_login(
+        services.directus, student_id, uploads_to=await _caller(services)
+    )
+
+
+async def archive(services: Services, student_id: UUID) -> Student:
+    return await archive_student(services.directus, student_id)
+
+
+async def unarchive(services: Services, student_id: UUID) -> Student:
+    return await unarchive_student(services.directus, student_id)
+
+
+async def remove_student(services: Services, student_id: UUID) -> Student:
+    return await delete_student(services.directus, student_id, uploads_to=await _caller(services))
+
+
+async def list_homework_questions(services: Services, homework_id: UUID) -> list[QuestionText]:
+    return await question_texts(services.directus, homework_id)
+
+
+async def mark(
+    services: Services,
+    homework_id: UUID,
+    questions: Sequence[MarkedQuestion],
+    comment: str | None = None,
+) -> Homework:
+    return await mark_homework(
+        services.directus, homework_id, HomeworkMarking.over(questions, comment)
+    )
 
 
 async def list_documents(
@@ -229,12 +266,18 @@ async def generate_feedback(
     services: Services,
     student_id: UUID,
     document_ids: Sequence[UUID] = (),
+    homework_ids: Sequence[UUID] = (),
     instructions: str | None = None,
 ) -> GenerationJob:
     return await _generate(
         services,
         GenerationKind.FEEDBACK,
-        JobInput(student=student_id, documents=tuple(document_ids), instructions=instructions),
+        JobInput(
+            student=student_id,
+            documents=tuple(document_ids),
+            homework=tuple(homework_ids),
+            instructions=instructions,
+        ),
     )
 
 
@@ -282,6 +325,12 @@ async def update_generation_job(
     )
 
 
+async def run_again(services: Services, job_id: UUID) -> GenerationJob:
+    """Queue the same input again and run it to completion. The failed row stays as history."""
+    job = await retry_job(services.directus, services.generators, job_id)
+    return await run_job(services.directus, services.generators, job.id, typeset=services.typeset)
+
+
 async def list_tutors(services: Services) -> list[TutorAccount]:
     return await tutors.list_tutors(services.directus)
 
@@ -305,7 +354,7 @@ async def set_tutor_status(services: Services, user_id: UUID, status: TutorStatu
 
 
 async def remove_tutor(services: Services, user_id: UUID) -> None:
-    await tutors.remove_tutor(services.directus, user_id)
+    await tutors.remove_tutor(services.directus, user_id, uploads_to=await _caller(services))
 
 
 async def list_jobs(
@@ -333,6 +382,11 @@ async def _generate(services: Services, kind: GenerationKind, job_input: JobInpu
         services.directus, kind, job_input, model=services.generators.for_kind(kind)
     )
     return await run_job(services.directus, services.generators, job.id, typeset=services.typeset)
+
+
+async def _caller(services: Services) -> UUID:
+    """Who a deleted user's uploads pass to, so Directus's own foreign key lets them go."""
+    return (await logins.whoami(services.directus)).id
 
 
 def _eq(**fields: object) -> dict[str, Any] | None:

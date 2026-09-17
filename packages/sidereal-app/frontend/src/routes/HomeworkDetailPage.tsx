@@ -5,20 +5,27 @@ import { toast } from "sonner";
 import { ArtefactDetail } from "@/components/artefacts/ArtefactDetail";
 import { DueDateField } from "@/components/artefacts/DueDateField";
 import { HomeworkQuestions } from "@/components/artefacts/HomeworkQuestions";
+import { Marking } from "@/components/artefacts/Marking";
+import type { MarkingQuestion } from "@/components/artefacts/Marking";
 import { Submission } from "@/components/artefacts/Submission";
 import { HOMEWORK_NEXT } from "@/components/artefacts/transitions";
 import { TypstCard } from "@/components/artefacts/TypstCard";
 import { TypstEditor } from "@/components/artefacts/TypstEditor";
+import { TypstSource } from "@/components/artefacts/TypstSource";
+import { markedQuestions, paperOf } from "@/components/artefacts/questions";
 import { TopicsField } from "@/components/topics/TopicsField";
 import { taggedTopics } from "@/components/topics/tree";
 import { Spinner, StatusChip } from "@/components/ui";
 import { apiError } from "@/lib/api";
 import { fileIdOf } from "@/lib/files";
-import { formatDate, formatDateTime } from "@/lib/format";
+import { formatDateTime, relativeDay } from "@/lib/format";
+import { readMarking } from "@/lib/marking";
 import {
   useCompileHomework,
   useDeleteHomework,
+  useFeedbackForHomework,
   useHomework,
+  useSaveMarking,
   useTagHomework,
   useUpdateHomework,
 } from "@/lib/queries";
@@ -29,7 +36,9 @@ export function HomeworkDetailPage() {
   const { id, artefactId } = useParams<{ id: string; artefactId: string }>();
   const navigate = useNavigate();
   const { data: homework, isLoading, isError } = useHomework(artefactId);
+  const feedback = useFeedbackForHomework(artefactId);
   const update = useUpdateHomework();
+  const saveMarking = useSaveMarking();
   const remove = useDeleteHomework();
   const compile = useCompileHomework();
   const tag = useTagHomework();
@@ -57,6 +66,12 @@ export function HomeworkDetailPage() {
   const pdfId = fileIdOf(homework.pdf);
   const handedInFileId = fileIdOf(homework.submission_file);
   const topics = taggedTopics(homework.topics);
+  // Marking replaces the status step it used to be: the panel's own button finishes it.
+  const marks = homework.status === "submitted" || homework.status === "marked";
+  const advance = marks ? undefined : next;
+  const questions: MarkingQuestion[] = markedQuestions(homework.questions);
+  const paperId = paperOf(homework.generated_from);
+  const written = feedback.data?.[0];
 
   return (
     <ArtefactDetail
@@ -70,8 +85,9 @@ export function HomeworkDetailPage() {
         <>
           <StatusChip status={homework.status} />
           <span>{formatDateTime(homework.date_created)}</span>
-          {homework.due_on ? <span>Due {formatDate(homework.due_on)}</span> : null}
+          {homework.due_on ? <span>Due {relativeDay(homework.due_on)}</span> : null}
           {isTypst ? <span>Typeset</span> : null}
+          {written ? <Link to={`/students/${id ?? ""}/feedback/${written.id}`}>Feedback</Link> : null}
         </>
       }
       generatedFrom={homework.generated_from}
@@ -83,7 +99,9 @@ export function HomeworkDetailPage() {
       }}
       {...(isTypst
         ? {
-            contentSection: (
+            contentSection: paperId ? (
+              <TypstSource content={homework.content ?? ""} paperId={paperId} />
+            ) : (
               <TypstEditor
                 content={homework.content ?? ""}
                 onSave={async (content) => {
@@ -95,13 +113,13 @@ export function HomeworkDetailPage() {
             ),
           }
         : {})}
-      {...(next
+      {...(advance
         ? {
             advance: {
-              label: next.label,
+              label: advance.label,
               run: async () => {
-                await update.mutateAsync({ id: homework.id, patch: { status: next.next } });
-                toast.success(next.done);
+                await update.mutateAsync({ id: homework.id, patch: { status: advance.next } });
+                toast.success(advance.done);
               },
             },
           }
@@ -115,12 +133,24 @@ export function HomeworkDetailPage() {
             attachmentId={handedInFileId}
             transcription={homework.submission_transcription}
           />
+          {marks ? (
+            <Marking
+              questions={questions}
+              marking={readMarking(homework.marking)}
+              status={homework.status === "marked" ? "marked" : "submitted"}
+              onSave={async (marking) => {
+                await saveMarking.mutateAsync({ id: homework.id, marking, status: "marked" });
+                toast.success("Marked");
+              }}
+            />
+          ) : null}
           {isTypst ? (
             <TypstCard
               homeworkId={homework.id}
               pdfId={pdfId}
               pdfName={`${homework.title ?? "homework"}.pdf`}
               compileError={homework.compile_error}
+              compilable={paperId === null}
             />
           ) : null}
         </>

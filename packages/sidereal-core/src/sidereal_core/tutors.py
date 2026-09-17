@@ -13,6 +13,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from sidereal_core.directus import DirectusClient, DirectusClientError, DirectusError
+from sidereal_core.files import release_uploads
 from sidereal_core.logins import REFUSED, check_email, check_password
 from sidereal_core.models import (
     Collection,
@@ -188,14 +189,20 @@ async def set_tutor_status(
     return _account(user, await _student_count(client, user_id))
 
 
-async def remove_tutor(client: DirectusClient, user_id: UUID) -> None:
+async def remove_tutor(
+    client: DirectusClient, user_id: UUID, *, uploads_to: UUID | None = None
+) -> None:
     await _tutor(client, user_id)
     students = await _student_count(client, user_id)
     if students:
+        held = "1 student" if students == 1 else f"{students} students"
         raise TutorHasStudentsError(
-            f"This tutor still has {students} student(s). Reassign them to another tutor first."
+            f"This tutor still has {held}. Reassign them to another tutor first."
         )
     try:
+        # Material they uploaded is the caller's to keep: deleting the user would leave it
+        # with no `uploaded_by`, and a tutor's file rules are that column.
+        await release_uploads(client, user_id, to=uploads_to)
         await client.delete_user(user_id)
     except DirectusClientError as exc:
         _refuse(exc, "That tutor could not be removed.")

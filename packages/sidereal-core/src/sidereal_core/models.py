@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import date, datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, Self
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -164,6 +165,7 @@ class DirectusFile(Record):
     title: str | None = None
     type: str | None = None
     filesize: int | None = None
+    uploaded_by: UUID | None = None
 
 
 class StudentDraft(Draft):
@@ -274,6 +276,35 @@ class Paper(Record, PaperDraft):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
 
+class MarkedQuestion(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    number: str
+    marks_awarded: int = Field(ge=0)
+    marks_available: int = Field(ge=0)
+    comment: str | None = None
+
+
+class HomeworkMarking(BaseModel):
+    """The tutor's marks, as `homework.marking` holds them."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    questions: tuple[MarkedQuestion, ...] = ()
+    total_awarded: int = Field(ge=0)
+    total_available: int = Field(ge=0)
+    comment: str | None = None
+
+    @classmethod
+    def over(cls, questions: Sequence[MarkedQuestion], comment: str | None = None) -> Self:
+        return cls(
+            questions=tuple(questions),
+            total_awarded=sum(question.marks_awarded for question in questions),
+            total_available=sum(question.marks_available for question in questions),
+            comment=comment,
+        )
+
+
 class HomeworkDraft(Draft):
     student: UUID
     session: UUID | None = None
@@ -288,6 +319,8 @@ class HomeworkDraft(Draft):
     submission: str | None = None
     submission_transcription: dict[str, Any] | None = None
     submitted_at: datetime | None = None
+    # The tutor's marks, in the `HomeworkMarking` shape.
+    marking: dict[str, Any] | None = None
     generated_from: dict[str, Any] | None = None
 
 
@@ -349,6 +382,7 @@ class HomeworkTopic(Record, HomeworkTopicDraft):
 class FeedbackDraft(Draft):
     student: UUID
     session: UUID | None = None
+    homework: UUID | None = None
     content: str
     status: FeedbackStatus = FeedbackStatus.DRAFT
     generated_from: dict[str, Any] | None = None

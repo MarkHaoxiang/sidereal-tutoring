@@ -2,6 +2,8 @@ import { X } from "lucide-react";
 import { useEffect, useId, useRef } from "react";
 import type { MouseEvent, ReactNode } from "react";
 
+import { raiseToasts } from "@/lib/toplayer";
+
 import styles from "./Dialog.module.css";
 
 export interface DialogProps {
@@ -28,6 +30,8 @@ export function Dialog({ open, onClose, title, children, footer, busy = false }:
     if (open && !dialog.open) {
       openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       dialog.showModal();
+      // The dialog has just taken the top of the top layer; the toasts go back above it.
+      raiseToasts();
     } else if (!open && dialog.open) {
       dialog.close();
       // The opener may have re-rendered while the dialog was up, so check it is still

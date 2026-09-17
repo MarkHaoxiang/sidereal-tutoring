@@ -1,5 +1,6 @@
-/* The admin tables. Both pages hold more columns than a phone can show, so the table
-   scrolls inside a focusable region rather than reflowing into something unreadable. */
+/* The admin tables. At 40rem and above the table scrolls inside a focusable region
+   rather than reflowing into something unreadable; below it, .cards replaces the
+   table outright — never both at once behind display: none. */
 .scroller {
   overflow-x: auto;
   border: 1px solid var(--color-border);
@@ -190,4 +191,77 @@
   background: var(--color-danger-tint);
   color: var(--color-danger);
   overflow-wrap: anywhere;
+}
+
+/* The error is the point of a failed job's detail: its label sits in its own row, big
+   enough to lead, with room at the end for a Retry button another change will add. */
+.errorHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.errorLabel {
+  margin: 0;
+  color: var(--color-danger);
+  font-size: var(--font-size-h3);
+  font-weight: 600;
+}
+
+/* Below 40rem the table gives way to one card per row — same fields, stacked. */
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-bg-raised);
+  box-shadow: var(--shadow-raised);
+}
+
+.cardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.cardField {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: var(--font-size-small);
+}
+
+.cardFieldLabel {
+  color: var(--color-fg-muted);
+}
+
+.cardNote {
+  margin: 0;
+  color: var(--color-fg-muted);
+  font-size: var(--font-size-small);
+}
+
+.cardActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.cardDetail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-border);
 }

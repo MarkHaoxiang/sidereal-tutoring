@@ -1,7 +1,9 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { Button, Dialog, Field, Input, PdfView, Select } from "@/components/ui";
 import { apiError } from "@/lib/api";
+import { plainTextPreview } from "@/lib/typstText";
 import { useStudents, useWorksheet } from "@/lib/queries";
 import type { CanonicalQuestion } from "@/lib/schema";
 
@@ -17,8 +19,7 @@ export interface WorksheetDialogProps {
 }
 
 function summary(question: CanonicalQuestion): string {
-  const first = question.stem ?? question.parts?.[0]?.text ?? "";
-  return first.length > 90 ? `${first.slice(0, 90)}…` : first;
+  return plainTextPreview(question.stem ?? question.parts?.[0]?.text ?? null, 100);
 }
 
 export function WorksheetDialog({ open, onClose, paperId, paperTitle, questions }: WorksheetDialogProps) {
@@ -30,6 +31,11 @@ export function WorksheetDialog({ open, onClose, paperId, paperTitle, questions 
   const [due, setDue] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pdfId, setPdfId] = useState<string | null>(null);
+  const [homeworkId, setHomeworkId] = useState<string | null>(null);
+  const navigate = useNavigate();
+
+  const student = (students.data ?? []).find((candidate) => candidate.id === studentId) ?? null;
+  const submitLabel = student ? "Set as homework" : "Make worksheet";
 
   const close = () => {
     setChosen([]);
@@ -38,6 +44,7 @@ export function WorksheetDialog({ open, onClose, paperId, paperTitle, questions 
     setDue("");
     setError(null);
     setPdfId(null);
+    setHomeworkId(null);
     onClose();
   };
 
@@ -64,6 +71,7 @@ export function WorksheetDialog({ open, onClose, paperId, paperTitle, questions 
         due: due || null,
       });
       setPdfId(result.pdf_file_id);
+      setHomeworkId(result.homework_id ?? null);
     } catch (failure) {
       setError(apiError(failure));
     }
@@ -77,9 +85,23 @@ export function WorksheetDialog({ open, onClose, paperId, paperTitle, questions 
       busy={worksheet.isPending}
       footer={
         pdfId ? (
-          <Button variant="primary" onClick={close}>
-            Done
-          </Button>
+          <>
+            {homeworkId ? (
+              <Button
+                variant="primary"
+                onClick={() => {
+                  const to = `/students/${studentId}/homework/${homeworkId}`;
+                  close();
+                  void navigate(to);
+                }}
+              >
+                Open the homework
+              </Button>
+            ) : null}
+            <Button variant={homeworkId ? "ghost" : "primary"} onClick={close}>
+              Done
+            </Button>
+          </>
         ) : (
           <>
             <Button variant="ghost" onClick={close} disabled={worksheet.isPending}>
@@ -93,7 +115,7 @@ export function WorksheetDialog({ open, onClose, paperId, paperTitle, questions 
                 void submit();
               }}
             >
-              Make worksheet
+              {submitLabel}
             </Button>
           </>
         )
@@ -103,7 +125,9 @@ export function WorksheetDialog({ open, onClose, paperId, paperTitle, questions 
         <PdfView fileId={pdfId} fallbackName={`${title.trim() || paperTitle}.pdf`} />
       ) : (
         <>
-          <p className={styles.note}>Makes a PDF only — no homework is set.</p>
+          <p className={styles.note}>
+            {student ? `Sets homework for ${student.name}.` : "Makes a PDF."}
+          </p>
 
           <Field label="Questions" error={error}>
             {questions.length === 0 ? (
@@ -127,17 +151,17 @@ export function WorksheetDialog({ open, onClose, paperId, paperTitle, questions 
             )}
           </Field>
 
-          <Field label="For a student (optional)">
+          <Field label="For a student">
             <Select
               value={studentId}
               onChange={(event) => {
                 setStudentId(event.target.value);
               }}
             >
-              <option value="">Nobody in particular</option>
-              {(students.data ?? []).map((student) => (
-                <option key={student.id} value={student.id}>
-                  {student.name}
+              <option value="">Nobody — just the PDF</option>
+              {(students.data ?? []).map((candidate) => (
+                <option key={candidate.id} value={candidate.id}>
+                  {candidate.name}
                 </option>
               ))}
             </Select>
@@ -152,15 +176,17 @@ export function WorksheetDialog({ open, onClose, paperId, paperTitle, questions 
                 }}
               />
             </Field>
-            <Field label="Due">
-              <Input
-                type="date"
-                value={due}
-                onChange={(event) => {
-                  setDue(event.target.value);
-                }}
-              />
-            </Field>
+            {student ? (
+              <Field label="Due">
+                <Input
+                  type="date"
+                  value={due}
+                  onChange={(event) => {
+                    setDue(event.target.value);
+                  }}
+                />
+              </Field>
+            ) : null}
           </div>
         </>
       )}

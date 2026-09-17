@@ -7,11 +7,20 @@ from datetime import date
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sidereal_core.canonical import CanonicalMarkScheme, CanonicalPaper
-from sidereal_core.models import Document, HomeworkFormat, Student
+from sidereal_core.models import Document, Homework, HomeworkFormat, Question, Student
 
 # Every output field is required, optional ones nullable: a strict tool schema has no
 # optional properties, and "the model did not say" must stay distinguishable from "".
 _OUTPUT = ConfigDict(frozen=True, extra="forbid")
+
+
+class MarkedHomework(BaseModel):
+    """One hand-in as the generator reads it: what was set, and what came back."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    homework: Homework
+    questions: tuple[Question, ...] = ()
 
 
 class GenerationRequest(BaseModel):
@@ -19,9 +28,14 @@ class GenerationRequest(BaseModel):
 
     student: Student
     documents: tuple[Document, ...] = ()
+    # Feedback's hand-ins: the questions as set, the student's answers and the tutor's marks.
+    homework: tuple[MarkedHomework, ...] = ()
     instructions: str | None = None
     period_start: date | None = None
     period_end: date | None = None
+    # Every kind is told both, so nothing in the writing has to guess what day it is.
+    today: date | None = None
+    session_date: date | None = None
     # Homework only: it decides whether `content` comes back as markdown or as a Typst body.
     format: HomeworkFormat = HomeworkFormat.MARKDOWN
 

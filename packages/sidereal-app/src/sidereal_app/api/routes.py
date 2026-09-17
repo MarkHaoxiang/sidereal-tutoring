@@ -5,12 +5,13 @@ from collections.abc import Mapping
 from importlib.metadata import version
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Response
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
 from sidereal_core.canonical import RenderOutput
 from sidereal_core.logins import (
     CallerRole,
     Identity,
     StudentLogin,
+    account_status,
     create_login,
     identify,
     remove_login,
@@ -25,8 +26,14 @@ from sidereal_core.models import (
     HomeworkFormat,
     JobStatus,
     Paper,
+    Student,
 )
-from sidereal_core.students import visible_student
+from sidereal_core.students import (
+    archive_student,
+    delete_student,
+    unarchive_student,
+    visible_student,
+)
 from sidereal_core.tutors import (
     DEFAULT_JOB_LIMIT,
     AdminHealth,
@@ -40,7 +47,7 @@ from sidereal_core.tutors import (
     reset_tutor_password,
     set_tutor_status,
 )
-from sidereal_generate.jobs import JobInput, run_job, start_job
+from sidereal_generate.jobs import JobInput, retry_job, run_job, start_job
 from sidereal_generate.papers import (
     WorksheetResult,
     extract_paper_mark_scheme,
@@ -56,13 +63,17 @@ from sidereal_app.api.errors import (
     ASSET_UNREADABLE,
     DOCUMENT_REQUIRED,
     FORMAT_UNSUPPORTED,
+    HOMEWORK_UNSUPPORTED,
     PAGES_UNSUPPORTED,
     STUDENT_REQUIRED,
+    TOO_MANY_CHECKS,
     TUTOR_ONLY,
     detail,
 )
 from sidereal_app.api.models import (
+    AccountState,
     DocumentRequest,
+    EmailRequest,
     Health,
     JobRequest,
     LoginRequest,
@@ -83,7 +94,9 @@ from sidereal_app.deps import (
     Directus,
     GeneratorSet,
     IngesterSet,
+    LoginLimiter,
     Scanner,
+    ServiceDirectus,
     Tutor,
     Typeset,
 )
@@ -97,6 +110,19 @@ router = APIRouter(prefix="/api")
 async def health() -> Health:
     """Liveness only. It does not reach Directus, so it stays up while Directus is down."""
     return Health(status="ok")
+
+
+@router.post("/auth/status")
+async def read_account_status(
+    body: EmailRequest, request: Request, client: ServiceDirectus, limiter: LoginLimiter
+) -> AccountState:
+    """Why a sign-in was refused, for someone who has just been refused one. No token."""
+    if not limiter.allow(request.client.host if request.client else ""):
+        raise HTTPException(
+            status_code=429,
+            detail=detail(TOO_MANY_CHECKS, "Too many checks from here. Try again shortly."),
+        )
+    return AccountState(status=await account_status(client, body.email))
 
 
 @router.get("/me")
@@ -146,7 +172,7 @@ async def change_tutor_status(
 @router.delete("/admin/tutors/{user_id}", status_code=204)
 async def delete_tutor(user_id: UUID, admin: Admin, client: Directus) -> Response:
     """A tutor who still has students is a 409: reassigning them comes first."""
-    await remove_tutor(client, user_id)
+    await remove_tutor(client, user_id, uploads_to=admin.id)
     return Response(status_code=204)
 
 
@@ -158,6 +184,24 @@ async def read_admin_jobs(
     limit: int = DEFAULT_JOB_LIMIT,
 ) -> list[AdminJob]:
     return await list_jobs(client, status, limit)
+
+
+@router.post("/students/{student_id}/archive")
+async def archive(student_id: UUID, tutor: Tutor, client: Directus) -> Student:
+    """The student is filed away and their login is suspended: archiving revokes access."""
+    return await archive_student(client, student_id)
+
+
+@router.post("/students/{student_id}/unarchive")
+async def unarchive(student_id: UUID, tutor: Tutor, client: Directus) -> Student:
+    return await unarchive_student(client, student_id)
+
+
+@router.delete("/students/{student_id}", status_code=204)
+async def remove_student(student_id: UUID, tutor: Tutor, client: Directus) -> Response:
+    """Their sessions, homework, feedback and plans go; their material joins the library."""
+    await delete_student(client, student_id, uploads_to=tutor.id)
+    return Response(status_code=204)
 
 
 @router.post("/students/{student_id}/login", status_code=201)
@@ -177,8 +221,8 @@ async def set_student_password(
 
 @router.delete("/students/{student_id}/login", status_code=204)
 async def remove_student_login(student_id: UUID, user: CurrentUser, client: Directus) -> Response:
-    """The login goes; the student's work stays."""
-    await remove_login(client, student_id)
+    """The login goes; the student's work stays, and their uploads pass to the caller."""
+    await remove_login(client, student_id, uploads_to=user.id)
     return Response(status_code=204)
 
 
@@ -240,6 +284,7 @@ async def create_job(
         JobInput(
             student=body.student_id,
             documents=tuple(body.document_ids),
+            homework=tuple(body.homework_ids),
             instructions=body.instructions,
             period_start=body.period_start,
             period_end=body.period_end,
@@ -263,6 +308,11 @@ def _check_input(kind: GenerationKind, body: JobRequest) -> None:
         raise HTTPException(
             status_code=422,
             detail=detail(PAGES_UNSUPPORTED, "Only extracting a paper can ask about pages."),
+        )
+    if body.homework_ids and kind is not GenerationKind.FEEDBACK:
+        raise HTTPException(
+            status_code=422,
+            detail=detail(HOMEWORK_UNSUPPORTED, "Only feedback is written about a hand-in."),
         )
     if kind is GenerationKind.PAPER_EXTRACT:
         if not 1 <= len(body.document_ids) <= 2:
@@ -386,6 +436,21 @@ async def paper_worksheet_pdf(
         title=body.title,
         due=body.due,
     )
+
+
+@router.post("/jobs/{job_id}/retry", status_code=202)
+async def run_job_again(
+    job_id: UUID,
+    user: CurrentUser,
+    client: Directus,
+    generators: GeneratorSet,
+    typeset: Typeset,
+    background: BackgroundTasks,
+) -> GenerationJob:
+    """Queue the same input again. The job that failed stays where it is, as the history."""
+    job = await retry_job(client, generators, job_id)
+    background.add_task(run_job, client, generators, job.id, typeset=typeset)
+    return job
 
 
 @router.get("/jobs/{job_id}")

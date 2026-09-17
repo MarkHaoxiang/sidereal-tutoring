@@ -37,6 +37,21 @@ from sidereal_core.directus import (
     DirectusErrorDetail,
     DirectusUnavailableError,
 )
+from sidereal_core.files import release_uploads
+from sidereal_core.homework import (
+    QuestionText,
+    mark_homework,
+    ordered_questions,
+    question_texts,
+)
+from sidereal_core.logins import (
+    AccountStatus,
+    CallerRole,
+    Identity,
+    StudentLogin,
+    account_status,
+    whoami,
+)
 from sidereal_core.models import (
     Collection,
     DirectusFile,
@@ -62,12 +77,14 @@ from sidereal_core.models import (
     Homework,
     HomeworkDraft,
     HomeworkFormat,
+    HomeworkMarking,
     HomeworkQuestion,
     HomeworkQuestionDraft,
     HomeworkStatus,
     HomeworkTopic,
     HomeworkTopicDraft,
     JobStatus,
+    MarkedQuestion,
     Paper,
     PaperDraft,
     PaperStatus,
@@ -96,6 +113,13 @@ from sidereal_core.settings import (
     directus_settings,
     typeset_settings,
 )
+from sidereal_core.students import (
+    StudentNotVisibleError,
+    archive_student,
+    delete_student,
+    unarchive_student,
+    visible_student,
+)
 from sidereal_core.tutors import (
     AdminHealth,
     AdminJob,
@@ -123,6 +147,7 @@ from sidereal_core.typeset import (
     TypesetError,
     TypesetUnavailableError,
 )
+from sidereal_core.typst_text import plain_text
 
 __all__ = [
     "DEFAULT_DIRECTUS_URL",
@@ -137,9 +162,11 @@ __all__ = [
     "MAX_GRID_ROWS",
     "MAX_TABLE_COLS",
     "MAX_TABLE_ROWS",
+    "AccountStatus",
     "AdminHealth",
     "AdminJob",
     "AnswerKind",
+    "CallerRole",
     "CanonicalAnswer",
     "CanonicalAnswerOption",
     "CanonicalBlock",
@@ -190,12 +217,15 @@ __all__ = [
     "Homework",
     "HomeworkDraft",
     "HomeworkFormat",
+    "HomeworkMarking",
     "HomeworkQuestion",
     "HomeworkQuestionDraft",
     "HomeworkStatus",
     "HomeworkTopic",
     "HomeworkTopicDraft",
+    "Identity",
     "JobStatus",
+    "MarkedQuestion",
     "Paper",
     "PaperDraft",
     "PaperStatus",
@@ -204,6 +234,7 @@ __all__ = [
     "PlanStatus",
     "Question",
     "QuestionDraft",
+    "QuestionText",
     "QuestionTopic",
     "QuestionTopicDraft",
     "Record",
@@ -214,6 +245,8 @@ __all__ = [
     "SessionStatus",
     "Student",
     "StudentDraft",
+    "StudentLogin",
+    "StudentNotVisibleError",
     "StudentStatus",
     "Topic",
     "TopicDraft",
@@ -229,13 +262,24 @@ __all__ = [
     "TypesetError",
     "TypesetSettings",
     "TypesetUnavailableError",
+    "account_status",
     "admin_health",
+    "archive_student",
     "create_tutor",
+    "delete_student",
     "directus_settings",
     "list_jobs",
     "list_tutors",
+    "mark_homework",
+    "ordered_questions",
+    "plain_text",
+    "question_texts",
+    "release_uploads",
     "remove_tutor",
     "reset_tutor_password",
     "set_tutor_status",
     "typeset_settings",
+    "unarchive_student",
+    "visible_student",
+    "whoami",
 ]

@@ -28,13 +28,15 @@ from sidereal_generate.base import (
     GenerationTruncatedError,
 )
 from sidereal_generate.fake import FailingGenerator, FakeGenerator, FakePaperExtractor
-from sidereal_generate.jobs import Generators, JobInput, run_job, start_job
+from sidereal_generate.jobs import Generators, JobInput, retry_job, run_job, start_job
 from sidereal_generate.models import (
     FeedbackOutput,
     GeneratedQuestion,
+    GenerationRequest,
     HomeworkOutput,
     PlanOutput,
 )
+from sidereal_generate.usage import UsageTally
 
 HOMEWORK = HomeworkOutput(
     title="Quadratics: week 3",
@@ -245,7 +247,7 @@ async def test_a_job_whose_input_is_unusable_fails_rather_than_raising() -> None
         ),
         (GenerationNotConfiguredError("OPENROUTER_API_KEY is not set"), "Generation is not set up"),
         (GenerationTruncatedError("ran out of output budget"), "The answer was cut off"),
-        (GenerationError("no tool call"), "The generated result could not be used."),
+        (GenerationError("no tool call"), "The generated result could not be used: no tool call"),
         (RuntimeError("model refused"), "Generation failed unexpectedly."),
     ],
 )
@@ -284,3 +286,128 @@ async def test_material_the_job_may_no_longer_read_is_said_plainly() -> None:
 
     assert finished.status is JobStatus.FAILED
     assert finished.error == "Some of the selected material could no longer be read."
+
+
+class Recording(FakeGenerator[FeedbackOutput]):
+    """A generator that keeps the request it was given, so the prompt can be read back."""
+
+    def __init__(self) -> None:
+        super().__init__(FEEDBACK)
+        self.requests: list[GenerationRequest] = []
+
+    async def generate(
+        self, request: GenerationRequest, *, usage: UsageTally | None = None
+    ) -> FeedbackOutput:
+        self.requests.append(request)
+        return await super().generate(request, usage=usage)
+
+
+def handed_in(fake: FakeDirectus, student_id: str) -> str:
+    homework = fake.seed(
+        Collection.HOMEWORK,
+        {
+            "student": student_id,
+            "title": "Moments",
+            "content": "",
+            "status": "marked",
+            "submission": "Q1 R_D = 90 N",
+            "submission_transcription": {"text": "4.8 + 2.4", "confidence": "high"},
+            "marking": {"total_awarded": 4, "total_available": 6, "questions": []},
+        },
+    )
+    question = fake.seed(Collection.QUESTIONS, {"text": "A plank $A B$.", "number": "1"})
+    fake.seed(
+        Collection.HOMEWORK_QUESTIONS,
+        {"homework": homework["id"], "question": question["id"], "sort": 1},
+    )
+    return str(homework["id"])
+
+
+async def test_feedback_reads_the_hand_in_and_is_filed_against_it() -> None:
+    fake, job_input = seeded()
+    student_id = str(job_input.student)
+    homework_id = handed_in(fake, student_id)
+    fake.seed(
+        Collection.SESSIONS,
+        {"student": student_id, "scheduled_at": "2099-09-18T17:00:00+00:00", "status": "scheduled"},
+    )
+    feedback = Recording()
+    all_generators = generators()
+    all_generators = Generators(
+        homework=all_generators.homework,
+        feedback=feedback,
+        plan=all_generators.plan,
+        paper=all_generators.paper,
+    )
+
+    typeset = FakeTypeset().client()
+    async with fake.client() as client:
+        job = await start_job(
+            client,
+            GenerationKind.FEEDBACK,
+            job_input.model_copy(update={"homework": (UUID(homework_id),)}),
+            model="fake",
+        )
+        finished = await run_job(client, all_generators, job.id, typeset=typeset)
+
+    assert finished.status is JobStatus.SUCCEEDED
+    row = fake.rows(Collection.FEEDBACK)[0]
+    assert row["homework"] == homework_id
+    assert row["generated_from"]["homework"] == [homework_id]
+    asked = feedback.requests[0]
+    assert asked.homework[0].homework.submission == "Q1 R_D = 90 N"
+    assert [question.number for question in asked.homework[0].questions] == ["1"]
+    assert asked.today is not None
+    assert asked.session_date == date(2099, 9, 18)
+
+
+async def test_feedback_about_nothing_in_particular_is_filed_against_nothing() -> None:
+    fake, job_input = seeded()
+
+    typeset = FakeTypeset().client()
+    async with fake.client() as client:
+        job = await start_job(client, GenerationKind.FEEDBACK, job_input, model="fake")
+        await run_job(client, generators(), job.id, typeset=typeset)
+
+    assert fake.rows(Collection.FEEDBACK)[0].get("homework") is None
+
+
+async def test_a_lesson_already_past_is_not_the_next_one() -> None:
+    fake, job_input = seeded()
+    feedback = Recording()
+    fake.seed(
+        Collection.SESSIONS,
+        {
+            "student": str(job_input.student),
+            "scheduled_at": "2020-01-01T17:00:00+00:00",
+            "status": "scheduled",
+        },
+    )
+    built = generators()
+    built = Generators(
+        homework=built.homework, feedback=feedback, plan=built.plan, paper=built.paper
+    )
+
+    typeset = FakeTypeset().client()
+    async with fake.client() as client:
+        job = await start_job(client, GenerationKind.FEEDBACK, job_input, model="fake")
+        await run_job(client, built, job.id, typeset=typeset)
+
+    assert feedback.requests[0].session_date is None
+
+
+async def test_a_retry_queues_the_same_input_and_leaves_the_failed_row_alone() -> None:
+    fake, job_input = seeded()
+    built = generators()
+
+    typeset = FakeTypeset().client()
+    async with fake.client() as client:
+        failed = await start_job(client, GenerationKind.FEEDBACK, job_input, model="fake")
+        again = await retry_job(client, built, failed.id)
+        finished = await run_job(client, built, again.id, typeset=typeset)
+
+    assert again.id != failed.id
+    assert again.kind is GenerationKind.FEEDBACK
+    assert again.input == failed.input
+    assert finished.status is JobStatus.SUCCEEDED
+    assert len(fake.rows(Collection.GENERATION_JOBS)) == 2

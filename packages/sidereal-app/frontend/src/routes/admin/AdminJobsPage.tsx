@@ -1,13 +1,18 @@
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Fragment, useState } from "react";
+import { toast } from "sonner";
 
-import { EmptyState, PageHeader, Select, SkeletonRows, STATUS_TOKENS, StatusChip } from "@/components/ui";
+import { Button, EmptyState, PageHeader, Select, SkeletonRows, STATUS_TOKENS, StatusChip } from "@/components/ui";
 import { formatDateTime } from "@/lib/format";
-import { useAdminJobs } from "@/lib/queries";
+import { useMediaQuery } from "@/lib/media";
+import { apiError } from "@/lib/api";
+import { useAdminJobs, useRetryJob } from "@/lib/queries";
 import type { AdminJobStatus } from "@/lib/queries";
 
 import pageStyles from "../page.module.css";
 import styles from "./table.module.css";
+
+const WIDE = "(min-width: 40rem)";
 
 const STATUS_OPTIONS: { value: AdminJobStatus | "all"; label: string }[] = [
   { value: "all", label: "Every job" },
@@ -17,10 +22,54 @@ const STATUS_OPTIONS: { value: AdminJobStatus | "all"; label: string }[] = [
   { value: "failed", label: "Failed" },
 ];
 
+function JobDetail({ id, error, input }: { id: string; error: string | null | undefined; input: unknown }) {
+  const again = useRetryJob();
+
+  const retry = async () => {
+    try {
+      await again.mutateAsync(id);
+      toast.success("Running");
+    } catch (failure) {
+      toast.error(apiError(failure));
+    }
+  };
+
+  return (
+    <>
+      {error ? (
+        <>
+          <div className={styles.errorHeader}>
+            <p className={styles.errorLabel}>Error</p>
+            <Button
+              size="sm"
+              loading={again.isPending}
+              onClick={() => {
+                void retry();
+              }}
+            >
+              Retry
+            </Button>
+          </div>
+          <p className={styles.error}>{error}</p>
+        </>
+      ) : null}
+      <p className={styles.detailLabel}>Input</p>
+      <pre className={styles.pre}>{JSON.stringify(input ?? {}, null, 2)}</pre>
+    </>
+  );
+}
+
 export function AdminJobsPage() {
   const [status, setStatus] = useState<AdminJobStatus | "all">("all");
   const [expanded, setExpanded] = useState<string[]>([]);
-  const { data: jobs, isLoading, isError } = useAdminJobs(status === "all" ? {} : { status });
+  const wide = useMediaQuery(WIDE);
+  const {
+    data: jobs,
+    isLoading,
+    isError,
+    isFetching,
+    refetch,
+  } = useAdminJobs(status === "all" ? {} : { status });
 
   const toggle = (id: string) => {
     setExpanded((current) =>
@@ -47,6 +96,14 @@ export function AdminJobsPage() {
             </option>
           ))}
         </Select>
+        <Button
+          loading={isFetching}
+          onClick={() => {
+            void refetch();
+          }}
+        >
+          Refresh
+        </Button>
         {jobs ? <span className={styles.count}>{jobs.length} shown</span> : null}
       </div>
 
@@ -61,7 +118,7 @@ export function AdminJobsPage() {
         />
       ) : null}
 
-      {jobs && jobs.length > 0 ? (
+      {jobs && jobs.length > 0 && wide ? (
         <div className={styles.scroller} tabIndex={0} role="region" aria-label="Generation jobs">
           <table className={styles.table}>
             <thead>
@@ -109,14 +166,7 @@ export function AdminJobsPage() {
                       <tr className={styles.detailRow}>
                         <td colSpan={6}>
                           <div className={styles.detail}>
-                            {job.error ? (
-                              <>
-                                <p className={styles.detailLabel}>Error</p>
-                                <p className={styles.error}>{job.error}</p>
-                              </>
-                            ) : null}
-                            <p className={styles.detailLabel}>Input</p>
-                            <pre className={styles.pre}>{JSON.stringify(job.input ?? {}, null, 2)}</pre>
+                            <JobDetail id={job.id} error={job.error} input={job.input} />
                           </div>
                         </td>
                       </tr>
@@ -126,6 +176,58 @@ export function AdminJobsPage() {
               })}
             </tbody>
           </table>
+        </div>
+      ) : null}
+
+      {jobs && jobs.length > 0 && !wide ? (
+        <div className={styles.cards} role="list" aria-label="Generation jobs">
+          {jobs.map(({ job, student_name, tutor_email }) => {
+            const open = expanded.includes(job.id);
+            return (
+              <article key={job.id} className={styles.card} role="listitem">
+                <div className={styles.cardHeader}>
+                  <span className={styles.primary}>{STATUS_TOKENS[job.kind].label}</span>
+                  <StatusChip status={job.status ?? "queued"} />
+                </div>
+                <div className={styles.cardField}>
+                  <span className={styles.cardFieldLabel}>Student</span>
+                  <span>{student_name ?? "—"}</span>
+                </div>
+                <div className={styles.cardField}>
+                  <span className={styles.cardFieldLabel}>Tutor</span>
+                  <span className={styles.secondaryCell}>{tutor_email ?? "—"}</span>
+                </div>
+                <div className={styles.cardField}>
+                  <span className={styles.cardFieldLabel}>Model</span>
+                  <span className={styles.secondaryCell}>{job.model ?? "—"}</span>
+                </div>
+                <div className={styles.cardField}>
+                  <span className={styles.cardFieldLabel}>Started</span>
+                  <span className={styles.secondaryCell}>{formatDateTime(job.date_created ?? null)}</span>
+                </div>
+                <button
+                  type="button"
+                  className={styles.twist}
+                  aria-expanded={open}
+                  onClick={() => {
+                    toggle(job.id);
+                  }}
+                >
+                  {open ? (
+                    <ChevronDown size={15} aria-hidden="true" />
+                  ) : (
+                    <ChevronRight size={15} aria-hidden="true" />
+                  )}
+                  Details
+                </button>
+                {open ? (
+                  <div className={styles.cardDetail}>
+                    <JobDetail id={job.id} error={job.error} input={job.input} />
+                  </div>
+                ) : null}
+              </article>
+            );
+          })}
         </div>
       ) : null}
     </div>

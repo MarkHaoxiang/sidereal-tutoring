@@ -47,6 +47,8 @@ Sits above sidereal-core. Imports core only.
   them back by `sort` and transcribes them in that order.
 - `documents.transcription` is `{questions: [...]}` and is written only when the scan names a paper.
   A notes scan's transcription is the row's `text`, and its `transcription` stays null.
+- A hand-in's questions come from `sidereal_core.homework.ordered_questions`; ingest only maps
+  them onto `PaperQuestion`.
 - `homework.submission_transcription` is `{text, confidence, questions, model, usage}` — the whole
   transcription in the one column. Transcribing never writes `generated_from`: a student may write
   their own submission fields and Directus refuses them that one.

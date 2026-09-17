@@ -11,10 +11,12 @@ export interface TypstCardProps {
   pdfId: string | null;
   pdfName: string;
   compileError: string | null;
+  /** False for a sheet cut from a paper: a recompile would print it without its figures. */
+  compilable?: boolean;
 }
 
 /** The printable side of a Typst homework: the PDF if there is one, the compiler's report if not. */
-export function TypstCard({ homeworkId, pdfId, pdfName, compileError }: TypstCardProps) {
+export function TypstCard({ homeworkId, pdfId, pdfName, compileError, compilable = true }: TypstCardProps) {
   const compile = useCompileHomework();
 
   const run = async () => {
@@ -30,7 +32,7 @@ export function TypstCard({ homeworkId, pdfId, pdfName, compileError }: TypstCar
     <section className={styles.section}>
       <div className={styles.sectionHeader}>
         <h2 className={styles.sectionTitle}>Typeset</h2>
-        {compileError !== null || pdfId === null ? (
+        {compilable && (compileError !== null || pdfId === null) ? (
           <Button
             loading={compile.isPending}
             onClick={() => {

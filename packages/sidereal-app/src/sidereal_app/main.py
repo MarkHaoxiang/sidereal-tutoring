@@ -69,6 +69,7 @@ from sidereal_app.api.errors import (
     WEAK_PASSWORD,
     error_body,
 )
+from sidereal_app.api.ratelimit import KeyedLimiter
 from sidereal_app.api.routes import VERSION, router
 
 TITLE = "Sidereal Tutoring"
@@ -77,6 +78,9 @@ TITLE = "Sidereal Tutoring"
 LOG_LEVEL = "SIDEREAL_LOG_LEVEL"
 DEFAULT_LOG_LEVEL = "INFO"
 FETCH_TIMEOUT = 20.0
+# Enough for one person mistyping a password, far too few to walk an address book.
+LOGIN_CHECK_RATE = 1 / 15
+LOGIN_CHECK_BURST = 5.0
 LOGIN_ERRORS: dict[type[Exception], tuple[int, str]] = {
     LoginExistsError: (409, LOGIN_EXISTS),
     LoginMissingError: (404, LOGIN_MISSING),
@@ -115,6 +119,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.typeset = TypesetClient(typeset_settings().url, http_client=typeset)
         app.state.generators = default_generators()
         app.state.scanner = ScanIngester(default_transcriber())
+        app.state.login_limiter = KeyedLimiter(rate=LOGIN_CHECK_RATE, burst=LOGIN_CHECK_BURST)
         yield
 
 

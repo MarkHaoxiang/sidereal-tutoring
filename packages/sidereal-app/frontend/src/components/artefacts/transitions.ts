@@ -8,10 +8,10 @@ export interface Transition<TStatus> {
 }
 
 // Only the step a tutor may take from where they are — a status is never a free choice.
+// `submitted` has no entry: marking is the step, and the marking panel's own button takes it.
 export const HOMEWORK_NEXT: Partial<Record<HomeworkStatus, Transition<HomeworkStatus>>> = {
   draft: { next: "assigned", label: "Assign", done: "Assigned" },
   assigned: { next: "submitted", label: "Mark handed in", done: "Handed in" },
-  submitted: { next: "marked", label: "Finish marking", done: "Marked" },
 };
 
 export const FEEDBACK_NEXT: Partial<Record<FeedbackStatus, Transition<FeedbackStatus>>> = {

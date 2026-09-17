@@ -1,0 +1,18 @@
+/* The popover is only a seat in the top layer: it covers the viewport, paints nothing, and
+   catches nothing — the toasts inside it do. */
+.host {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  border: 0;
+  padding: 0;
+  overflow: visible;
+  background: transparent;
+  pointer-events: none;
+}
+
+.host :global([data-sonner-toast]) {
+  pointer-events: auto;
+}

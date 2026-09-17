@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 
 import { GenerateSection } from "@/components/artefacts/GenerateSection";
+import { JobsPanel } from "@/components/artefacts/JobsPanel";
 import styles from "@/components/artefacts/artefacts.module.css";
 import { SkeletonRows, StatusChip } from "@/components/ui";
 import { formatDate, formatDateTime } from "@/lib/format";
@@ -25,6 +26,8 @@ export function PlansTab() {
           emptyMessage="No study plans yet."
         />
       ) : null}
+
+      <JobsPanel studentId={studentId} kind="plan" />
 
       {data && data.length > 0 ? (
         <ul className={styles.list}>

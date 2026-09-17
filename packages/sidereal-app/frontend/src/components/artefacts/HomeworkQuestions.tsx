@@ -2,6 +2,7 @@ import { TopicChips } from "@/components/topics/TopicChips";
 import { taggedTopics } from "@/components/topics/tree";
 import { useGeneratedQuestions } from "@/lib/queries";
 import type { HomeworkDetail } from "@/lib/queries";
+import { plainText } from "@/lib/typstText";
 
 import styles from "./artefacts.module.css";
 
@@ -68,11 +69,12 @@ export function HomeworkQuestions({ homework }: { homework: HomeworkDetail }) {
       <div className={styles.sectionHeader}>
         <h2 className={styles.sectionTitle}>Questions</h2>
       </div>
+      <p className={styles.sectionNote}>The questions as they were generated — editing the sheet does not change them.</p>
       <ol className={styles.questions}>
         {rows.map((row) => (
           <li key={row.id} className={styles.question}>
-            {row.text}
-            {row.answer ? <span className={styles.answer}>Answer: {row.answer}</span> : null}
+            {plainText(row.text)}
+            {row.answer ? <span className={styles.answer}>Answer: {plainText(row.answer)}</span> : null}
             {row.topics.length > 0 ? <TopicChips topics={row.topics} className={styles.questionTopics} /> : null}
           </li>
         ))}

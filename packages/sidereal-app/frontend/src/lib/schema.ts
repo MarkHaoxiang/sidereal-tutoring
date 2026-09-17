@@ -319,6 +319,22 @@ export interface Paper extends AuditFields {
   generated_from: GenerationProvenance | null;
 }
 
+// `homework.marking`: the tutor's marks, keyed by the homework's question numbers. Written by
+// the tutor alone; a student reads it and cannot write it.
+export interface MarkedQuestion {
+  number: string;
+  marks_awarded: number;
+  marks_available: number;
+  comment?: string;
+}
+
+export interface Marking {
+  questions: MarkedQuestion[];
+  total_awarded: number;
+  total_available: number;
+  comment?: string;
+}
+
 export interface Homework extends AuditFields {
   id: string;
   student: string | Student;
@@ -334,6 +350,7 @@ export interface Homework extends AuditFields {
   submission_file: string | DirectusFile | null;
   submission_transcription: Transcription | null;
   submitted_at: string | null;
+  marking: Marking | null;
   generated_from: GenerationProvenance | null;
   // Alias m2m field through the `homework_questions` junction.
   questions: string[] | HomeworkQuestion[];
@@ -345,6 +362,7 @@ export interface Feedback extends AuditFields {
   id: string;
   student: string | Student;
   session: string | Session | null;
+  homework: string | Homework | null;
   content: string | null;
   status: FeedbackStatus;
   generated_from: GenerationProvenance | null;

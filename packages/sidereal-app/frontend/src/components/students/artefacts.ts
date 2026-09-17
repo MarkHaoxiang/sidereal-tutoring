@@ -1,3 +1,4 @@
+import { feedbackTitle } from "@/lib/feedback";
 import type { FeedbackListItem, HomeworkListItem, PlanListItem } from "@/lib/queries";
 import type { FeedbackStatus, HomeworkStatus, PlanStatus } from "@/lib/schema";
 
@@ -35,7 +36,7 @@ export function collectArtefacts(sources: {
     ...(sources.feedback ?? []).map((item) => ({
       id: item.id,
       kind: "feedback" as const,
-      title: "Feedback",
+      title: feedbackTitle(item),
       status: item.status,
       created: item.date_created,
       student: item.student,

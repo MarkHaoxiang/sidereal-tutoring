@@ -1,8 +1,8 @@
 import { Link } from "react-router-dom";
 
-import { feedbackTitle } from "@/components/student/feedback";
 import studentStyles from "@/components/student/student.module.css";
 import { EmptyState, SkeletonRows } from "@/components/ui";
+import { feedbackTitle } from "@/lib/feedback";
 import { formatDate } from "@/lib/format";
 import { useMyFeedbackList } from "@/lib/queries";
 
@@ -25,7 +25,7 @@ export function StudentFeedbackListPage() {
           {rows.map((row) => (
             <li key={row.id}>
               <Link to={`/me/feedback/${row.id}`} className={studentStyles.row}>
-                <span className={studentStyles.rowTitle}>{feedbackTitle(row.content)}</span>
+                <span className={studentStyles.rowTitle}>{feedbackTitle(row)}</span>
                 <span className={studentStyles.rowMeta}>{formatDate(row.date_created)}</span>
               </Link>
             </li>

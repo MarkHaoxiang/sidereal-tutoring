@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "gen-api": "uv run python -m sidereal_app.api.openapi > openapi.json && openapi-typescript openapi.json --default-non-nullable=false -o src/lib/api-schema.d.ts",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "check:typst": "npx tsx scripts/typst-text-check.ts"
   },
   "dependencies": {
     "@directus/sdk": "^25.0.1",

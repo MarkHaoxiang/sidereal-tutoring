@@ -6,12 +6,8 @@ from typing import Any
 from uuid import UUID
 
 from sidereal_core.directus import DirectusClient
-from sidereal_core.models import (
-    Collection,
-    Homework,
-    HomeworkQuestion,
-    Question,
-)
+from sidereal_core.homework import ordered_questions
+from sidereal_core.models import Collection, Homework
 
 from sidereal_ingest.documents import DocumentError
 from sidereal_ingest.scan import ScanFile, ScanIngester
@@ -53,24 +49,8 @@ def _transcription(result: TranscriptionResult) -> dict[str, Any]:
 async def _homework_questions(
     client: DirectusClient, homework_id: UUID
 ) -> tuple[PaperQuestion, ...]:
-    """The homework's questions in the order they were set: one `_in` query, not one per row."""
-    links = await client.list_items(
-        Collection.HOMEWORK_QUESTIONS,
-        HomeworkQuestion,
-        filter={"homework": {"_eq": str(homework_id)}},
-        sort=["sort"],
-    )
-    ordered = sorted(links, key=lambda link: link.sort or 0)
-    if not ordered:
-        return ()
-    questions = await client.list_items(
-        Collection.QUESTIONS,
-        Question,
-        filter={"id": {"_in": [str(link.question) for link in ordered]}},
-    )
-    by_id = {question.id: question for question in questions}
+    """The numbers the working may be filed under, in the order the homework was set."""
     return tuple(
         PaperQuestion(number=question.number or str(position), stem=question.text)
-        for position, link in enumerate(ordered, start=1)
-        if (question := by_id.get(link.question)) is not None
+        for position, question in enumerate(await ordered_questions(client, homework_id), start=1)
     )

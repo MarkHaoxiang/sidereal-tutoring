@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, unwrap } from "@/lib/api";
 import { directus } from "@/lib/directus";
-import type { HomeworkStatus } from "@/lib/schema";
+import type { HomeworkStatus, Marking } from "@/lib/schema";
 
 import { meKeys } from "./me";
 
@@ -48,6 +48,7 @@ function fetchHomework(id: string) {
         "submission",
         "submission_transcription",
         "submitted_at",
+        "marking",
         "generated_from",
         "date_created",
         "pdf",
@@ -58,7 +59,16 @@ function fetchHomework(id: string) {
           questions: [
             "id",
             "sort",
-            { question: ["id", "text", "answer", { topics: ["id", "sort", { topic: ["id", "name"] }] }] },
+            {
+              question: [
+                "id",
+                "text",
+                "answer",
+                "number",
+                "marks",
+                { topics: ["id", "sort", { topic: ["id", "name"] }] },
+              ],
+            },
           ],
         },
         { topics: ["id", "sort", { topic: ["id", "name"] }] },
@@ -85,12 +95,14 @@ export interface HomeworkPatch {
   content?: string | null;
   due_on?: string | null;
   status?: HomeworkStatus;
+  marking?: Marking | null;
 }
 
-export function useHomeworkList(params: HomeworkListParams = {}) {
+export function useHomeworkList(params: HomeworkListParams = {}, enabled = true) {
   return useQuery({
     queryKey: homeworkKeys.list(params),
     queryFn: () => fetchHomeworkList(params),
+    enabled,
   });
 }
 
@@ -118,6 +130,26 @@ export function useUpdateHomework() {
       directus.request(updateItem("homework", id, patch, { fields: ["id", "title", "status"] })),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: homeworkKeys.all });
+    },
+  });
+}
+
+/** The marks and the status in one write, so finishing marking is a single step. */
+export function useSaveMarking() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, marking, status }: { id: string; marking: Marking; status?: HomeworkStatus }) =>
+      directus.request(
+        updateItem(
+          "homework",
+          id,
+          { marking, ...(status ? { status } : {}) },
+          { fields: ["id", "status"] }
+        )
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: homeworkKeys.all });
+      void queryClient.invalidateQueries({ queryKey: meKeys.all });
     },
   });
 }

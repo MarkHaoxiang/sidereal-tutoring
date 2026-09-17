@@ -22,6 +22,16 @@ Sits beside sidereal-app. Imports core, ingest and generate; never sidereal-app.
   administrator's, and the server's token usually is not one.
 - A tool that writes against a student calls `visible_student` first: Directus cannot check a create
   through a relation, so nothing else keeps one tutor's work out of another's student.
+- `mark_homework` takes the marks question by question and `HomeworkMarking.over` sums the totals,
+  so a total the agent worked out itself can never disagree with the questions.
+- `homework_questions` returns the questions as readable text, never Typst: an agent asked to mark
+  a hand-in reads the same wording a tutor does.
+- `archive_student`, `unarchive_student` and `delete_student` are the same `sidereal_core.students`
+  calls the app's endpoints make.
+- `retry_job` starts a failed job's input as a new job and runs it to completion, like the other
+  generation tools.
+- A tool that deletes a `directus_users` row reads `whoami` first, so that user's uploads pass to
+  the caller rather than being left with no owner.
 - `extract_paper` runs its job to completion like the other generation tools; `render_paper`,
   `paper_worksheet` and `extract_paper_mark_scheme` call the same `sidereal_generate.papers`
   functions the app's endpoints do.

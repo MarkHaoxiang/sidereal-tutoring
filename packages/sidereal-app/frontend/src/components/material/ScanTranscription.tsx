@@ -2,6 +2,7 @@ import { FragmentView } from "@/components/papers/FragmentView";
 import { structureQuestions } from "@/components/papers/draft";
 import { ConfidenceChip, Markdown } from "@/components/ui";
 import { cx } from "@/lib/cx";
+import { plainText } from "@/lib/typstText";
 import type { RenderBody } from "@/lib/queries";
 import type { CanonicalPaper, Transcription } from "@/lib/schema";
 
@@ -41,7 +42,7 @@ export function ScanTranscription({ text, transcription, structure, empty }: Sca
               label={`question ${question.number}`}
               empty="This question is not in the paper."
             />
-            <Markdown transcribed>{question.text}</Markdown>
+            <Markdown transcribed>{plainText(question.text)}</Markdown>
             {question.note ? <p className={styles.note}>{question.note}</p> : null}
           </article>
         ))}
@@ -49,5 +50,5 @@ export function ScanTranscription({ text, transcription, structure, empty }: Sca
     );
   }
 
-  return text ? <Markdown transcribed>{text}</Markdown> : <p className={styles.quiet}>{empty}</p>;
+  return text ? <Markdown transcribed>{plainText(text)}</Markdown> : <p className={styles.quiet}>{empty}</p>;
 }

@@ -6,7 +6,13 @@ import { TopicFilter } from "@/components/topics/TopicFilter";
 import { Button, Dialog, Field, Input, Spinner, StatusChip, Textarea } from "@/components/ui";
 import { apiError } from "@/lib/api";
 import { formatDate, formatDateTime } from "@/lib/format";
-import { useCreateJob, useDocuments, useLibraryDocuments, useSessions } from "@/lib/queries";
+import {
+  useCreateJob,
+  useDocuments,
+  useHomeworkList,
+  useLibraryDocuments,
+  useSessions,
+} from "@/lib/queries";
 import type { DocumentListItem } from "@/lib/queries";
 import type { HomeworkFormat } from "@/lib/schema";
 
@@ -42,9 +48,12 @@ export function GenerateDialog({ open, onClose, studentId, kind, onStarted }: Ge
     sort: "-scheduled_at",
     limit: 1,
   });
+  // Feedback is about what the student handed in, so those rows are offered to it alone.
+  const handIns = useHomeworkList({ studentId, status: ["submitted", "marked"] }, open && copy.hasHomework);
   const createJob = useCreateJob();
 
   const [selected, setSelected] = useState<string[]>([]);
+  const [homework, setHomework] = useState<string[]>([]);
   const [instructions, setInstructions] = useState("");
   const [format, setFormat] = useState<HomeworkFormat>("markdown");
   const [periodStart, setPeriodStart] = useState("");
@@ -84,6 +93,7 @@ export function GenerateDialog({ open, onClose, studentId, kind, onStarted }: Ge
 
   const close = () => {
     setSelected([]);
+    setHomework([]);
     setInstructions("");
     setFormat("markdown");
     setPeriodStart("");
@@ -100,9 +110,18 @@ export function GenerateDialog({ open, onClose, studentId, kind, onStarted }: Ge
     setSelected((current) => (current.includes(id) ? current.filter((entry) => entry !== id) : [...current, id]));
   };
 
+  const toggleHomework = (id: string) => {
+    setError(null);
+    setHomework((current) => (current.includes(id) ? current.filter((entry) => entry !== id) : [...current, id]));
+  };
+
   const submit = async () => {
-    if (selected.length === 0) {
-      setError("Choose at least one piece of material to work from.");
+    if (selected.length === 0 && homework.length === 0) {
+      setError(
+        copy.hasHomework
+          ? "Choose the homework this is about, or some material to work from."
+          : "Choose at least one piece of material to work from."
+      );
       return;
     }
     if (periodError) {
@@ -113,6 +132,7 @@ export function GenerateDialog({ open, onClose, studentId, kind, onStarted }: Ge
         kind,
         student_id: studentId,
         document_ids: selected,
+        ...(copy.hasHomework ? { homework_ids: homework } : {}),
         instructions: instructions.trim() || null,
         format: copy.hasFormat ? format : "markdown",
         ...(copy.hasPeriod ? { period_start: periodStart || null, period_end: periodEnd || null } : {}),
@@ -148,6 +168,37 @@ export function GenerateDialog({ open, onClose, studentId, kind, onStarted }: Ge
         </>
       }
     >
+      {copy.hasHomework ? (
+        <Field label="About this homework" help="Its questions, what was handed in, and the marks.">
+          {handIns.isLoading ? (
+            <p className={styles.status}>
+              <Spinner /> Loading homework…
+            </p>
+          ) : null}
+          {handIns.data && handIns.data.length === 0 ? (
+            <p className={styles.status}>Nothing handed in yet.</p>
+          ) : null}
+          {handIns.data && handIns.data.length > 0 ? (
+            <div className={styles.material}>
+              {handIns.data.map((row) => (
+                <label key={row.id} className={styles.choice}>
+                  <input
+                    type="checkbox"
+                    checked={homework.includes(row.id)}
+                    onChange={() => {
+                      toggleHomework(row.id);
+                    }}
+                  />
+                  <span className={styles.choiceTitle}>{row.title ?? "Untitled homework"}</span>
+                  <StatusChip status={row.status} />
+                  <span className={styles.choiceDate}>{formatDateTime(row.date_created)}</span>
+                </label>
+              ))}
+            </div>
+          ) : null}
+        </Field>
+      ) : null}
+
       <Field
         label="Material to work from"
         help={lastLessonId ? "The last lesson's material is ticked." : undefined}

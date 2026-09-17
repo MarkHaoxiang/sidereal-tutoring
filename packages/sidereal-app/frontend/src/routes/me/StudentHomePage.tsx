@@ -3,10 +3,10 @@ import { Link } from "react-router-dom";
 
 import { formatDayHeading, formatDuration, formatTime } from "@/components/sessions/schedule";
 import { HomeworkRow } from "@/components/student/HomeworkRow";
-import { feedbackTitle } from "@/components/student/feedback";
 import { byDueDate } from "@/components/student/homework";
 import { SkeletonRows } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
+import { feedbackTitle } from "@/lib/feedback";
 import { formatDate } from "@/lib/format";
 import { useMyFeedbackList, useMyHomeworkList, useMyPlans, useMySessions, useMyStudent } from "@/lib/queries";
 
@@ -78,7 +78,7 @@ export function StudentHomePage() {
             {recentFeedback.map((row) => (
               <li key={row.id} className={styles.feedbackRow}>
                 <Link to={`/me/feedback/${row.id}`} className={styles.feedbackLink}>
-                  {feedbackTitle(row.content)}
+                  {feedbackTitle(row)}
                 </Link>
                 <span className={styles.status}>{formatDate(row.date_created)}</span>
               </li>

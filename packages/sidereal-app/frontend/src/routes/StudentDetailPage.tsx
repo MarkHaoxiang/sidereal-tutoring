@@ -1,5 +1,5 @@
 import { useId, useMemo, useState } from "react";
-import { Outlet, useParams } from "react-router-dom";
+import { Outlet, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
 import { StudentDialog } from "@/components/students/StudentDialog";
@@ -10,11 +10,13 @@ import { callerRole, useAuth } from "@/lib/auth-context";
 import {
   relationId,
   tutorName,
+  useArchiveStudent,
+  useDeleteStudent,
   useReassignStudent,
   useStudent,
   useStudentLogin,
   useTutorUsers,
-  useUpdateStudent,
+  useUnarchiveStudent,
 } from "@/lib/queries";
 
 import pageStyles from "./page.module.css";
@@ -24,13 +26,17 @@ const PANEL_ID = "student-sections";
 
 export function StudentDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { data: student, isLoading, isError } = useStudent(id);
-  const updateStudent = useUpdateStudent();
+  const archive = useArchiveStudent();
+  const unarchive = useUnarchiveStudent();
+  const removeStudent = useDeleteStudent();
   // `user` comes back as an id; its email is a `directus_users` read of its own.
   const loginUserId = typeof student?.user === "string" ? student.user : null;
   const login = useStudentLogin(loginUserId);
   const [editOpen, setEditOpen] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   // Whose student this is, is the admin's to change: `students.tutor` is what every
   // tutor-side row filter hangs off.
@@ -70,12 +76,23 @@ export function StudentDetailPage() {
 
   const toggleArchive = async () => {
     try {
-      await updateStudent.mutateAsync({ id, patch: { status: isArchived ? "active" : "archived" } });
+      await (isArchived ? unarchive : archive).mutateAsync(id);
       toast.success(isArchived ? "Unarchived" : "Archived");
     } catch (error) {
       toast.error(apiError(error));
       throw error;
     }
+  };
+
+  const deleteStudent = async () => {
+    try {
+      await removeStudent.mutateAsync(id);
+    } catch (error) {
+      toast.error(apiError(error));
+      throw error;
+    }
+    toast.success("Deleted");
+    void navigate("/students");
   };
 
   return (
@@ -107,6 +124,14 @@ export function StudentDetailPage() {
                 }}
               >
                 {isArchived ? "Unarchive" : "Archive"}
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setConfirmDelete(true);
+                }}
+              >
+                Delete
               </Button>
             </>
           }
@@ -176,12 +201,24 @@ export function StudentDetailPage() {
         title={isArchived ? "Bring this student back?" : "Archive this student?"}
         message={
           isArchived
-            ? "They return to your active list."
-            : "They leave your active list. Sessions, material and work are all kept, and you can bring them back at any time."
+            ? "They return to your active list and can sign in again."
+            : "They leave your active list and cannot sign in. Sessions, material and work are all kept, and you can bring them back at any time."
         }
         confirmLabel={isArchived ? "Unarchive" : "Archive"}
         danger={!isArchived}
         onConfirm={toggleArchive}
+      />
+
+      <ConfirmDialog
+        open={confirmDelete}
+        onClose={() => {
+          setConfirmDelete(false);
+        }}
+        title={student ? `Delete ${student.name}?` : "Delete this student?"}
+        message="Their sign-in, sessions, homework, feedback and study plans all go, for good. Material filed against them joins the library, and the generation history is kept."
+        confirmLabel="Delete"
+        danger
+        onConfirm={deleteStudent}
       />
     </div>
   );

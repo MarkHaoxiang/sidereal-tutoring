@@ -48,9 +48,12 @@
   text-decoration: none;
 }
 
-@media (max-width: 40rem) {
-  .frame {
-    height: min(60vh, 32rem);
-    min-height: 16rem;
-  }
+/* No embed at phone width: the two controls stand in for it, full width and thumb-sized. */
+.phone {
+  gap: 0.5rem;
+}
+
+.open {
+  justify-content: center;
+  padding-block: 0.75rem;
 }

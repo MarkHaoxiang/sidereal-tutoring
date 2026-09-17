@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Link } from "react-router-dom";
 
 import { Button, PageHeader, SkeletonRows } from "@/components/ui";
 import { cx } from "@/lib/cx";
@@ -50,11 +51,11 @@ function Tile({
 export function AdminDashboardPage() {
   const { data: health, isLoading, isError, isFetching, refetch } = useAdminHealth();
 
-  const counts: { label: string; value: number }[] = [
-    { label: "Tutors", value: health?.counts.tutors ?? 0 },
-    { label: "Students", value: health?.counts.students ?? 0 },
-    { label: "Material", value: health?.counts.documents ?? 0 },
-    { label: "Jobs running", value: health?.counts.jobs_running ?? 0 },
+  const counts: { label: string; value: number; to: string }[] = [
+    { label: "Tutors", value: health?.counts.tutors ?? 0, to: "/admin/tutors" },
+    { label: "Students", value: health?.counts.students ?? 0, to: "/students" },
+    { label: "Material", value: health?.counts.documents ?? 0, to: "/library" },
+    { label: "Jobs running", value: health?.counts.jobs_running ?? 0, to: "/admin/jobs" },
   ];
 
   return (
@@ -113,8 +114,10 @@ export function AdminDashboardPage() {
           <dl className={styles.counts}>
             {counts.map((count) => (
               <div key={count.label} className={styles.count}>
-                <dd className={styles.countValue}>{count.value}</dd>
-                <dt className={styles.countLabel}>{count.label}</dt>
+                <Link to={count.to} className={styles.countLink}>
+                  <dd className={styles.countValue}>{count.value}</dd>
+                  <dt className={styles.countLabel}>{count.label}</dt>
+                </Link>
               </div>
             ))}
           </dl>

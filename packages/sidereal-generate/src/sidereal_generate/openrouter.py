@@ -49,7 +49,7 @@ from sidereal_generate.prompts import (
     PLAN_TOOL,
     render,
 )
-from sidereal_generate.settings import ReasoningEffort, generate_settings
+from sidereal_generate.settings import TRUNCATION_FACTOR, ReasoningEffort, generate_settings
 from sidereal_generate.usage import UsageTally
 
 logger = logging.getLogger(__name__)
@@ -99,6 +99,10 @@ class OpenRouterCall:
     def model(self) -> str:
         return self._model
 
+    @property
+    def max_tokens(self) -> int:
+        return self._max_tokens
+
     def _extra(self) -> dict[str, Any]:
         """Price every call, and say how much thinking it is worth."""
         if self._reasoning is None:
@@ -115,11 +119,13 @@ class OpenRouterCall:
         schema: dict[str, Any],
         images: Sequence[bytes] = (),
         usage: UsageTally | None = None,
+        budget: int | None = None,
     ) -> object:
         messages = _messages(system, prompt, images)
+        budget = budget or self._max_tokens
         if self._structured:
             try:
-                return await self._json_schema(messages, name, schema, usage, len(images))
+                return await self._json_schema(messages, name, schema, usage, len(images), budget)
             except (BadRequestError, NotFoundError) as exc:
                 logger.warning(
                     "%s refused strict mode (response_format json_schema) for %s, "
@@ -129,7 +135,9 @@ class OpenRouterCall:
                     exc,
                 )
                 self._structured = False
-        return await self._tool_call(messages, name, description, schema, usage, len(images))
+        return await self._tool_call(
+            messages, name, description, schema, usage, len(images), budget
+        )
 
     async def _json_schema(
         self,
@@ -138,10 +146,11 @@ class OpenRouterCall:
         schema: dict[str, Any],
         usage: UsageTally | None = None,
         images: int = 0,
+        budget: int | None = None,
     ) -> object:
         completion = await self._openai().chat.completions.create(
             model=self._model,
-            max_tokens=self._max_tokens,
+            max_tokens=budget or self._max_tokens,
             timeout=REQUEST_TIMEOUT,
             messages=messages,
             response_format={
@@ -165,10 +174,11 @@ class OpenRouterCall:
         schema: dict[str, Any],
         usage: UsageTally | None = None,
         images: int = 0,
+        budget: int | None = None,
     ) -> object:
         completion = await self._openai().chat.completions.create(
             model=self._model,
-            max_tokens=self._max_tokens,
+            max_tokens=budget or self._max_tokens,
             timeout=REQUEST_TIMEOUT,
             messages=messages,
             tools=[
@@ -335,18 +345,37 @@ class OpenRouterGenerator[OutputT: BaseModel]:
     async def generate(
         self, request: GenerationRequest, *, usage: UsageTally | None = None
     ) -> OutputT:
-        payload = await self._call.payload(
-            system=self.system(request),
-            prompt=render(request),
-            name=self._tool_name,
-            description=f"Return the {self._output_model.__name__} for this request.",
-            schema=strict_schema(self._output_model),
-            usage=usage,
-        )
+        payload = await self._asked(request, usage, None)
         try:
             return self._output_model.model_validate(unstringify(payload, self._output_model))
         except ValidationError as exc:
             raise GenerationError(f"{self._tool_name} returned an unusable payload: {exc}") from exc
+
+    async def _asked(
+        self, request: GenerationRequest, usage: UsageTally | None, budget: int | None
+    ) -> object:
+        """A cut-off answer buys nothing, so it is asked for once more with twice the budget."""
+        try:
+            return await self._call.payload(
+                system=self.system(request),
+                prompt=render(request),
+                name=self._tool_name,
+                description=f"Return the {self._output_model.__name__} for this request.",
+                schema=strict_schema(self._output_model),
+                usage=usage,
+                budget=budget,
+            )
+        except GenerationTruncatedError:
+            if budget is not None:
+                raise
+            doubled = self._call.max_tokens * TRUNCATION_FACTOR
+            logger.warning(
+                "%s was cut off writing %s; asking again with %d tokens",
+                self._call.model,
+                self._tool_name,
+                doubled,
+            )
+            return await self._asked(request, usage, doubled)
 
 
 class OpenRouterHomeworkGenerator(OpenRouterGenerator[HomeworkOutput]):
@@ -395,7 +424,13 @@ def plan_generator(
     http_client: httpx2.AsyncClient | None = None,
 ) -> PlanGenerator:
     return OpenRouterGenerator(
-        PlanOutput, PLAN_PROMPT, PLAN_TOOL, client=client, model=model, http_client=http_client
+        PlanOutput,
+        PLAN_PROMPT,
+        PLAN_TOOL,
+        client=client,
+        model=model,
+        max_tokens=generate_settings().plan_max_tokens,
+        http_client=http_client,
     )
 
 

@@ -173,3 +173,11 @@ export function tutorName(tutor: { first_name?: string | null; last_name?: strin
   const name = [tutor.first_name, tutor.last_name].filter(Boolean).join(" ").trim();
   return name || tutor.email || "Unnamed tutor";
 }
+
+// The address `scripts/directus-bootstrap.sh` gives the account the agent surface signs in as.
+// It holds the Tutor role and so comes back with the tutors, but it is not a person.
+const SERVICE_ACCOUNT = "agent@sidereal.example.com";
+
+export function isServiceAccount(tutor: { email?: string | null }): boolean {
+  return (tutor.email ?? "").toLowerCase() === SERVICE_ACCOUNT;
+}

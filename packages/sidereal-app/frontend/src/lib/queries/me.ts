@@ -16,6 +16,7 @@ export const meKeys = {
   homeworkDetail: (id: string) => ["me", "homework", id] as const,
   feedback: ["me", "feedback"] as const,
   feedbackDetail: (id: string) => ["me", "feedback", id] as const,
+  feedbackForHomework: (homeworkId: string) => ["me", "feedback", "homework", homeworkId] as const,
   plans: ["me", "plans"] as const,
   sessions: ["me", "sessions"] as const,
 };
@@ -61,6 +62,7 @@ function fetchMyHomework(id: string) {
         "submission",
         "submission_transcription",
         "submitted_at",
+        "marking",
         "date_created",
         "pdf",
         "submission_file",
@@ -74,7 +76,8 @@ function fetchMyHomework(id: string) {
 function fetchMyFeedbackList() {
   return directus.request(
     readItems("feedback", {
-      fields: ["id", "content", "status", "date_created"],
+      // Feedback has no title; the homework it is about is what names it in a list.
+      fields: ["id", "content", "status", "date_created", { homework: ["id", "title"] }],
       filter: { status: { _eq: "sent" } },
       sort: ["-date_created"],
       limit: -1,
@@ -85,7 +88,19 @@ function fetchMyFeedbackList() {
 function fetchMyFeedback(id: string) {
   return directus.request(
     readItem("feedback", id, {
+      fields: ["id", "content", "status", "date_created", { homework: ["id", "title"] }],
+    })
+  );
+}
+
+/** The feedback the student's tutor wrote about one piece of homework. */
+function fetchMyFeedbackForHomework(homeworkId: string) {
+  return directus.request(
+    readItems("feedback", {
       fields: ["id", "content", "status", "date_created"],
+      filter: { status: { _eq: "sent" }, homework: { _eq: homeworkId } },
+      sort: ["-date_created"],
+      limit: -1,
     })
   );
 }
@@ -144,6 +159,14 @@ export function useMyFeedback(id: string | undefined) {
     queryKey: meKeys.feedbackDetail(id ?? ""),
     queryFn: () => fetchMyFeedback(id ?? ""),
     enabled: Boolean(id),
+  });
+}
+
+export function useMyFeedbackForHomework(homeworkId: string | undefined) {
+  return useQuery({
+    queryKey: meKeys.feedbackForHomework(homeworkId ?? ""),
+    queryFn: () => fetchMyFeedbackForHomework(homeworkId ?? ""),
+    enabled: Boolean(homeworkId),
   });
 }
 

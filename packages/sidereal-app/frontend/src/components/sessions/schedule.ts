@@ -1,6 +1,8 @@
 // Sessions are the one place the app reads and writes a wall-clock time, so the
 // conversions between an ISO timestamp and the tutor's own clock live together here.
 
+import { relativeDay } from "@/lib/format";
+
 function pad(value: number): string {
   return String(value).padStart(2, "0");
 }
@@ -44,21 +46,7 @@ export function dayKey(iso: string | null): string {
 }
 
 export function formatDayHeading(iso: string | null): string {
-  const at = parse(iso);
-  if (!at) {
-    return "No date set";
-  }
-  const today = new Date();
-  const key = dayKey(iso);
-  if (key === dayKey(today.toISOString())) {
-    return "Today";
-  }
-  const tomorrow = new Date(today.getTime());
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  if (key === dayKey(tomorrow.toISOString())) {
-    return "Tomorrow";
-  }
-  return at.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
+  return relativeDay(iso);
 }
 
 export function formatTime(iso: string | null): string {

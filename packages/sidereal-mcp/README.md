@@ -24,13 +24,15 @@ nothing until students are assigned to it.
 |---|---|
 | `list_students`, `get_student`, `whoami` | Who the work is for, and who is asking. |
 | `create_student_login`, `reset_student_password`, `remove_student_login` | A student's way in. |
+| `archive_student`, `unarchive_student`, `delete_student` | Filing a student away suspends their login; deleting takes the login, their sessions, homework, feedback and plans, and leaves their material in the library. |
+| `homework_questions`, `mark_homework` | A hand-in's questions as readable text, and the marks question by question. Marking takes the row to `marked`. |
 | `list_documents`, `ingest_source` | Source material. |
 | `scan_pages`, `transcribe_submission` | Handwritten pages transcribed into a document (`paper_id` maps the working to that paper's questions), and a student's hand-in read beside their homework. |
-| `generate_homework`, `generate_feedback`, `generate_plan` | Runs the job to completion and returns it. `generate_homework` takes `format`: `markdown` or `typst`. |
-| `extract_paper`, `render_paper`, `paper_worksheet` | A document read into a paper (with `mark_scheme_id` when its mark scheme is a second document), its PDFs made again, and some of its questions as one worksheet. |
+| `generate_homework`, `generate_feedback`, `generate_plan` | Runs the job to completion and returns it. `generate_homework` takes `format`: `markdown` or `typst`; `generate_feedback` takes `homework_ids`, the hand-ins the feedback is about. |
+| `extract_paper`, `render_paper`, `paper_worksheet` | A document read into a paper (with `mark_scheme_id` when its mark scheme is a second document), its PDFs made again, and some of its questions as one worksheet — which, given a `student_id`, is also set as a draft homework. |
 | `preview_typst` | Typst source to one SVG per page. |
 | `compile_homework` | Compiles a Typst row's `content` again, replacing its PDF or setting `compile_error`. |
-| `list_generation_jobs`, `update_generation_job` | The history, and a tutor's verdict on it. |
+| `list_generation_jobs`, `retry_job`, `update_generation_job` | The history, running a failed job's input again, and a tutor's verdict on it. |
 | `list_tutors`, `create_tutor`, `reset_tutor_password`, `set_tutor_status`, `remove_tutor` | The practice's tutors. Needs an administrator's token. |
 | `list_jobs`, `admin_health` | Jobs across every tutor, and whether the services behind them are up. |
 

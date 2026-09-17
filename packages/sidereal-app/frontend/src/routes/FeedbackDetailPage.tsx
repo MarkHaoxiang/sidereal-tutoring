@@ -6,6 +6,7 @@ import { ArtefactDetail } from "@/components/artefacts/ArtefactDetail";
 import { FEEDBACK_NEXT } from "@/components/artefacts/transitions";
 import { Spinner, StatusChip } from "@/components/ui";
 import { apiError } from "@/lib/api";
+import { feedbackHomework } from "@/lib/feedback";
 import { formatDateTime } from "@/lib/format";
 import { useDeleteFeedback, useFeedback, useUpdateFeedback } from "@/lib/queries";
 
@@ -37,16 +38,18 @@ export function FeedbackDetailPage() {
   }
 
   const next = FEEDBACK_NEXT[feedback.status];
+  const about = feedbackHomework(feedback.homework);
 
   return (
     <ArtefactDetail
       backTo={backTo}
       backLabel="Feedback"
-      title={`Feedback for ${feedback.student?.name ?? "this student"}`}
+      title={about ? about.title : `Feedback for ${feedback.student?.name ?? "this student"}`}
       meta={
         <>
           <StatusChip status={feedback.status} />
           <span>{formatDateTime(feedback.date_created)}</span>
+          {about ? <Link to={`/students/${id ?? ""}/homework/${about.id}`}>Homework</Link> : null}
         </>
       }
       generatedFrom={feedback.generated_from}

@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import httpx
 import pytest
 from sidereal_core.directus import DirectusClient, DirectusUnavailableError
 from sidereal_core.logins import (
+    AccountStatus,
     CallerRole,
     InvalidEmailError,
     LoginExistsError,
@@ -14,6 +15,7 @@ from sidereal_core.logins import (
     LoginRefusedError,
     StudentRoleMissingError,
     WeakPasswordError,
+    account_status,
     create_login,
     remove_login,
     reset_password,
@@ -235,3 +237,29 @@ async def test_directus_being_unreachable_stays_a_directus_failure() -> None:
     async with fake.client() as client:
         with pytest.raises(DirectusUnavailableError):
             await create_login(client, student_id, EMAIL, PASSWORD)
+
+
+async def test_removing_a_login_releases_the_uploads_that_would_pin_it() -> None:
+    fake = FakeDirectus()
+    login = fake.seed(Collection.DIRECTUS_USERS, {"email": "leo@example.test"})
+    row = fake.seed(Collection.STUDENTS, {"name": "Leo", "user": login["id"]})
+    fake.register_file("working.jpg", b"jpeg", uploaded_by=login["id"])
+    tutor = uuid4()
+
+    async with fake.client() as client:
+        student = await remove_login(client, UUID(row["id"]), uploads_to=tutor)
+
+    assert student.user is None
+    assert not fake.rows(Collection.DIRECTUS_USERS)
+    assert [file["uploaded_by"] for file, _ in fake.files.values()] == [str(tutor)]
+
+
+async def test_an_account_that_may_not_sign_in_says_so_without_saying_more() -> None:
+    fake = FakeDirectus()
+    fake.seed(Collection.DIRECTUS_USERS, {"email": "priya@example.test", "status": "suspended"})
+    fake.seed(Collection.DIRECTUS_USERS, {"email": "amara@example.test", "status": "active"})
+
+    async with fake.client() as client:
+        assert await account_status(client, "priya@example.test") is AccountStatus.SUSPENDED
+        assert await account_status(client, "amara@example.test") is AccountStatus.ACTIVE
+        assert await account_status(client, "nobody@example.test") is AccountStatus.UNKNOWN

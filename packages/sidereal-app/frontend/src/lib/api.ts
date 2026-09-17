@@ -116,6 +116,21 @@ export async function createDocument(body: CreateDocumentBody): Promise<ApiDocum
   return unwrap(await api.POST("/api/documents", { body }));
 }
 
+export type AccountStatus = components["schemas"]["AccountStatus"];
+
+/**
+ * Whether an address may sign in at all, asked only after a refusal. It answers without a
+ * token, and a call that fails for any reason is "unknown" — the generic message then stands.
+ */
+export async function accountStatus(email: string): Promise<AccountStatus> {
+  try {
+    const result = await api.POST("/api/auth/status", { body: { email } });
+    return result.data?.status ?? "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
 export async function processDocument(id: string): Promise<ApiDocument> {
   return unwrap(
     await api.POST("/api/documents/{document_id}/process", {

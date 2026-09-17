@@ -9,10 +9,12 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict
 
 from sidereal_core.directus import DirectusClient, DirectusClientError, DirectusError
+from sidereal_core.files import release_uploads
 from sidereal_core.models import Collection, DirectusUser, Student
 from sidereal_core.students import StudentNotVisibleError, visible_student
 
 STUDENT_ROLE = "Student"
+ACTIVE_STATUS = "active"
 MIN_PASSWORD_LENGTH = 8
 # What Directus answers when a rule refuses the write or its validation fails.
 REFUSED = (400, 403)
@@ -22,6 +24,14 @@ class CallerRole(StrEnum):
     ADMIN = "admin"
     TUTOR = "tutor"
     STUDENT = "student"
+
+
+class AccountStatus(StrEnum):
+    """As much as anyone refused at sign-in is told about why."""
+
+    ACTIVE = "active"
+    SUSPENDED = "suspended"
+    UNKNOWN = "unknown"
 
 
 class Identity(BaseModel):
@@ -74,6 +84,20 @@ class LoginRefusedError(StudentLoginError):
     def __init__(self, status: int, message: str) -> None:
         self.status = status
         super().__init__(message)
+
+
+async def account_status(client: DirectusClient, email: str) -> AccountStatus:
+    """Whether an account may sign in at all.
+
+    Directus answers `INVALID_CREDENTIALS` for a suspended account and for a wrong password
+    alike, so nothing else can tell someone which of the two they are looking at.
+    """
+    users = await client.list_users(filter={"email": {"_eq": email}}, limit=1)
+    if not users:
+        return AccountStatus.UNKNOWN
+    if users[0].status == ACTIVE_STATUS:
+        return AccountStatus.ACTIVE
+    return AccountStatus.SUSPENDED
 
 
 async def student_for_user(client: DirectusClient, user_id: UUID) -> Student | None:
@@ -141,10 +165,15 @@ async def reset_password(client: DirectusClient, student_id: UUID, password: str
     return _login(user, "")
 
 
-async def remove_login(client: DirectusClient, student_id: UUID) -> Student:
+async def remove_login(
+    client: DirectusClient, student_id: UUID, *, uploads_to: UUID | None = None
+) -> Student:
     """Delete the login. The student's work stays; only the way in goes."""
     user_id = await _login_of(client, student_id)
     try:
+        # Their hand-in photos are the caller's to keep: deleting the user would leave them
+        # with no `uploaded_by`, and a tutor's file rules are that column.
+        await release_uploads(client, user_id, to=uploads_to)
         await client.delete_user(user_id)
         return await client.update_item(Collection.STUDENTS, Student, student_id, {"user": None})
     except DirectusClientError as exc:
