@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 from sidereal_core.canonical import CanonicalPaper
-from sidereal_generate.base import strict_schema
+from sidereal_generate.base import GenerationError, strict_schema
 from sidereal_generate.chunks import (
     BatchQuestion,
     BlockBatch,
@@ -19,6 +19,8 @@ from sidereal_generate.chunks import (
     merge,
     question_batches,
     question_runs,
+    reconciled,
+    wordless,
 )
 
 # The provider refused a 6,521-byte grammar and compiled a 4,101-byte one. Every schema an
@@ -162,7 +164,7 @@ def test_a_block_naming_a_node_the_paper_has_not_is_logged_and_dropped(
     ]
 
     with caplog.at_level(logging.WARNING):
-        paper = merge(skeleton, {}, blocks)
+        paper = merge(skeleton, {"1": BatchQuestion(number="1", stem="A question.")}, blocks)
 
     assert paper.questions[0].blocks == ()
     assert "a block names question 9 part b" in caplog.text
@@ -180,3 +182,135 @@ def test_a_question_no_batch_was_asked_for_is_logged_and_dropped(
 
     assert [question.number for question in paper.questions] == ["1"]
     assert "a batch returned question 9" in caplog.text
+
+
+def part(label: str, text: str) -> dict[str, Any]:
+    return {"label": label, "text": text}
+
+
+def test_a_batch_question_takes_the_place_of_the_stubs_the_shape_split_it_into(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """AQA prints `01.1`; a shape that read those as questions is corrected by what was read."""
+    skeleton = shape(
+        sections=[
+            {"title": "Section A", "questions": [stub("01.1"), stub("01.2"), stub("01.3")]},
+            {"title": "Section B", "questions": [stub("02")]},
+        ]
+    )
+    answered = {
+        "01": BatchQuestion.model_validate(
+            {
+                "number": "01",
+                "stem": "A trolley on a ramp.",
+                "parts": [part("1", "State the force."), part("2", "Find it."), part("3", "Why?")],
+            }
+        ),
+        "02": BatchQuestion(number="02", stem="A second question."),
+    }
+
+    with caplog.at_level(logging.WARNING):
+        paper = merge(skeleton, answered)
+
+    assert paper.questions == ()
+    assert [question.number for question in paper.sections[0].questions] == ["01"]
+    assert paper.sections[0].title == "Section A"
+    assert paper.sections[0].questions[0].stem == "A trolley on a ramp."
+    assert [p.label for p in paper.sections[0].questions[0].parts] == ["1", "2", "3"]
+    assert [question.number for question in paper.sections[1].questions] == ["02"]
+    assert "the shape split question 01 into 01.1, 01.2, 01.3" in caplog.text
+    # No stub's one-line summary survives as a question's wording.
+    assert "About 01" not in paper.model_dump_json()
+
+
+def test_a_paper_really_numbered_one_point_one_at_the_top_level_is_left_alone() -> None:
+    """Nothing is renumbered without a batch question to key the reconciliation on."""
+    skeleton = shape(questions=[stub("1.1"), stub("1.2")])
+    answered = {
+        "1.1": BatchQuestion(number="1.1", stem="The first."),
+        "1.2": BatchQuestion(number="1.2", stem="The second."),
+    }
+
+    paper = merge(skeleton, answered)
+
+    assert [question.number for question in paper.questions] == ["1.1", "1.2"]
+    assert [question.stem for question in paper.questions] == ["The first.", "The second."]
+
+
+def test_a_question_ten_is_no_part_of_a_question_one() -> None:
+    """A suffix that is not a separator is another question's number, not a part label."""
+    skeleton = shape(questions=[stub("10"), stub("11")])
+    answered = {
+        "1": BatchQuestion(number="1"),
+        "10": BatchQuestion(number="10", stem="Ten."),
+        "11": BatchQuestion(number="11", stem="Eleven."),
+    }
+
+    paper = merge(skeleton, answered)
+
+    assert [question.number for question in paper.questions] == ["10", "11"]
+
+
+def test_a_question_left_untranscribed_fails_rather_than_keeping_its_summary() -> None:
+    skeleton = shape(questions=[stub("1"), stub("2"), stub("3")])
+
+    with pytest.raises(GenerationError) as raised:
+        merge(skeleton, {"1": BatchQuestion(number="1", stem="The first.")})
+
+    assert str(raised.value) == (
+        "No call transcribed question 2, 3, so the paper would carry a one-line summary where "
+        "its wording belongs. Try the extraction again."
+    )
+
+
+def test_a_folded_question_keeps_the_earliest_page_and_the_material_of_its_stubs() -> None:
+    skeleton = shape(
+        questions=[stub("05.1", page=7), stub("05.2", page=8, material=True)],
+    )
+    answered = {"05": BatchQuestion(number="05", stem="Read the extract.")}
+
+    folded = question_batches(reconciled(skeleton, answered), page_count=9)
+
+    assert folded[0].numbers == ("05",)
+    assert folded[0].pages == (7, 8, 9)
+    assert block_batches(reconciled(skeleton, answered), page_count=9)[0].numbers == ("05",)
+
+
+def figure_request(**overrides: Any) -> dict[str, Any]:
+    return {
+        "page": 1,
+        "bbox": [0.1, 0.1, 0.8, 0.6],
+        "caption": None,
+        "question_number": "1",
+        "part_label": None,
+        **overrides,
+    }
+
+
+def test_a_node_a_figure_was_asked_for_and_given_no_wording_is_named() -> None:
+    batch = QuestionBatch.model_validate(
+        {
+            "figures": [figure_request(), figure_request(question_number="2", part_label="b")],
+            "questions": [
+                {"number": "1", "stem": "  "},
+                {"number": "2", "parts": [part("a", "Say why."), part("b", "")]},
+            ],
+        }
+    )
+
+    assert wordless(batch) == ("question 1", "question 2 part b")
+
+
+def test_a_node_that_carries_its_wording_is_not_named() -> None:
+    """A question whose parts speak for it has its wording, and a figure is not its only text."""
+    batch = QuestionBatch.model_validate(
+        {
+            "figures": [figure_request(), figure_request(question_number="2")],
+            "questions": [
+                {"number": "1", "stem": "The circuit shown."},
+                {"number": "2", "stem": None, "parts": [part("a", "Find the current.")]},
+            ],
+        }
+    )
+
+    assert wordless(batch) == ()

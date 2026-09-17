@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import io
+import json
 from collections.abc import Sequence
 from typing import Any
 from uuid import UUID
@@ -12,6 +13,7 @@ from anthropic import AsyncAnthropic
 from PIL import Image
 from pydantic import ValidationError
 from sidereal_core.canonical import (
+    MAX_FIGURE_WIDTH_MM,
     CanonicalCodeBlock,
     CanonicalFigureBlock,
     CanonicalPaper,
@@ -30,6 +32,7 @@ from sidereal_generate.models import FigureRequest, PaperExtraction
 from sidereal_generate.papers import PaperError, extract_paper, paper_worksheet, rerender_paper
 from sidereal_generate.typst_maths import normalise_model
 from sidereal_generate.usage import UsageTally
+from sidereal_ingest.pdf import figure as source_figure
 
 DOCUMENT_ID = UUID("22222222-2222-4222-8222-222222222222")
 PAGE_WIDTH = 595
@@ -485,3 +488,25 @@ def test_a_box_that_is_not_four_finite_numbers_is_refused() -> None:
         figure(bbox=[0.1, 0.2, 0.3])
     with pytest.raises(ValidationError, match="four finite numbers"):
         figure(bbox=[0.1, 0.2, 0.3, float("inf")])
+
+
+async def test_a_figure_block_carries_the_width_the_source_page_printed_it_at() -> None:
+    fake, typeset = seeded(image_pdf()), FakeTypeset()
+
+    paper_id = await extracted(fake, typeset, Extractor([figure()]), pages=True)
+
+    structure = fake.items[Collection.PAPERS][str(paper_id)]["structure"]
+    block = structure["questions"][0]["blocks"][0]
+    assert 1 <= block["width_mm"] <= MAX_FIGURE_WIDTH_MM
+    # Whether the crop was snapped to the drawn objects is provenance, not structure.
+    assert "snapped" not in json.dumps(structure)
+
+
+async def test_the_width_a_figure_prints_at_is_the_ingest_measurement() -> None:
+    fake, typeset = seeded(image_pdf()), FakeTypeset()
+    measured = source_figure(image_pdf(), page=1, bbox=(0.1, 0.1, 0.8, 0.6))
+
+    paper_id = await extracted(fake, typeset, Extractor([figure()]), pages=True)
+
+    structure = fake.items[Collection.PAPERS][str(paper_id)]["structure"]
+    assert structure["questions"][0]["blocks"][0]["width_mm"] == measured.width_mm

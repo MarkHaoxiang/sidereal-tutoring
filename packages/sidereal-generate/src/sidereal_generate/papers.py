@@ -10,6 +10,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 from sidereal_core.canonical import (
+    MAX_FIGURE_WIDTH_MM,
     CanonicalFigureBlock,
     CanonicalMarkScheme,
     CanonicalPaper,
@@ -39,7 +40,7 @@ from sidereal_core.typeset import (
     TypesetError,
 )
 from sidereal_ingest.base import IngestError
-from sidereal_ingest.pdf import crop_figure, needs_page_images, page_images, raster_pages
+from sidereal_ingest.pdf import Figure, figure, needs_page_images, page_images, raster_pages
 
 from sidereal_generate.base import GenerationError, PaperExtractor
 from sidereal_generate.models import FigureRequest, MarkSchemeExtraction, PaperExtraction
@@ -471,17 +472,33 @@ async def _figure(
 ) -> CanonicalFigureBlock | None:
     """A crop that fails is logged and dropped: the paper is the work, not the picture."""
     try:
-        jpeg = crop_figure(source, page=request.page, bbox=request.region)
+        cropped = figure(source, page=request.page, bbox=request.region)
     except IngestError as exc:
         logger.warning("figure %d could not be cropped: %s", number, exc)
         return None
+    logger.info(
+        "figure %d is %d mm wide on page %d, %s",
+        number,
+        cropped.width_mm,
+        request.page,
+        "snapped to the drawn objects it overlaps" if cropped.snapped else "boxed as asked for",
+    )
     uploaded = await client.upload_file(
         f"figure-{number}{FIGURE_SUFFIX}",
-        jpeg,
+        cropped.jpeg,
         FIGURE_TYPE,
         title=request.caption or f"Figure {number}",
     )
-    return CanonicalFigureBlock(asset=f"{uploaded.id}{FIGURE_SUFFIX}", caption=request.caption)
+    return CanonicalFigureBlock(
+        asset=f"{uploaded.id}{FIGURE_SUFFIX}",
+        caption=request.caption,
+        width_mm=_width(cropped),
+    )
+
+
+def _width(cropped: Figure) -> int | None:
+    """A measurement the text column has no room for is none: the figure takes the column."""
+    return cropped.width_mm if 1 <= cropped.width_mm <= MAX_FIGURE_WIDTH_MM else None
 
 
 def _with_figures(

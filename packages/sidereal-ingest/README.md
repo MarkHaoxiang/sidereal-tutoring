@@ -53,14 +53,15 @@ too much of a paper is drawn rather than written, send its pages to a vision cal
 crop a region the model points at back out of the source.
 
 ```python
-from sidereal_ingest import crop_figure, needs_page_images, page_count, page_images
+from sidereal_ingest import figure, needs_page_images, page_count, page_images
 
 if needs_page_images(content):
     images = page_images(content)  # first 40 pages; compare len() with page_count(content)
-    jpeg = crop_figure(content, page=4, bbox=(0.12, 0.30, 0.88, 0.62))
+    crop = figure(content, page=4, bbox=(0.12, 0.30, 0.88, 0.62))  # .jpeg, .width_mm, .snapped
 ```
 
-`bbox` is `(x0, y0, x1, y1)` in 0-1 from the page's top-left, as a vision model reports it.
+`bbox` is `(x0, y0, x1, y1)` in 0-1 from the page's top-left, as a vision model reports it; the
+crop is moved onto the objects drawn under it, so `.snapped` says whether any were found.
 
 ```sh
 uv run --package sidereal-ingest pytest packages/sidereal-ingest/tests

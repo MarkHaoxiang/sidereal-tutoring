@@ -66,8 +66,17 @@ Sits above sidereal-ingest. Imports core and ingest only.
   `ChunkedPaperExtractor` sits on one `BatchCaller.ask`, so the whole flow is driven in tests
   with no network. A backend supplies the caller and nothing else.
 - The shape is the paper's order of record: its question order, its sections and its passages are
-  what the merge rebuilds. A batch answer the shape did not ask for is logged and dropped, and a
-  question no batch transcribed keeps the one line the shape gave it.
+  what the merge rebuilds. A batch answer the shape did not ask for is logged and dropped.
+- A batch question the shape has not, whose unmatched stubs are that number plus a separated
+  suffix — `01` against `01.1`, `01.2` — takes their place and their section, and they are
+  retired. A stub is never renumbered without a transcription keyed to it: `10` is no part of `1`.
+- Reconciliation runs before the block call, so it asks under the numbering the transcription
+  settled on.
+- A skeleton summary is never stored as a paper's wording: a question left untranscribed after
+  reconciliation is a `GenerationError` naming it, not a one-line stem.
+- A question or part a batch asked a figure for and gave no wording is asked once more, once per
+  batch; a second wordless answer is a `GenerationError`. A figure never carries a question's
+  only text.
 - A sectioned paper's top-level `questions` stays empty. That is the paper's shape, not a loss.
 - The merged result is validated as a whole `CanonicalPaper`; one that will not validate is a
   `GenerationError` and no half paper is written.
@@ -106,6 +115,9 @@ Sits above sidereal-ingest. Imports core and ingest only.
   work.
 - A figure's asset name is `<file id>.jpg`: the service refuses a name that is not a file name,
   and the render step strips the suffix to fetch the bytes.
+- A `figure` block's `width_mm` is the width ingest measured on the source page, so a small
+  diagram does not print the width of the column. Whether the crop was snapped to the drawn
+  objects is logged and never stored: the canonical models carry no provenance.
 - Every render sends its figures' bytes beside the structure, inside the service's per-asset and
   total limits. A `figure` block whose bytes are not being sent is stripped from the copy that
   goes to render and kept in the stored structure, so a later render with room still prints it.

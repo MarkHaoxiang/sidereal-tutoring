@@ -37,6 +37,12 @@ Sits above sidereal-core. Imports core only.
 - A figure `bbox` is `(x0, y0, x1, y1)` normalised 0-1 from the page's top-left, and is cropped
   from a 200 dpi render of that one page. A box a model gives is clamped, unswapped and, if it
   has no area, refused.
+- A figure box snaps to the drawn objects it overlaps: images if any overlap, else paths.
+- A path crossing the page, whole or as a hairline, is furniture and is never a figure.
+- A box with nothing drawn under it keeps its own edges, less any band of text against them, and
+  is never trimmed to nothing.
+- A figure's `width_mm` is its width on the source page, floored so it cannot round to nothing
+  and capped at the text column.
 - A scan's pages are `document_pages` rows written in order when the row is filed; processing reads
   them back by `sort` and transcribes them in that order.
 - `documents.transcription` is `{questions: [...]}` and is written only when the scan names a paper.

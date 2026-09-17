@@ -30,9 +30,11 @@ from sidereal_generate.chunks import (
     merge,
     question_batches,
     question_runs,
+    reconciled,
     repaired,
     repaired_scheme,
     scheme_runs,
+    wordless,
 )
 from sidereal_generate.models import FigureRequest, MarkSchemeExtraction, PaperExtraction
 from sidereal_generate.prompts import (
@@ -40,6 +42,7 @@ from sidereal_generate.prompts import (
     BLOCK_BATCH_PAGES_PROMPT,
     BLOCK_BATCH_PROMPT,
     BLOCKS_TOOL,
+    FIGURE_WORDING,
     MARK_SCHEME_PROMPT,
     MARK_SCHEME_REPAIR,
     MARK_SCHEME_TOOL,
@@ -61,6 +64,10 @@ logger = logging.getLogger(__name__)
 
 UNREADABLE = "{named} could not be read after two tries. Try the extraction again."
 UNMERGEABLE = "The pieces this paper was read in did not fit together. Try the extraction again."
+NO_WORDING = (
+    "The wording of {named} was left inside a figure and did not come back when it was asked "
+    "for again. Try the extraction again."
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -120,6 +127,8 @@ class ChunkedPaperExtractor:
             usage=usage,
         )
         answered, figures = await self._questions(skeleton, text, sheets, marked, usage)
+        # Before the block call, so it asks under the numbering the transcription settled on.
+        skeleton = reconciled(skeleton, answered)
         blocks = await self._blocks(skeleton, text, sheets, usage)
         try:
             paper = merge(skeleton, answered, blocks)
@@ -210,18 +219,55 @@ class ChunkedPaperExtractor:
         answered: dict[str, BatchQuestion] = {}
         figures: list[FigureRequest] = []
         for batch in question_batches(skeleton, size=self._size, page_count=len(sheets)):
+            system = QUESTION_BATCH_PAGES_PROMPT if sheets else QUESTION_BATCH_TEXT_PROMPT
+            prompt = _batch_prompt(text, batch, marked)
+            named = f"questions {_listed(batch.numbers)}"
+            shown = images(sheets, batch.pages)
             answer = await self._read(
                 QuestionBatch,
-                system=QUESTION_BATCH_PAGES_PROMPT if sheets else QUESTION_BATCH_TEXT_PROMPT,
-                prompt=_batch_prompt(text, batch, marked),
+                system=system,
+                prompt=prompt,
                 tool=QUESTIONS_TOOL,
-                named=f"questions {_listed(batch.numbers)}",
-                pages=images(sheets, batch.pages),
+                named=named,
+                pages=shown,
                 usage=usage,
+            )
+            answer = await self._worded(
+                answer, system=system, prompt=prompt, named=named, pages=shown, usage=usage
             )
             answered.update({question.number: question for question in answer.questions})
             figures.extend(answer.figures)
         return answered, tuple(figures)
+
+    async def _worded(
+        self,
+        answer: QuestionBatch,
+        *,
+        system: str,
+        prompt: str,
+        named: str,
+        pages: tuple[bytes, ...],
+        usage: UsageTally | None,
+    ) -> QuestionBatch:
+        """One more ask, once, when a figure came back where a question's wording belongs."""
+        silent = wordless(answer)
+        if not silent:
+            return answer
+        listed = _listed(silent)
+        logger.warning("%s came back with a figure and no wording, asking once more", listed)
+        asked = await self._read(
+            QuestionBatch,
+            system=system,
+            prompt=f"{prompt}\n\n{FIGURE_WORDING.format(named=listed)}",
+            tool=QUESTIONS_TOOL,
+            named=named,
+            pages=pages,
+            usage=usage,
+        )
+        still = wordless(asked)
+        if still:
+            raise GenerationError(NO_WORDING.format(named=_listed(still)))
+        return asked
 
     async def _blocks(
         self,

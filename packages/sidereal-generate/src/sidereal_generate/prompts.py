@@ -250,6 +250,12 @@ BATCH_RETRY = (
     "Your previous answer did not fit the structure. Answer this call again, corrected, and "
     "return the same questions. The validator reported:"
 )
+FIGURE_WORDING = (
+    "Your previous answer left {named} with a figure and no wording at all. Answer this call "
+    "again with every question and part transcribed in full. A question's wording is printed on "
+    "the page beside the drawing: transcribe it from the page. A figure is a picture the paper "
+    "prints alongside the words, never the place a question's only text is left."
+)
 
 
 def render_questions(questions: Sequence[PaperQuestion]) -> str:

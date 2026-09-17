@@ -349,9 +349,8 @@ async def test_a_merge_the_canonical_paper_refuses_is_a_generation_error() -> No
         await reader.extract(document())
 
 
-async def test_a_question_no_batch_transcribed_keeps_the_stub_the_shape_gave_it(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
+async def test_a_question_no_batch_transcribed_fails_instead_of_keeping_a_summary() -> None:
+    """A one-line stub stored as the paper's wording is the same fault as an invented answer."""
     _, reader = extractor(
         {
             SKELETON_TOOL: [shape(questions=[stub("1", marks=4), stub("2")])],
@@ -359,12 +358,59 @@ async def test_a_question_no_batch_transcribed_keeps_the_stub_the_shape_gave_it(
         }
     )
 
+    with pytest.raises(GenerationError, match="No call transcribed question 2"):
+        await reader.extract(document())
+
+
+async def test_a_batch_question_the_shape_split_into_parts_replaces_those_stubs(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The live Physics paper: the shape read AQA's `01.1` labels as questions of their own."""
+    caller, reader = extractor(
+        {
+            SKELETON_TOOL: [
+                shape(
+                    sections=[
+                        {
+                            "title": "Section A",
+                            "questions": [stub("01.1", material=True), stub("01.2"), stub("01.3")],
+                        },
+                        {"title": "Section B", "questions": [stub("02")]},
+                    ]
+                )
+            ],
+            QUESTIONS_TOOL: [
+                {
+                    "questions": [
+                        {
+                            "number": "01",
+                            "stem": "A trolley rolls down a ramp.",
+                            "parts": [
+                                {"label": "1", "text": "State the force."},
+                                {"label": "2", "text": "Calculate it."},
+                                {"label": "3", "text": "Explain why."},
+                            ],
+                        },
+                        {"number": "02", "stem": "A second question."},
+                    ],
+                    "figures": [],
+                }
+            ],
+            BLOCKS_TOOL: [{"blocks": []}],
+        }
+    )
+
     with caplog.at_level(logging.WARNING):
         paper = (await reader.extract(document())).paper
 
-    assert [question.number for question in paper.questions] == ["1", "2"]
-    assert paper.questions[1].stem == "About 2"
-    assert "no batch transcribed question 2" in caplog.text
+    assert [question.number for question in paper.sections[0].questions] == ["01"]
+    assert paper.sections[0].title == "Section A"
+    assert paper.sections[0].questions[0].stem == "A trolley rolls down a ramp."
+    assert [part.label for part in paper.sections[0].questions[0].parts] == ["1", "2", "3"]
+    assert [question.number for question in paper.sections[1].questions] == ["02"]
+    assert "About 01.1" not in paper.model_dump_json()
+    # The block call asks under the numbering the transcription settled on, not the shape's.
+    assert '<question number="01"' in caller.asked(BLOCKS_TOOL)[0].prompt
 
 
 async def test_the_figures_of_every_batch_are_gathered_into_one_list() -> None:
@@ -700,3 +746,71 @@ async def test_a_part_a_repair_left_out_is_kept_as_it_was() -> None:
     assert parts[0].text == "Find $P Q$."
     assert parts[0].parts[0].text == "State $PQ$."
     assert parts[1].text == "Hence find $RS$."
+
+
+def wordless_batch(stem: str | None) -> dict[str, Any]:
+    """One question with a figure and, until the model is asked again, nothing to read."""
+    return {
+        "questions": [{"number": "1", "stem": stem}],
+        "figures": [
+            {
+                "page": 1,
+                "bbox": [0.1, 0.1, 0.8, 0.6],
+                "caption": None,
+                "question_number": "1",
+                "part_label": None,
+            }
+        ],
+    }
+
+
+async def test_a_question_whose_wording_was_left_in_a_figure_is_asked_for_once_more(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caller, reader = extractor(
+        {
+            SKELETON_TOOL: [shape(questions=[stub("1")])],
+            QUESTIONS_TOOL: [wordless_batch(""), wordless_batch("The circuit shown.")],
+        }
+    )
+
+    with caplog.at_level(logging.WARNING):
+        paper = (await reader.extract(document(), pages=[b"one"])).paper
+
+    assert paper.questions[0].stem == "The circuit shown."
+    asked = caller.asked(QUESTIONS_TOOL)
+    assert len(asked) == 2
+    assert "figure and no wording" in asked[1].prompt
+    assert "question 1 came back with a figure and no wording" in caplog.text
+
+
+async def test_a_second_answer_that_still_leaves_the_wording_in_the_figure_fails() -> None:
+    caller, reader = extractor(
+        {
+            SKELETON_TOOL: [shape(questions=[stub("1")])],
+            QUESTIONS_TOOL: [wordless_batch(None)],
+        }
+    )
+
+    with pytest.raises(GenerationError) as raised:
+        await reader.extract(document(), pages=[b"one"])
+
+    assert str(raised.value) == (
+        "The wording of question 1 was left inside a figure and did not come back when it was "
+        "asked for again. Try the extraction again."
+    )
+    # One extra ask per batch, and no more.
+    assert len(caller.asked(QUESTIONS_TOOL)) == 2
+
+
+async def test_a_question_that_came_back_with_its_wording_is_asked_nothing_extra() -> None:
+    caller, reader = extractor(
+        {
+            SKELETON_TOOL: [shape(questions=[stub("1")])],
+            QUESTIONS_TOOL: [wordless_batch("The circuit shown.")],
+        }
+    )
+
+    await reader.extract(document(), pages=[b"one"])
+
+    assert len(caller.asked(QUESTIONS_TOOL)) == 1

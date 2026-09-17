@@ -27,6 +27,7 @@ from sidereal_core.canonical import (
     CanonicalTableBlock,
 )
 
+from sidereal_generate.base import GenerationError
 from sidereal_generate.models import FigureRequest
 
 logger = logging.getLogger(__name__)
@@ -34,6 +35,11 @@ logger = logging.getLogger(__name__)
 # How many question numbers one call transcribes. The grammar does not care; the output
 # budget does, and a batch is what a model can finish before it runs out of one.
 BATCH_QUESTIONS = 6
+
+UNTRANSCRIBED = (
+    "No call transcribed question {numbers}, so the paper would carry a one-line summary where "
+    "its wording belongs. Try the extraction again."
+)
 
 _BATCH = ConfigDict(frozen=True, extra="forbid")
 
@@ -293,9 +299,13 @@ def merge(
 ) -> CanonicalPaper:
     """The skeleton filled in: its order, its sections, and the blocks each question names."""
     placed = _placements(blocks)
-    known = {stub.number for stub in stubs(skeleton)}
-    for number in sorted(set(answered) - known):
+    skeleton = reconciled(skeleton, answered)
+    listed = stubs(skeleton)
+    for number in sorted(set(answered) - {stub.number for stub in listed}):
         logger.warning("a batch returned question %s, which the paper's shape has not", number)
+    silent = tuple(stub.number for stub in listed if stub.number not in answered)
+    if silent:
+        raise GenerationError(UNTRANSCRIBED.format(numbers=", ".join(silent)))
     paper = CanonicalPaper(
         title=skeleton.title,
         source=skeleton.source,
@@ -319,6 +329,104 @@ def merge(
     for number, label in placed:
         logger.warning("a block names question %s part %s, which this paper has not", number, label)
     return paper
+
+
+def reconciled(skeleton: PaperSkeleton, answered: Mapping[str, BatchQuestion]) -> PaperSkeleton:
+    """The shape resettled on what was transcribed, where the two disagree about a question.
+
+    A batch that returned `01` where the shape has only `01.1`, `01.2` read the paper right:
+    those stubs are that question's parts, so they give up their place — and their section —
+    to it. Without such a batch answer nothing is renumbered.
+    """
+    plan = _folded(skeleton, answered)
+    if not plan:
+        return skeleton
+    return skeleton.model_copy(
+        update={
+            "questions": _folded_stubs(skeleton.questions, plan),
+            "sections": tuple(
+                section.model_copy(update={"questions": _folded_stubs(section.questions, plan)})
+                for section in skeleton.sections
+            ),
+        }
+    )
+
+
+def wordless(batch: QuestionBatch) -> tuple[str, ...]:
+    """The nodes this batch asked a figure for and gave no wording of their own."""
+    questions = {question.number: question for question in batch.questions}
+    named: list[str] = []
+    for request in batch.figures:
+        question = questions.get(request.question_number)
+        if question is None:
+            continue
+        if request.part_label is None:
+            if not (question.stem or "").strip() and not question.parts:
+                named.append(f"question {question.number}")
+            continue
+        text = _labelled(question, request.part_label)
+        if text is not None and not text.strip():
+            named.append(f"question {question.number} part {request.part_label}")
+    return tuple(dict.fromkeys(named))
+
+
+type _Plan = dict[str, QuestionStub | None]
+
+
+def _folded(skeleton: PaperSkeleton, answered: Mapping[str, BatchQuestion]) -> _Plan:
+    """Which stubs one transcribed question stands in for, and which of them it replaces."""
+    listed = stubs(skeleton)
+    unknown = sorted(set(answered) - {stub.number for stub in listed})
+    plan: _Plan = {}
+    for number in unknown:
+        group = tuple(
+            stub
+            for stub in listed
+            if stub.number not in answered
+            and stub.number not in plan
+            and _is_part_of(stub.number, number)
+        )
+        if not group:
+            continue
+        logger.warning(
+            "the shape split question %s into %s; its transcription replaces them",
+            number,
+            ", ".join(stub.number for stub in group),
+        )
+        plan[group[0].number] = QuestionStub(
+            number=number,
+            stem=group[0].stem,
+            page=min(stub.page for stub in group),
+            has_material=any(stub.has_material for stub in group),
+        )
+        for stub in group[1:]:
+            plan[stub.number] = None
+    return plan
+
+
+def _folded_stubs(listed: Sequence[QuestionStub], plan: _Plan) -> tuple[QuestionStub, ...]:
+    kept: list[QuestionStub] = []
+    for stub in listed:
+        folded = plan.get(stub.number, stub)
+        if folded is not None:
+            kept.append(folded)
+    return tuple(kept)
+
+
+def _is_part_of(label: str, number: str) -> bool:
+    """`01.1` is part 1 of question `01`; `10` is no part of question `1`."""
+    suffix = label.removeprefix(number)
+    return suffix != label and bool(suffix) and not suffix[0].isalnum()
+
+
+def _labelled(question: BatchQuestion, label: str) -> str | None:
+    for part in question.parts:
+        if part.label == label:
+            return part.text
+        for sub in part.parts:
+            if sub.label == label:
+                return sub.text
+    return None
 
 
 def _repaired(
@@ -390,13 +498,8 @@ def _placements(blocks: Sequence[BlockPlacement]) -> _Placed:
 def _question(
     stub: QuestionStub, answered: Mapping[str, BatchQuestion], placed: _Placed
 ) -> CanonicalQuestion:
-    question = answered.get(stub.number)
+    question = answered[stub.number]
     blocks = tuple(placed.pop((stub.number, None), ()))
-    if question is None:
-        logger.warning("no batch transcribed question %s; its one-line stem is kept", stub.number)
-        return CanonicalQuestion(
-            number=stub.number, stem=stub.stem, marks=stub.marks, blocks=blocks
-        )
     return CanonicalQuestion(
         number=stub.number,
         stem=question.stem,
