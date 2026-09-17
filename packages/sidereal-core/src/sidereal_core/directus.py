@@ -159,6 +159,9 @@ class DirectusClient:
         """`directus_roles` is a system collection: it answers on `/roles`, not `/items`."""
         return await self._list("/roles", DirectusRole)
 
+    async def get_role(self, role_id: str | UUID) -> DirectusRole:
+        return DirectusRole.model_validate(await self._request("GET", f"/roles/{role_id}"))
+
     async def find_role(self, name: str) -> DirectusRole | None:
         roles = await self._list("/roles", DirectusRole, filter={"name": {"_eq": name}}, limit=1)
         return roles[0] if roles else None

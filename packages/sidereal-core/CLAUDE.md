@@ -26,6 +26,9 @@ Bottom layer. Imports no other workspace package.
   a relation, so this is the only thing keeping one tutor out of another's students.
 - The caller is an admin when a policy behind them or their role grants `admin_access`, a student
   when a `students` row points at them, and a tutor otherwise. Admin wins over both.
+- A login in the `Student` role that no `students` row points at is a `LoginUnlinkedError`, never
+  a tutor: a removed student's surviving session was served the tutor's own shell. A caller who
+  cannot read their own role is left as they were — no rule locks a tutor out.
 - `admin_access` is on no row Directus 12 will show — not on a user, not on a role: `me()` reads it
   from `GET /policies/me/globals`, and it is False on every user read any other way.
 - `check_email` and `check_password`, and the errors they raise, are shared by student logins and

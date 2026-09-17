@@ -8,6 +8,7 @@ NO_CREDENTIALS = "missing_token"
 DIRECTUS_REJECTED = "directus_rejected"
 LOGIN_EXISTS = "login_exists"
 LOGIN_MISSING = "login_missing"
+LOGIN_UNLINKED = "login_unlinked"
 INVALID_EMAIL = "invalid_email"
 WEAK_PASSWORD = "weak_password"  # noqa: S105 - an error code, not a password.
 STUDENT_ROLE_MISSING = "student_role_missing"

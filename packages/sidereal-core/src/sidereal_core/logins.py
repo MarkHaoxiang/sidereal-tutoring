@@ -14,6 +14,7 @@ from sidereal_core.models import Collection, DirectusUser, Student
 from sidereal_core.students import StudentNotVisibleError, visible_student
 
 STUDENT_ROLE = "Student"
+UNLINKED = "This login is no longer linked to a student. Ask your tutor."
 ACTIVE_STATUS = "active"
 MIN_PASSWORD_LENGTH = 8
 # What Directus answers when a rule refuses the write or its validation fails.
@@ -78,6 +79,10 @@ class StudentRoleMissingError(StudentLoginError):
     pass
 
 
+class LoginUnlinkedError(StudentLoginError):
+    """A Student-role login no `students` row points at. It is nobody, not a tutor."""
+
+
 class LoginRefusedError(StudentLoginError):
     """Directus refused the write. Its own wording never reaches a tutor."""
 
@@ -108,13 +113,32 @@ async def student_for_user(client: DirectusClient, user_id: UUID) -> Student | N
 
 
 async def identify(client: DirectusClient, user: DirectusUser) -> Identity:
-    """Admin wins over every other reading, so an admin is never looked up as a student."""
+    """Admin wins over every other reading, so an admin is never looked up as a student.
+
+    A login in the Student role that no `students` row points at is refused rather than read
+    as a tutor: a student whose login was removed kept a session, and the app served it the
+    tutor's own shell.
+    """
     if user.admin_access:
         return _identity(user, CallerRole.ADMIN, None)
     student = await student_for_user(client, user.id)
-    if student is None:
-        return _identity(user, CallerRole.TUTOR, None)
-    return _identity(user, CallerRole.STUDENT, student.id)
+    if student is not None:
+        return _identity(user, CallerRole.STUDENT, student.id)
+    if await _in_student_role(client, user):
+        raise LoginUnlinkedError(UNLINKED)
+    return _identity(user, CallerRole.TUTOR, None)
+
+
+async def _in_student_role(client: DirectusClient, user: DirectusUser) -> bool:
+    """Whether the caller's own role is the Student one, by the name the bootstrap gave it."""
+    if user.role is None:
+        return False
+    try:
+        role = await client.get_role(user.role)
+    except DirectusClientError:
+        # A caller who may not read their own role is not one this can refuse.
+        return False
+    return role.name == STUDENT_ROLE
 
 
 async def whoami(client: DirectusClient) -> Identity:

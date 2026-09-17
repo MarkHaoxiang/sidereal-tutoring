@@ -584,6 +584,10 @@ ensure_filtered_permission "$student_policy_id" plans read \
 ensure_filtered_permission "$student_policy_id" directus_users read \
   '["id","email","first_name","last_name","role","avatar","appearance"]' "$account_self"
 
+# The name of their own role, and nothing else about it: `identify` refuses a Student-role login
+# that no student row points at, and without this row it cannot tell one from a tutor.
+ensure_filtered_permission "$student_policy_id" directus_roles read '["id","name"]' '{}'
+
 # --- Service permissions ----------------------------------------------------------------------
 # One row, and the policy holds nothing else: `POST /api/auth/status` tells someone who has just
 # been refused a sign-in why, and the agent's Tutor scope cannot see a user outside its own

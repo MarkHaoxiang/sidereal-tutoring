@@ -16,6 +16,7 @@ from sidereal_core.logins import (
     LoginExistsError,
     LoginMissingError,
     LoginRefusedError,
+    LoginUnlinkedError,
     StudentLoginError,
     StudentRoleMissingError,
     WeakPasswordError,
@@ -55,6 +56,7 @@ from sidereal_app.api.errors import (
     LOGIN_FAILED,
     LOGIN_MISSING,
     LOGIN_REFUSED,
+    LOGIN_UNLINKED,
     MATERIAL_UNUSABLE,
     PAPER_UNUSABLE,
     STUDENT_GONE,
@@ -88,6 +90,7 @@ LOGIN_ERRORS: dict[type[Exception], tuple[int, str]] = {
     InvalidEmailError: (422, INVALID_EMAIL),
     WeakPasswordError: (422, WEAK_PASSWORD),
     StudentRoleMissingError: (500, STUDENT_ROLE_MISSING),
+    LoginUnlinkedError: (403, LOGIN_UNLINKED),
 }
 TUTOR_ERRORS: dict[type[Exception], tuple[int, str]] = {
     TutorHasStudentsError: (409, TUTOR_HAS_STUDENTS),

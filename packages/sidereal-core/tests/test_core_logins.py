@@ -13,6 +13,7 @@ from sidereal_core.logins import (
     LoginExistsError,
     LoginMissingError,
     LoginRefusedError,
+    LoginUnlinkedError,
     StudentRoleMissingError,
     WeakPasswordError,
     account_status,
@@ -184,6 +185,28 @@ async def test_an_admin_is_never_read_as_a_student() -> None:
     assert identity.role is CallerRole.ADMIN
     assert identity.student_id is None
     assert "/items/students" not in [request.url.path for request in fake.requests]
+
+
+async def test_a_student_role_login_no_student_points_at_is_refused() -> None:
+    """The live failure: a removed student kept a session and was served the tutor's shell."""
+    fake, _ = seeded()
+    role = fake.rows(Collection.DIRECTUS_ROLES)[0]
+    fake.user["role"] = role["id"]
+
+    async with fake.client() as client:
+        with pytest.raises(LoginUnlinkedError, match="no longer linked to a student"):
+            await whoami(client)
+
+
+async def test_a_tutors_own_role_leaves_them_a_tutor() -> None:
+    fake, _ = seeded()
+    tutor_role = fake.seed(Collection.DIRECTUS_ROLES, {"name": "Tutor"})
+    fake.user["role"] = tutor_role["id"]
+
+    async with fake.client() as client:
+        identity = await whoami(client)
+
+    assert identity.role is CallerRole.TUTOR
 
 
 class Refuses(FakeDirectus):

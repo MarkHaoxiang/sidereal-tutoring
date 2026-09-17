@@ -61,6 +61,39 @@ def test_me_is_a_student_when_a_student_row_points_at_the_caller(
     assert body["student_id"] == str(student_id)
 
 
+def test_me_refuses_a_student_role_login_no_student_points_at(
+    client: TestClient, fake_directus: FakeDirectus, student_id: UUID, auth: dict[str, str]
+) -> None:
+    """A student whose login was removed kept a session, and it was served the tutor's shell."""
+    role = fake_directus.seed(Collection.DIRECTUS_ROLES, {"name": "Student"})
+    fake_directus.user["role"] = role["id"]
+
+    response = client.get("/api/me", headers=auth)
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "login_unlinked"
+    assert response.json()["detail"]["message"] == (
+        "This login is no longer linked to a student. Ask your tutor."
+    )
+    # Every tutor route goes through the same reading, so nothing else needs its own refusal.
+    preview = client.post("/api/typeset/preview", headers=auth, json={"source": "Hello."})
+    assert preview.status_code == 403
+    assert preview.json()["detail"]["code"] == "login_unlinked"
+
+
+def test_a_tutor_in_their_own_role_is_still_a_tutor(
+    client: TestClient, fake_directus: FakeDirectus, student_id: UUID, auth: dict[str, str]
+) -> None:
+    role = fake_directus.seed(Collection.DIRECTUS_ROLES, {"name": "Tutor"})
+    fake_directus.user["role"] = role["id"]
+
+    assert client.get("/api/me", headers=auth).json()["role"] == "tutor"
+    assert (
+        client.post("/api/typeset/preview", headers=auth, json={"source": "Hello."}).status_code
+        == 200
+    )
+
+
 def test_creating_a_login_returns_201_and_links_the_student(
     client: TestClient,
     fake_directus: FakeDirectus,

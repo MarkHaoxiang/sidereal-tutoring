@@ -58,6 +58,8 @@ Top layer. Imports core, ingest and generate; never sidereal-mcp.
   even on their own row.
 - Deleting any Directus user hands that user's uploads to the caller first — the admin for a tutor,
   the tutor for a student's login — so no material is left with an owner nobody can be.
+- `GET /api/me` is 403 `login_unlinked` for a Student-role login no student row points at, and so
+  is every route behind `require_tutor`: the reading they share is what refuses.
 - `POST /api/jobs/feedback` takes `homework_ids`; every other kind carrying them is 422
   `homework_unsupported` before a job row exists.
 - `POST /api/jobs/{id}/retry` answers 202 with a new queued row and runs it in the background. The
