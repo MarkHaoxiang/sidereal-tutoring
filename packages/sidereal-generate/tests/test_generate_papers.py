@@ -1023,3 +1023,37 @@ async def test_a_worksheet_prints_the_passage_its_question_only_points_at() -> N
 
     blocks = typeset.rendered[-1]["document"]["questions"][0]["blocks"]
     assert blocks == [{"type": "passage", "title": "Source A", "text": "Two lines."}]
+
+
+async def test_a_worksheet_prints_a_choice_question_once() -> None:
+    """The live sheet printed each multiple-choice question three times over."""
+    fake = seeded()
+    typeset = FakeTypeset()
+    paper_id = await extracted(fake, typeset, (DOCUMENT_ID,))
+    stored = fake.items[Collection.PAPERS][str(paper_id)]
+    question = stored["structure"]["questions"][0]
+    question["stem"] = (
+        "An aeroplane flies horizontally at 150 m s at a bearing of 60 degrees east of "
+        "north.\n\nHow far north is it after one hour?"
+    )
+    question["answer"] = {
+        "type": "multiple_choice",
+        "options": [{"label": "A", "text": "270 km"}, {"label": "B", "text": "470 km"}],
+    }
+    question["blocks"] = [
+        {
+            "type": "passage",
+            "text": (
+                "An aeroplane flies horizontally at 150 m s at a bearing of 60 degrees east "
+                "of north.\n\nHow far north is it after one hour?\n\nA 270 km\nB 470 km"
+            ),
+        },
+        {"type": "passage", "title": "Source A", "text": "Material the question needs."},
+    ]
+
+    async with fake.client() as client:
+        await paper_worksheet(client, typeset.client(), paper_id, ["1"])
+
+    printed = typeset.rendered[-1]["document"]["questions"][0]
+    assert [block["title"] for block in printed["blocks"]] == ["Source A"]
+    assert len(printed["answer"]["options"]) == 2

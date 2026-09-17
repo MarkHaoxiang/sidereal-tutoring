@@ -16,7 +16,7 @@ from sidereal_core.canonical import (
 )
 from sidereal_core.models import Document
 
-from sidereal_generate.base import GenerationError, strict_schema, unstringify
+from sidereal_generate.base import GenerationError, strict_schema, unescaped, unstringify
 from sidereal_generate.chunks import (
     BATCH_QUESTIONS,
     Batch,
@@ -388,7 +388,7 @@ def _repair_prompt(run: Sequence[BaseModel], diagnostics: str) -> str:
 
 
 def _fitted[M: BaseModel](model: type[M], payload: object) -> M:
-    return model.model_validate(unstringify(payload, model))
+    return model.model_validate(unescaped(unstringify(payload, model)))
 
 
 def _batch_prompt(text: str, batch: Batch, marked: Sequence[int]) -> str:

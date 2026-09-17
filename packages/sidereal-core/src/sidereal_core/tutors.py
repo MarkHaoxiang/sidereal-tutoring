@@ -314,13 +314,19 @@ def _in(ids: AbstractSet[UUID]) -> dict[str, Any]:
 def _admin_job(
     job: GenerationJob, students: Mapping[str, Student], tutors: Mapping[str, DirectusUser]
 ) -> AdminJob:
+    """A deleted student's jobs stay: `input` carries who they were for, and it is read here."""
     student = students.get(str(job.student)) if job.student else None
     tutor = tutors.get(str(student.tutor)) if student and student.tutor else None
     return AdminJob(
         job=job,
-        student_name=None if student is None else student.name,
-        tutor_email=None if tutor is None else tutor.email,
+        student_name=student.name if student is not None else _named(job, "student_name"),
+        tutor_email=tutor.email if tutor is not None else _named(job, "tutor_email"),
     )
+
+
+def _named(job: GenerationJob, field: str) -> str | None:
+    value = (job.input or {}).get(field)
+    return value if isinstance(value, str) and value else None
 
 
 async def _tutor_role(client: DirectusClient) -> DirectusRole:

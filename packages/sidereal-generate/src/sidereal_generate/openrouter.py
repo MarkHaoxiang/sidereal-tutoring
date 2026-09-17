@@ -29,6 +29,7 @@ from sidereal_generate.base import (
     PaperExtractor,
     PlanGenerator,
     strict_schema,
+    unescaped,
     unstringify,
 )
 from sidereal_generate.chunks import BATCH_QUESTIONS
@@ -347,7 +348,8 @@ class OpenRouterGenerator[OutputT: BaseModel]:
     ) -> OutputT:
         payload = await self._asked(request, usage, None)
         try:
-            return self._output_model.model_validate(unstringify(payload, self._output_model))
+            answer = unescaped(unstringify(payload, self._output_model))
+            return self._output_model.model_validate(answer)
         except ValidationError as exc:
             raise GenerationError(f"{self._tool_name} returned an unusable payload: {exc}") from exc
 

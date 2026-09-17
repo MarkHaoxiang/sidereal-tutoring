@@ -14,9 +14,11 @@ export interface FragmentViewProps {
 
 /** A canonical fragment as the typeset service sets it, on the paper it will be printed on. */
 export function FragmentView({ body, label, empty }: FragmentViewProps) {
-  const rendered = useRenderTypst(useRenderAssets(body));
+  const request = useRenderAssets(body);
+  const rendered = useRenderTypst(request.body);
   const pages = rendered.data?.pages ?? [];
   const problem = rendered.error === null ? null : typstProblem(rendered.error);
+  const missing = request.missing;
 
   if (body === null) {
     return <p className={styles.status}>{empty}</p>;
@@ -45,6 +47,13 @@ export function FragmentView({ body, label, empty }: FragmentViewProps) {
           </div>
         )}
       </div>
+      {missing > 0 ? (
+        <p className={styles.fragmentNote}>
+          {missing === 1
+            ? "One figure could not be loaded, so it is not shown."
+            : `${String(missing)} figures could not be loaded, so they are not shown.`}
+        </p>
+      ) : null}
       {problem !== null ? <p className={styles.fragmentProblem}>{problem}</p> : null}
     </div>
   );

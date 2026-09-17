@@ -23,7 +23,15 @@ export const homeworkKeys = {
 function fetchHomeworkList(params: HomeworkListParams) {
   return directus.request(
     readItems("homework", {
-      fields: ["id", "title", "status", "due_on", "date_created", { student: ["id", "name"] }],
+      fields: [
+        "id",
+        "title",
+        "status",
+        "due_on",
+        "marking",
+        "date_created",
+        { student: ["id", "name"] },
+      ],
       filter: {
         ...(params.studentId ? { student: { _eq: params.studentId } } : {}),
         ...(params.status ? { status: { _in: params.status } } : {}),

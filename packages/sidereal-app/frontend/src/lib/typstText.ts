@@ -41,6 +41,9 @@ const OPERATORS: Record<string, string> = {
 // The symbols that count as letters when deciding whether a space between two atoms survives.
 const LETTER_SYMBOLS = new Set("παβγδΔθλμρσΣφωΩ");
 
+// A symbol that is set tight against whatever precedes it: `$30 degree$` is an angle, "30°".
+const TIGHT = new Set("°");
+
 function table(from: string, to: string): Record<string, string> {
   const map: Record<string, string> = {};
   [...from].forEach((character, index) => {
@@ -270,7 +273,10 @@ function render(rows: Atom[]): string {
     }
     const before = index > 0 ? rows[index - 1] : undefined;
     const after = rows[index + 1];
-    const joined = before !== undefined && after !== undefined && endsLetter(before) && startsLetter(after);
+    const joined =
+      after !== undefined &&
+      ((TIGHT.has(after.text) && !after.quoted) ||
+        (before !== undefined && endsLetter(before) && startsLetter(after)));
     if (!joined) {
       out += " ";
     }

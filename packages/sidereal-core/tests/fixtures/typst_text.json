@@ -9,6 +9,14 @@
       "text": "at an angle of 30° to the beam"
     },
     {
+      "typst": "at an angle of $30 degree$ to the beam",
+      "text": "at an angle of 30° to the beam"
+    },
+    {
+      "typst": "along a bearing $60 degree$ east of north",
+      "text": "along a bearing 60° east of north"
+    },
+    {
       "typst": "Two stable isotopes of helium are $\"\"^4_2\"He\"$ and $\"\"^3_2\"He\"$.",
       "text": "Two stable isotopes of helium are ⁴₂He and ³₂He."
     },

@@ -152,6 +152,22 @@ Sits above sidereal-ingest. Imports core and ingest only.
 - Every render sends its figures' bytes beside the structure, inside the service's per-asset and
   total limits. A `figure` block whose bytes are not being sent is stripped from the copy that
   goes to render and kept in the stored structure, so a later render with room still prints it.
+- A JSON escape a model wrote into a text field is decoded where its answer is read: `12\u00b0`
+  is six characters the renderer would print, and `unescaped` turns every one back into its
+  character before validation.
+- A signed script is grouped before any compile: `10^-2` raises the sign alone, so `normalise`
+  writes `10^(-2)`.
+- A `passage` block that only restates its own question's wording is dropped — at the merge, so
+  it is never stored, and again where a worksheet is cut, so a paper read before that still
+  prints its choice questions once.
+- A figure crop is uploaded into the shared figures folder. A crop a tutor cannot read is left
+  out of the render and its `figure` block with it, which is a sheet with no diagrams and no
+  error.
+- A feedback job is given the sheet as the student received it beside the questions it was
+  generated from, and is told to state the total the tutor gave: after an edit the two differ,
+  and the sheet is what was answered.
+- A retry whose student has been deleted is a `JobStudentGoneError` before any write;
+  `paper_extract` carries no student and retries either way.
 - A worksheet's PDF is rendered, not compiled from its source: `/compile` carries no assets, so
   an `image()` in the source resolves to nothing.
 - A worksheet carries each chosen question's own blocks, and a `passage_ref` is printed inline from

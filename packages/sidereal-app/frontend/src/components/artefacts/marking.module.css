@@ -109,8 +109,17 @@
 
 .actions {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
+  gap: 0.5rem;
   margin-top: 0.75rem;
+}
+
+.unsaved {
+  margin: 0 auto 0 0;
+  color: var(--color-fg-muted);
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
 }
 
 .hidden {

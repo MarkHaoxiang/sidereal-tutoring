@@ -111,3 +111,42 @@ async def test_a_student_the_caller_cannot_see_cannot_be_deleted() -> None:
     async with fake.client() as client:
         with pytest.raises(StudentNotVisibleError):
             await delete_student(client, uuid4())
+
+
+async def test_a_deleted_students_jobs_keep_the_name_they_were_for() -> None:
+    """`generation_jobs.student` is SET NULL, so the Jobs history would lose whose work it was."""
+    fake = FakeDirectus()
+    tutor = fake.seed(Collection.DIRECTUS_USERS, {"email": "priya@example.test"})
+    row = fake.seed(Collection.STUDENTS, {"name": "Leo", "tutor": tutor["id"]})
+    job = fake.seed(
+        Collection.GENERATION_JOBS,
+        {
+            "kind": "feedback",
+            "student": row["id"],
+            "status": "succeeded",
+            "input": {"student": row["id"], "instructions": "Warm but honest."},
+        },
+    )
+
+    async with fake.client() as client:
+        await delete_student(client, UUID(row["id"]))
+
+    assert job["input"] == {
+        "instructions": "Warm but honest.",
+        "student_name": "Leo",
+        "tutor_email": "priya@example.test",
+    }
+
+
+async def test_a_student_with_no_tutor_still_names_their_jobs() -> None:
+    fake = FakeDirectus()
+    row = fake.seed(Collection.STUDENTS, {"name": "Leo"})
+    job = fake.seed(
+        Collection.GENERATION_JOBS,
+        {"kind": "plan", "student": row["id"], "status": "failed", "input": {}},
+    )
+
+    async with fake.client() as client:
+        await delete_student(client, UUID(row["id"]))
+
+    assert job["input"] == {"student_name": "Leo"}

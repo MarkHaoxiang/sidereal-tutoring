@@ -80,6 +80,8 @@
   only because no `$` is ever added or removed.
 - **A markup field keeps its lines**: the break is emitted after the escaping, so it is the
   renderer's `\` and never the field's own.
+- **A table's header and cells are markup**, escaped and set exactly as a stem is, so an
+  exponent a document sends as `$10^3$` is typeset and not flattened.
 - **A `passage` and a `code` block are strings, not markup**: they are emitted as Typst string
   literals and set line for line, so nothing in them is parsed and nothing in them executes.
 - **Every extent is capped**: `Part.parts` nests one level, `answer_lines` and `answer.lines`

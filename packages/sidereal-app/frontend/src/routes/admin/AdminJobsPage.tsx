@@ -7,7 +7,7 @@ import { formatDateTime } from "@/lib/format";
 import { useMediaQuery } from "@/lib/media";
 import { apiError } from "@/lib/api";
 import { useAdminJobs, useRetryJob } from "@/lib/queries";
-import type { AdminJobStatus } from "@/lib/queries";
+import type { AdminJob, AdminJobStatus } from "@/lib/queries";
 
 import pageStyles from "../page.module.css";
 import styles from "./table.module.css";
@@ -22,12 +22,28 @@ const STATUS_OPTIONS: { value: AdminJobStatus | "all"; label: string }[] = [
   { value: "failed", label: "Failed" },
 ];
 
-function JobDetail({ id, error, input }: { id: string; error: string | null | undefined; input: unknown }) {
+/** Whose student this was, and whether that student is still on the books. */
+function studentCell(row: AdminJob): string {
+  const name = row.student_name ?? null;
+  if (name === null) {
+    return "—";
+  }
+  return (row.job.student ?? null) === null ? `${name} (deleted)` : name;
+}
+
+// Every kind but a paper extraction is generated for a student, and a job whose student
+// has been deleted has nothing to run against.
+function lostStudent(job: AdminJob["job"]): boolean {
+  return job.kind !== "paper_extract" && (job.student ?? null) === null;
+}
+
+function JobDetail({ job }: { job: AdminJob["job"] }) {
   const again = useRetryJob();
+  const lost = lostStudent(job);
 
   const retry = async () => {
     try {
-      await again.mutateAsync(id);
+      await again.mutateAsync(job.id);
       toast.success("Running");
     } catch (failure) {
       toast.error(apiError(failure));
@@ -36,13 +52,15 @@ function JobDetail({ id, error, input }: { id: string; error: string | null | un
 
   return (
     <>
-      {error ? (
+      {job.error ? (
         <>
           <div className={styles.errorHeader}>
             <p className={styles.errorLabel}>Error</p>
             <Button
               size="sm"
               loading={again.isPending}
+              disabled={lost}
+              title={lost ? "Student deleted" : undefined}
               onClick={() => {
                 void retry();
               }}
@@ -50,11 +68,11 @@ function JobDetail({ id, error, input }: { id: string; error: string | null | un
               Retry
             </Button>
           </div>
-          <p className={styles.error}>{error}</p>
+          <p className={styles.error}>{job.error}</p>
         </>
       ) : null}
       <p className={styles.detailLabel}>Input</p>
-      <pre className={styles.pre}>{JSON.stringify(input ?? {}, null, 2)}</pre>
+      <pre className={styles.pre}>{JSON.stringify(job.input ?? {}, null, 2)}</pre>
     </>
   );
 }
@@ -132,7 +150,8 @@ export function AdminJobsPage() {
               </tr>
             </thead>
             <tbody>
-              {jobs.map(({ job, student_name, tutor_email }) => {
+              {jobs.map((row) => {
+                const { job, tutor_email } = row;
                 const open = expanded.includes(job.id);
                 return (
                   <Fragment key={job.id}>
@@ -157,7 +176,7 @@ export function AdminJobsPage() {
                       <td>
                         <StatusChip status={job.status ?? "queued"} />
                       </td>
-                      <td>{student_name ?? "—"}</td>
+                      <td>{studentCell(row)}</td>
                       <td className={styles.secondaryCell}>{tutor_email ?? "—"}</td>
                       <td className={styles.secondaryCell}>{job.model ?? "—"}</td>
                       <td className={styles.secondaryCell}>{formatDateTime(job.date_created ?? null)}</td>
@@ -166,7 +185,7 @@ export function AdminJobsPage() {
                       <tr className={styles.detailRow}>
                         <td colSpan={6}>
                           <div className={styles.detail}>
-                            <JobDetail id={job.id} error={job.error} input={job.input} />
+                            <JobDetail job={job} />
                           </div>
                         </td>
                       </tr>
@@ -181,7 +200,8 @@ export function AdminJobsPage() {
 
       {jobs && jobs.length > 0 && !wide ? (
         <div className={styles.cards} role="list" aria-label="Generation jobs">
-          {jobs.map(({ job, student_name, tutor_email }) => {
+          {jobs.map((row) => {
+            const { job, tutor_email } = row;
             const open = expanded.includes(job.id);
             return (
               <article key={job.id} className={styles.card} role="listitem">
@@ -191,7 +211,7 @@ export function AdminJobsPage() {
                 </div>
                 <div className={styles.cardField}>
                   <span className={styles.cardFieldLabel}>Student</span>
-                  <span>{student_name ?? "—"}</span>
+                  <span>{studentCell(row)}</span>
                 </div>
                 <div className={styles.cardField}>
                   <span className={styles.cardFieldLabel}>Tutor</span>
@@ -222,7 +242,7 @@ export function AdminJobsPage() {
                 </button>
                 {open ? (
                   <div className={styles.cardDetail}>
-                    <JobDetail id={job.id} error={job.error} input={job.input} />
+                    <JobDetail job={job} />
                   </div>
                 ) : null}
               </article>

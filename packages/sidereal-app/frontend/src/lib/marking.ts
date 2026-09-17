@@ -1,5 +1,4 @@
 import type { MarkedQuestion, Marking } from "@/lib/schema";
-import { plainText } from "@/lib/typstText";
 
 // `homework.marking` as the two surfaces read it: the tutor writes it on the homework page and
 // the student reads it on theirs. The shape itself is in schema.ts, with the rest of the domain.
@@ -62,13 +61,14 @@ export function markingTotals(questions: MarkedQuestion[]): { awarded: number; a
   );
 }
 
-export function marksLabel(awarded: number, available: number): string {
-  return `${String(awarded)} / ${String(available)}`;
+/** "5 / 20" for a homework that has been marked, or null for one that has not. */
+export function markingLabel(value: unknown): string | null {
+  const marking = readMarking(value);
+  return marking !== null && hasMarking(marking)
+    ? marksLabel(marking.total_awarded, marking.total_available)
+    : null;
 }
 
-/** What a marking row is about: the question's own number, and its first readable words. */
-export function questionLabel(number: string, text: string | null): string {
-  const line = plainText(text).replace(/\s+/g, " ").trim();
-  const clipped = line.length > 90 ? `${line.slice(0, 90).trimEnd()}…` : line;
-  return clipped ? `${number}. ${clipped}` : number;
+export function marksLabel(awarded: number, available: number): string {
+  return `${String(awarded)} / ${String(available)}`;
 }

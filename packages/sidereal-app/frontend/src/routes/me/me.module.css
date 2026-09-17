@@ -125,6 +125,12 @@
   margin: 0;
 }
 
+/* What the homework scored, beside the link to it. */
+.mark {
+  margin-left: 0.75rem;
+  font-weight: 600;
+}
+
 .feedbackRow {
   display: flex;
   flex-wrap: wrap;

@@ -1524,3 +1524,48 @@ async fn a_long_title_wraps_without_a_soft_hyphen() {
     let short = glyphs(&one_page(&service, "paper", section(SHORT)).await);
     assert_eq!(long - short, visible(LONG) - visible(SHORT));
 }
+
+#[tokio::test]
+async fn a_table_cell_is_markup_so_an_exponent_is_typeset_and_not_flattened() {
+    // The worksheet that printed "2.4 x 103": a cell carries maths like any other field, and
+    // a cell that would close the content block is escaped like any other field.
+    let service = Service::start().await;
+    let document = json!({
+        "title": "Densities",
+        "questions": [{
+            "number": "1",
+            "stem": "Deduce which material is used.",
+            "blocks": [{
+                "type": "table",
+                "caption": "Table 2",
+                "header": ["Material", "Density / $\"kg m\"^(-3)$"],
+                "rows": [["concrete", "$2.4 times 10^3$"], ["iron [A]", "$7.8 times 10^3$"]],
+            }],
+        }],
+    });
+
+    let source = source_of(
+        &service,
+        json!({ "kind": "worksheet", "document": document, "output": "source" }),
+    )
+    .await;
+    assert!(
+        source.contains("[\nDensity / $\"kg m\"^(-3)$\n]"),
+        "{source}"
+    );
+    assert!(source.contains("[\n$2.4 times 10^3$\n]"), "{source}");
+    assert!(source.contains("[\niron \\[A\\]\n]"), "{source}");
+
+    let compiled = service
+        .post(
+            "/render",
+            json!({ "kind": "worksheet", "document": document, "output": "pdf" }),
+        )
+        .await;
+    assert_eq!(
+        compiled.status().as_u16(),
+        200,
+        "{:?}",
+        compiled.text().await
+    );
+}

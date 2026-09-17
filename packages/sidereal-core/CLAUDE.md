@@ -48,6 +48,14 @@ Bottom layer. Imports no other workspace package.
 - `plain_text` turns Typst maths into readable inline text for a list preview.
   `tests/fixtures/typst_text.json` is the contract it shares with the frontend's
   `lib/typstText.ts`; changing either implementation means changing both against that file.
+- `sheet_text` is the homework as the student received it: a `typst` row's content is cut at the
+  template's own `#show:` line, because the preamble is the renderer's and not the work.
+- A paper's figure crops are filed in the `FIGURES_FOLDER` folder. Nothing points at a crop, so
+  the folder is the only thing a tutor's `directus_files` read rule can match; the arm is in
+  `scripts/directus-bootstrap.sh`.
+- Before a student is deleted, every generation job of theirs carries `input.student_name` and
+  `input.tutor_email`, and `input.student` is dropped: the row's own `student` is `SET NULL`, so
+  nothing else would say whose work it was and a retry would send back a row Directus refuses.
 - `admin_health` never raises: a service it cannot reach is `ok: false`, and every probe is capped
   at `PROBE_TIMEOUT`.
 - A listing never asks per row: ids are gathered and looked up with one `_in` query, and counts come

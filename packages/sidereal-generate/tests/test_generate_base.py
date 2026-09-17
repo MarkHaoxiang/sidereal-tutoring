@@ -5,7 +5,8 @@ import logging
 from typing import Any
 
 import pytest
-from sidereal_generate.base import unstringify
+from sidereal_core.canonical import CanonicalPassageBlock, CanonicalTableBlock
+from sidereal_generate.base import unescaped, unstringify
 from sidereal_generate.models import PaperExtraction
 
 PAPER: dict[str, Any] = {
@@ -101,3 +102,48 @@ def test_a_backslash_json_already_knows_is_not_doubled() -> None:
     assert PaperExtraction.model_validate(fixed).paper.instructions == (
         "A $\\pm$ backslash: \\ and a newline follow.\n"
     )
+
+
+def test_a_json_escape_a_model_wrote_out_is_turned_back_into_its_character() -> None:
+    r"""The live failure: a worksheet printed `12°` in the middle of a sentence."""
+    escaped = {
+        "paper": {
+            "title": "Physics A",
+            "questions": [
+                {
+                    "number": "1",
+                    "stem": "The angle is 12\\u00b0 and the ratio is \\u03c0.",
+                    "blocks": [
+                        {
+                            "type": "table",
+                            "header": ["Angle", "Ratio"],
+                            "rows": [["12\\u00b0", "\\u03c0"]],
+                        },
+                        {"type": "passage", "text": "Turn through 12\\u00b0, then \\u03c0 again."},
+                    ],
+                }
+            ],
+        },
+        "figures": [],
+    }
+
+    extraction = PaperExtraction.model_validate(unescaped(unstringify(escaped, PaperExtraction)))
+
+    question = extraction.paper.questions[0]
+    table, passage = question.blocks
+    assert isinstance(table, CanonicalTableBlock)
+    assert isinstance(passage, CanonicalPassageBlock)
+    assert question.stem == "The angle is 12° and the ratio is π."
+    assert table.rows == (("12°", "π"),)
+    assert passage.text == "Turn through 12°, then π again."
+
+
+def test_a_backslash_that_is_not_a_json_escape_is_left_as_the_model_wrote_it() -> None:
+    r"""`\uphill` is a word, `\ud800` alone stands for no character, and `$\\$` is maths."""
+    left = {"a": "\\uphill both ways", "b": "\\ud800", "c": "$a \\\\ b$", "d": 12}
+
+    assert unescaped(left) == left
+
+
+def test_a_surrogate_pair_is_one_character() -> None:
+    assert unescaped(["\\ud83d\\ude00"]) == ["\U0001f600"]

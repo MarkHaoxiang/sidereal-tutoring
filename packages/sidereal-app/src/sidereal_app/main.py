@@ -36,7 +36,7 @@ from sidereal_core.typeset import (
     TypesetUnavailableError,
 )
 from sidereal_generate.base import GenerationError, GenerationNotConfiguredError
-from sidereal_generate.jobs import default_generators
+from sidereal_generate.jobs import JobStudentGoneError, default_generators
 from sidereal_generate.papers import PaperError
 from sidereal_generate.typst import NotTypstError
 from sidereal_generate.vision import default_transcriber
@@ -57,6 +57,7 @@ from sidereal_app.api.errors import (
     LOGIN_REFUSED,
     MATERIAL_UNUSABLE,
     PAPER_UNUSABLE,
+    STUDENT_GONE,
     STUDENT_NOT_FOUND,
     STUDENT_ROLE_MISSING,
     TUTOR_HAS_STUDENTS,
@@ -132,6 +133,7 @@ def create_app() -> FastAPI:
     app.add_exception_handler(StudentLoginError, _login_refused)
     app.add_exception_handler(TutorError, _tutor_refused)
     app.add_exception_handler(StudentNotVisibleError, _student_not_found)
+    app.add_exception_handler(JobStudentGoneError, _student_gone)
     app.add_exception_handler(TypesetUnavailableError, _typeset_unavailable)
     app.add_exception_handler(TypesetError, _typeset_failed)
     app.add_exception_handler(NotTypstError, _not_typst)
@@ -221,6 +223,11 @@ def _login_refused(request: Request, exc: Exception) -> JSONResponse:
 def _student_not_found(request: Request, exc: Exception) -> JSONResponse:
     """A student the caller's own token cannot see is one that does not exist."""
     return JSONResponse(status_code=404, content=error_body(STUDENT_NOT_FOUND, str(exc)))
+
+
+def _student_gone(request: Request, exc: Exception) -> JSONResponse:
+    """A job whose student was deleted: the history is readable, the retry is not."""
+    return JSONResponse(status_code=422, content=error_body(STUDENT_GONE, str(exc)))
 
 
 def _tutor_refused(request: Request, exc: Exception) -> JSONResponse:

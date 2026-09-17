@@ -10,7 +10,7 @@ import { useMemo } from "react";
 import { ApiError, api, unwrap } from "@/lib/api";
 import type { paths } from "@/lib/api-schema";
 import { assetBase64 } from "@/lib/files";
-import { TypstError, figureAssets, readDiagnostics } from "@/lib/typeset";
+import { TypstError, figureAssets, readDiagnostics, withoutFigures } from "@/lib/typeset";
 
 import { homeworkKeys } from "./homework";
 
@@ -63,11 +63,19 @@ export function usePreviewTypst() {
   return useMutation({ mutationFn: previewTypst });
 }
 
+export interface RenderWithAssets {
+  /** What to send, or null while the figures are still being fetched. */
+  body: RenderBody | null;
+  /** How many figures were left out because their image could not be read. */
+  missing: number;
+}
+
 /**
- * The body with the bytes every `figure` block in it names, or null while they are still
- * being fetched: an asset the request does not carry is a 422 before the compiler runs.
+ * The body with the bytes every `figure` block in it names, at whatever depth it sits: an
+ * asset the request does not carry is a 422 before the compiler runs, so a figure whose
+ * image will not load is dropped from the document and counted instead.
  */
-export function useRenderAssets(body: RenderBody | null): RenderBody | null {
+export function useRenderAssets(body: RenderBody | null): RenderWithAssets {
   const names = useMemo(() => (body === null ? [] : figureAssets(body)), [body]);
   const fetched = useQueries({
     queries: names.map((name) => ({
@@ -79,18 +87,25 @@ export function useRenderAssets(body: RenderBody | null): RenderBody | null {
   });
 
   if (body === null || names.length === 0) {
-    return body;
+    return { body, missing: 0 };
+  }
+  // Answered or refused, never "not started": a query reads as idle in the render it is
+  // mounted in, and sending then would send a document whose figures have no bytes.
+  if (!fetched.every((result) => result.isSuccess || result.isError)) {
+    return { body: null, missing: 0 };
   }
   const assets: Record<string, string> = {};
+  const missing: string[] = [];
   names.forEach((name, index) => {
     const data = fetched[index]?.data;
     if (typeof data === "string") {
       assets[name] = data;
+    } else {
+      missing.push(name);
     }
   });
-  // A figure whose file will not load is left out, so the render says so rather than hanging.
-  const settled = fetched.every((result) => !result.isLoading);
-  return settled ? { ...body, assets } : null;
+  const document = missing.length === 0 ? body : withoutFigures(body, missing);
+  return { body: { ...document, assets }, missing: missing.length };
 }
 
 /**

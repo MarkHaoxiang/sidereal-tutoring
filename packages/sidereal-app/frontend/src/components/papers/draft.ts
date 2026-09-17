@@ -550,7 +550,7 @@ function buildQuestion(
       const subAt = `${partAt} (${sub.label.trim() || "?"})`;
       // A sub-part carries no parts of its own: the structure nests one level only.
       const builtSub: CanonicalPart = {
-        label: problems.required(sub.label, `${subAt} needs a label.`),
+        label: sub.label.trim(),
         text: problems.required(sub.text, `${subAt} needs to say what it asks.`),
       };
       const subMarks = problems.whole(sub.marks, `${subAt}'s marks`);
@@ -561,9 +561,10 @@ function buildQuestion(
       return builtSub;
     });
 
-    // A part that only groups sub-parts asks nothing itself, so its text may be empty.
+    // A part that only groups sub-parts asks nothing itself, so its text may be empty, and
+    // a paper that numbers its questions rather than its parts leaves the label empty too.
     const built: CanonicalPart = {
-      label: problems.required(part.label, `${partAt} needs a label.`),
+      label: part.label.trim(),
       text: part.text.trim(),
     };
     if (built.text === "" && subParts.length === 0) {
@@ -641,7 +642,7 @@ function buildSchemeQuestion(
   const parts: CanonicalMarkSchemePart[] = question.parts.map((part) => {
     const partAt = `${at}, part ${part.label.trim() || "?"}`;
     const built: CanonicalMarkSchemePart = {
-      label: problems.required(part.label, `${partAt} needs a label.`),
+      label: part.label.trim(),
       answer: problems.required(part.answer, `${partAt} needs an answer.`),
     };
     const marks = problems.whole(part.marks, `${partAt}'s marks`);

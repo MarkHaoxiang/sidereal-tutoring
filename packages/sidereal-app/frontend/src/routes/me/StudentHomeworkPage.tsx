@@ -2,6 +2,7 @@ import { ArrowLeft } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 
 import { AnswerCard } from "@/components/student/AnswerCard";
+import { splitAnswers } from "@/components/student/answers";
 import { dueLabel, homeworkQuestions, isOverdue } from "@/components/student/homework";
 import { MarkSheet } from "@/components/student/MarkSheet";
 import { TopicChips } from "@/components/topics/TopicChips";
@@ -9,7 +10,7 @@ import { taggedTopics } from "@/components/topics/tree";
 import { Card, Markdown, PdfView, Spinner, StatusChip } from "@/components/ui";
 import { fileIdOf } from "@/lib/files";
 import { readMarking } from "@/lib/marking";
-import { useMyHomework } from "@/lib/queries";
+import { useMyFeedbackForHomework, useMyHomework } from "@/lib/queries";
 import studentStyles from "@/components/student/student.module.css";
 
 import styles from "./me.module.css";
@@ -17,6 +18,8 @@ import styles from "./me.module.css";
 export function StudentHomeworkPage() {
   const { id } = useParams<{ id: string }>();
   const { data: homework, isLoading, isError } = useMyHomework(id);
+  // Only feedback their tutor has sent comes back, so a link here means there is one.
+  const feedback = useMyFeedbackForHomework(id)?.data?.[0] ?? null;
 
   if (!homework) {
     return (
@@ -44,6 +47,7 @@ export function StudentHomeworkPage() {
   }
 
   const questions = homeworkQuestions(homework.questions);
+  const answers = splitAnswers(homework.submission, questions);
   const topics = taggedTopics(homework.topics);
   const isTypst = homework.format === "typst";
   const pdfId = fileIdOf(homework.pdf);
@@ -60,10 +64,15 @@ export function StudentHomeworkPage() {
           {isOverdue(homework) ? <span className={studentStyles.overdue}>Overdue</span> : null}
           <span>{dueLabel(homework.due_on)}</span>
           <TopicChips topics={topics} />
+          {feedback ? (
+            <Link to={`/me/feedback/${feedback.id}`} className={styles.link}>
+              Feedback
+            </Link>
+          ) : null}
         </p>
       </div>
 
-      <MarkSheet marking={readMarking(homework.marking)} questions={questions} />
+      <MarkSheet marking={readMarking(homework.marking)} answers={answers} />
 
       {isTypst && pdfId ? (
         <Card>

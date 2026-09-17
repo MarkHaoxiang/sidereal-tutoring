@@ -5,6 +5,7 @@ import type { HomeworkDetail } from "@/lib/queries";
 import { plainText } from "@/lib/typstText";
 
 import styles from "./artefacts.module.css";
+import { editedSince } from "./questions";
 
 interface QuestionRow {
   id: string;
@@ -64,12 +65,18 @@ export function HomeworkQuestions({ homework }: { homework: HomeworkDetail }) {
     return null;
   }
 
+  const edited = editedSince(homework.content, rows);
+
   return (
     <section className={styles.section}>
       <div className={styles.sectionHeader}>
         <h2 className={styles.sectionTitle}>Questions</h2>
       </div>
-      <p className={styles.sectionNote}>The questions as they were generated — editing the sheet does not change them.</p>
+      <p className={styles.sectionNote}>
+        {edited
+          ? "The sheet was edited after these questions were generated."
+          : "The questions as they were generated — editing the sheet does not change them."}
+      </p>
       <ol className={styles.questions}>
         {rows.map((row) => (
           <li key={row.id} className={styles.question}>

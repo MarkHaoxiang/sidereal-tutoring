@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from pydantic import BaseModel, ConfigDict
 from sidereal_core.canonical import (
     CanonicalAnswer,
+    CanonicalBlock,
     CanonicalCodeBlock,
     CanonicalMarkScheme,
     CanonicalMarkSchemeQuestion,
@@ -54,6 +55,10 @@ UNANSWERED_PARTS = (
 )
 
 _BATCH = ConfigDict(frozen=True, extra="forbid")
+
+# The fewest letters of a question's wording a block must repeat before it is a copy of it
+# rather than an extract that happens to share a phrase.
+RESTATED = 40
 
 # The model never authors a `figure` block: the app crops those out of the PDF and places
 # them. Leaving it out of the union is part of what keeps these schemas compilable.
@@ -624,16 +629,74 @@ def _question(
 ) -> CanonicalQuestion:
     question = answered[stub.number]
     blocks = tuple(placed.pop((stub.number, None), ()))
-    return _hoisted(
-        CanonicalQuestion(
-            number=stub.number,
-            stem=question.stem,
-            marks=stub.marks if question.marks is None else question.marks,
-            answer=question.answer,
-            parts=tuple(_part(stub.number, part, placed) for part in question.parts),
-            blocks=blocks,
+    return unrestated(
+        _hoisted(
+            CanonicalQuestion(
+                number=stub.number,
+                stem=question.stem,
+                marks=stub.marks if question.marks is None else question.marks,
+                answer=question.answer,
+                parts=tuple(_part(stub.number, part, placed) for part in question.parts),
+                blocks=blocks,
+            )
         )
     )
+
+
+def unrestated(question: CanonicalQuestion) -> CanonicalQuestion:
+    """The question without a passage block that only prints the question's own wording again.
+
+    Asked for the material a multiple-choice question prints, a block call answers with the
+    question itself, options and all, and the sheet then carries it twice.
+    """
+    wording = [letters for text in _wording(question) if len(letters := _letters(text)) >= RESTATED]
+    if not wording:
+        return question
+    return question.model_copy(
+        update={
+            "blocks": _kept(question.blocks, wording),
+            "parts": tuple(
+                part.model_copy(
+                    update={
+                        "blocks": _kept(part.blocks, wording),
+                        "parts": tuple(
+                            sub.model_copy(update={"blocks": _kept(sub.blocks, wording)})
+                            for sub in part.parts
+                        ),
+                    }
+                )
+                for part in question.parts
+            ),
+        }
+    )
+
+
+def _wording(question: CanonicalQuestion) -> Iterator[str]:
+    yield question.stem or ""
+    for part in question.parts:
+        yield part.text
+        for sub in part.parts:
+            yield sub.text
+
+
+def _kept(blocks: Sequence[CanonicalBlock], wording: Sequence[str]) -> tuple[CanonicalBlock, ...]:
+    kept = []
+    for block in blocks:
+        if isinstance(block, CanonicalPassageBlock) and _restates(block, wording):
+            logger.warning("a passage block repeats the wording it is printed beside; dropping it")
+            continue
+        kept.append(block)
+    return tuple(kept)
+
+
+def _restates(block: CanonicalPassageBlock, wording: Sequence[str]) -> bool:
+    printed = _letters(block.text)
+    return any(letters in printed for letters in wording)
+
+
+def _letters(text: str) -> str:
+    """Wording with everything a transcription may spell differently taken out."""
+    return "".join(character for character in text.lower() if character.isalpha())
 
 
 def _hoisted(question: CanonicalQuestion) -> CanonicalQuestion:

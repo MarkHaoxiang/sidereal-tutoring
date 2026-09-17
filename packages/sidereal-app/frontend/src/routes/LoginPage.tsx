@@ -16,6 +16,9 @@ export function LoginPage() {
   const location = useLocation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  // Whoever was just signed out arrives carrying the sentence to show them.
+  const sentOut = (location.state as { message?: string } | null)?.message ?? null;
+  const [notice, setNotice] = useState<string | null>(sentOut);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -26,6 +29,7 @@ export function LoginPage() {
 
   const submit = async () => {
     setError(null);
+    setNotice(null);
     setIsSubmitting(true);
     try {
       // Three surfaces, one form: where they land is what /api/me says they are.
@@ -55,7 +59,7 @@ export function LoginPage() {
         <div className={styles.brandInner}>
           <Wordmark size="lg" className={styles.wordmark} />
           <p className={styles.tagline}>
-            Of the stars — a quiet study for your students and their work.
+            Of the stars — a quiet study for lessons, work and feedback.
           </p>
         </div>
       </section>
@@ -63,6 +67,12 @@ export function LoginPage() {
       <div className={styles.formSide}>
         <form className={styles.form} onSubmit={handleSubmit}>
           <h1 className={styles.title}>Sign in</h1>
+
+          {notice ? (
+            <p className={styles.notice} role="status">
+              {notice}
+            </p>
+          ) : null}
 
           <Field label="Email">
             <Input

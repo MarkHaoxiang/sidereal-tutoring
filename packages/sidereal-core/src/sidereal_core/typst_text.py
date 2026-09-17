@@ -52,6 +52,9 @@ _OPERATORS: dict[str, str] = {
 # The symbols that count as letters when deciding whether a space between two atoms survives.
 _LETTER_SYMBOLS = frozenset("παβγδΔθλμρσΣφωΩ")
 
+# A symbol that is set tight against whatever precedes it: `$30 degree$` is an angle, "30°".
+_TIGHT = frozenset("°")
+
 _SUPERSCRIPTS: dict[str, str] = dict(
     zip(
         "0123456789+-=()ni",
@@ -274,11 +277,9 @@ def _render(atoms: list[_Atom]) -> str:
             continue
         before = atoms[index - 1] if index > 0 else None
         after = atoms[index + 1] if index + 1 < len(atoms) else None
-        joined = (
-            before is not None
-            and after is not None
-            and _ends_letter(before)
-            and _starts_letter(after)
+        joined = after is not None and (
+            (after.text in _TIGHT and not after.quoted)
+            or (before is not None and _ends_letter(before) and _starts_letter(after))
         )
         if not joined:
             out.append(" ")

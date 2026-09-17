@@ -26,6 +26,7 @@ export function StudentFeedbackPage() {
             <Link to={`/me/homework/${about.id}`} className={styles.feedbackLink}>
               Your homework
             </Link>
+            {about.marks ? <span className={styles.mark}>{about.marks} marks</span> : null}
           </p>
         ) : null}
       </div>

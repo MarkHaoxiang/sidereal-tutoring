@@ -5,7 +5,7 @@ from uuid import UUID, uuid4
 import httpx
 import pytest
 from sidereal_core.directus import DirectusClient, DirectusError
-from sidereal_core.files import release_uploads
+from sidereal_core.files import FIGURES_FOLDER, release_uploads
 from sidereal_core.models import Collection
 from sidereal_core.testing import FakeDirectus
 
@@ -128,3 +128,19 @@ async def test_a_file_the_caller_may_not_own_is_released_to_nobody() -> None:
 
     assert refused
     assert fake.files[file_id][0]["uploaded_by"] is None
+
+
+async def test_a_file_can_be_uploaded_into_a_folder() -> None:
+    """A figure crop nothing points at is readable by the folder it sits in and nothing else."""
+    fake = FakeDirectus()
+    folder = fake.seed("directus_folders", {"name": FIGURES_FOLDER})
+
+    async with fake.client() as client:
+        found = await client.find_folder(FIGURES_FOLDER)
+        assert found is not None
+        uploaded = await client.upload_file(
+            "figure-1.jpg", b"\xff\xd8jpeg", "image/jpeg", folder=found.id
+        )
+
+    assert str(found.id) == folder["id"]
+    assert fake.files[str(uploaded.id)][0]["folder"] == folder["id"]

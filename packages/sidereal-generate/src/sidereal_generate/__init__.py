@@ -8,6 +8,7 @@ from sidereal_generate.base import (
     PaperExtractor,
     PlanGenerator,
     strict_schema,
+    unescaped,
     unstringify,
 )
 from sidereal_generate.claude import (
@@ -31,6 +32,7 @@ from sidereal_generate.jobs import (
     Generators,
     JobInput,
     JobInputError,
+    JobStudentGoneError,
     default_generators,
     run_job,
     start_job,
@@ -115,6 +117,7 @@ __all__ = [
     "HomeworkOutput",
     "JobInput",
     "JobInputError",
+    "JobStudentGoneError",
     "MarkSchemeExtraction",
     "NotTypstError",
     "OpenRouterCall",
@@ -148,6 +151,7 @@ __all__ = [
     "run_job",
     "start_job",
     "strict_schema",
+    "unescaped",
     "unstringify",
     "upload_pdf",
 ]

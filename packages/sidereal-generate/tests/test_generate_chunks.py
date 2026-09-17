@@ -5,7 +5,11 @@ import logging
 from typing import Any
 
 import pytest
-from sidereal_core.canonical import CanonicalMarkSchemeQuestion, CanonicalPaper
+from sidereal_core.canonical import (
+    CanonicalMarkSchemeQuestion,
+    CanonicalPaper,
+    CanonicalPassageBlock,
+)
 from sidereal_generate.base import GenerationError, strict_schema
 from sidereal_generate.chunks import (
     BatchQuestion,
@@ -558,3 +562,66 @@ def test_a_sub_part_covered_by_its_parts_whole_answer_is_unchanged() -> None:
     scheme = merge_scheme(paper, [answered])
 
     assert [part.label for part in scheme.questions[0].parts] == ["a"]
+
+
+def test_a_block_that_only_restates_the_question_is_not_kept() -> None:
+    """The live paper: a block call answered a choice question with the question itself."""
+    stem = (
+        "A parachutist descends to the ground at a constant speed with the parachute open. "
+        "Which force, together with the parachutist's weight, makes a pair according to "
+        "Newton's third law of motion?"
+    )
+    answered = {
+        "25": BatchQuestion.model_validate(
+            {
+                "number": "25",
+                "stem": stem,
+                "answer": {
+                    "type": "multiple_choice",
+                    "options": [{"label": "A", "text": "the drag force"}],
+                },
+            }
+        )
+    }
+    blocks = [
+        BlockPlacement.model_validate(
+            {
+                "question_number": "25",
+                "part_label": None,
+                "block": {"type": "passage", "text": f"{stem}\n\nA the drag force"},
+            }
+        ),
+        BlockPlacement.model_validate(
+            {
+                "question_number": "25",
+                "part_label": None,
+                "block": {"type": "passage", "title": "Extract", "text": "Material it needs."},
+            }
+        ),
+    ]
+
+    question = merge(shape(questions=[stub("25", material=True)]), answered, blocks).questions[0]
+
+    kept = [block for block in question.blocks if isinstance(block, CanonicalPassageBlock)]
+    assert [block.title for block in kept] == ["Extract"]
+
+
+def test_a_passage_that_merely_shares_a_phrase_with_its_question_is_kept() -> None:
+    answered = {
+        "1": BatchQuestion.model_validate(
+            {"number": "1", "stem": "Read the extract and answer the question below."}
+        )
+    }
+    blocks = [
+        BlockPlacement.model_validate(
+            {
+                "question_number": "1",
+                "part_label": None,
+                "block": {"type": "passage", "text": "Read the extract. Then the poem begins."},
+            }
+        )
+    ]
+
+    question = merge(shape(questions=[stub("1", material=True)]), answered, blocks).questions[0]
+
+    assert len(question.blocks) == 1

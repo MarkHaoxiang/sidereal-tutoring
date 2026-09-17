@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from collections.abc import Sequence
 from types import NoneType
 from typing import Any, Protocol, get_args, get_origin, runtime_checkable
@@ -51,6 +52,37 @@ def strict_schema(model: type[BaseModel]) -> dict[str, Any]:
         if isinstance(properties, dict):
             definition["required"] = list(properties)
     return schema
+
+
+# A JSON escape a model wrote into a text field instead of the character it stands for.
+# `12\u00b0` arrives as six characters, and six characters is what the renderer prints.
+# A lone surrogate stands for nothing on its own and is left as it was written.
+_ESCAPED = re.compile(
+    r"\\u(?:(?P<high>[dD][89abAB][0-9a-fA-F]{2})\\u(?P<low>[dD][c-fC-F][0-9a-fA-F]{2})"
+    r"|(?P<single>(?![dD][89a-fA-F])[0-9a-fA-F]{4}))"
+)
+
+
+def unescaped(payload: object) -> object:
+    """Every string in a model's answer with its JSON escapes turned back into characters."""
+    match payload:
+        case str():
+            return _ESCAPED.sub(_character, payload)
+        case dict():
+            return {key: unescaped(item) for key, item in payload.items()}
+        case list():
+            return [unescaped(item) for item in payload]
+        case _:
+            return payload
+
+
+def _character(match: re.Match[str]) -> str:
+    single = match.group("single")
+    if single is not None:
+        return chr(int(single, 16))
+    high = int(match.group("high"), 16) - 0xD800
+    low = int(match.group("low"), 16) - 0xDC00
+    return chr(0x10000 + (high << 10) + low)
 
 
 def unstringify(payload: object, model: type[BaseModel]) -> object:

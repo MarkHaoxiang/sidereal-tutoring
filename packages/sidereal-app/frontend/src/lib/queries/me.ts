@@ -88,7 +88,13 @@ function fetchMyFeedbackList() {
 function fetchMyFeedback(id: string) {
   return directus.request(
     readItem("feedback", id, {
-      fields: ["id", "content", "status", "date_created", { homework: ["id", "title"] }],
+      fields: [
+        "id",
+        "content",
+        "status",
+        "date_created",
+        { homework: ["id", "title", "status", "marking"] },
+      ],
     })
   );
 }

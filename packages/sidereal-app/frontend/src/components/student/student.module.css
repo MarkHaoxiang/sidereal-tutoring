@@ -111,6 +111,12 @@ a.row:focus-visible {
 }
 
 /* The question, above the box its answer goes in. */
+/* The box's own Insert, so what fills which box is never a guess. */
+.boxTools {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .questionText {
   margin: 0;
   color: var(--color-fg-muted);
@@ -294,18 +300,33 @@ a.row:focus-visible {
   gap: 0.5rem;
 }
 
-.markQuestion {
-  overflow-wrap: anywhere;
-}
-
 .markScore {
   color: var(--color-fg-muted);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
+.markQuestion {
+  font-weight: 600;
+}
+
+/* What was handed in for this question, so the mark is read beside the answer. */
+.markAnswer {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.markBlank {
+  margin: 0;
+  color: var(--color-fg-muted);
+  font-style: italic;
+}
+
 .markComment {
   margin: 0;
+  padding-left: 0.75rem;
+  border-left: 2px solid var(--color-border-strong);
   color: var(--color-fg-muted);
   text-wrap: pretty;
 }

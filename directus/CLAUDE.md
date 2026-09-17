@@ -136,6 +136,10 @@
   credentials.": a `suspended`, `inactive` or `archived` user, a wrong password and an unknown
   address are indistinguishable from the response. Telling a suspended user so means reading
   their `status` server-side, never the login error.
+- That status read is the `Service` policy's one grant: an unfiltered `directus_users` read over
+  `id`, `email` and `status`, attached to `agent@sidereal.example.com` directly and never to the
+  `Tutor` role, which no tutor-scoped token could answer. It holds nothing else, and a `fields=*`
+  read through it returns every other column as null.
 - The admin app authenticates by the `directus_session_token` cookie alone, which only
   `POST /auth/login` with `mode: "session"` issues. A json-mode token buys nothing there:
   `?access_token=` on an `/admin` route is ignored, and `POST /auth/refresh` with

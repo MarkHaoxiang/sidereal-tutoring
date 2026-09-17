@@ -55,6 +55,7 @@ from sidereal_core.logins import (
 from sidereal_core.models import (
     Collection,
     DirectusFile,
+    DirectusFolder,
     DirectusLicense,
     DirectusRole,
     DirectusServerInfo,
@@ -193,6 +194,7 @@ __all__ = [
     "DirectusError",
     "DirectusErrorDetail",
     "DirectusFile",
+    "DirectusFolder",
     "DirectusLicense",
     "DirectusRole",
     "DirectusServerInfo",

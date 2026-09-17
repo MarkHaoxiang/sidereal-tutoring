@@ -1,16 +1,29 @@
+import { markingLabel } from "@/lib/marking";
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : null;
 }
 
-/** The title of the homework a piece of feedback is about, as far as the SDK expanded it. */
-export function feedbackHomework(value: unknown): { id: string; title: string } | null {
+export interface FeedbackHomework {
+  id: string;
+  title: string;
+  /** "5 / 20" once it has been marked, and null until then. */
+  marks: string | null;
+}
+
+/** The homework a piece of feedback is about, as far as the SDK expanded it. */
+export function feedbackHomework(value: unknown): FeedbackHomework | null {
   const row = asRecord(value);
   const id = row?.["id"];
   if (row === null || typeof id !== "string") {
     return null;
   }
   const title = row["title"];
-  return { id, title: typeof title === "string" && title ? title : "Untitled homework" };
+  return {
+    id,
+    title: typeof title === "string" && title ? title : "Untitled homework",
+    marks: markingLabel(row["marking"]),
+  };
 }
 
 /**

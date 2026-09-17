@@ -11,6 +11,10 @@ from sidereal_core.models import DirectusFile
 logger = logging.getLogger(__name__)
 # A practice's whole file store is smaller than this; a user's share of it always is.
 MAX_UPLOADS = 1000
+# Where a paper's figure crops are filed. A crop is named only inside a paper's `structure`,
+# so no relation reaches it and no ownership rule can: the folder is what a tutor's read rule
+# on `directus_files` matches, and `scripts/directus-bootstrap.sh` creates it.
+FIGURES_FOLDER = "Figures"
 
 
 async def release_uploads(

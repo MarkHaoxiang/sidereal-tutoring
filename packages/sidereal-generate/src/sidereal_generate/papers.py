@@ -27,6 +27,7 @@ from sidereal_core.canonical import (
     RenderOutput,
 )
 from sidereal_core.directus import DirectusClient, DirectusClientError
+from sidereal_core.files import FIGURES_FOLDER
 from sidereal_core.models import (
     Collection,
     Document,
@@ -55,6 +56,7 @@ from sidereal_ingest.base import IngestError
 from sidereal_ingest.pdf import Figure, figure, needs_page_images, page_images, raster_pages
 
 from sidereal_generate.base import GenerationError, PaperExtractor
+from sidereal_generate.chunks import unrestated
 from sidereal_generate.models import FigureRequest, MarkSchemeExtraction, PaperExtraction
 from sidereal_generate.typst import upload_pdf
 from sidereal_generate.typst_maths import normalise_model
@@ -334,28 +336,32 @@ def _carried(
     """Each question with its blocks, and every shared passage printed where it is named.
 
     A worksheet has no `passages` of its own, so a `passage_ref` that stayed one would
-    render to nothing.
+    render to nothing. A block that only repeats the question's own wording is left behind:
+    a paper read before those were refused still carries one, and it would print twice.
     """
     passages = {passage.id: passage for passage in paper.passages}
-    return tuple(
-        question.model_copy(
-            update={
-                "blocks": _inlined(question.blocks, passages),
-                "parts": tuple(
-                    part.model_copy(
-                        update={
-                            "blocks": _inlined(part.blocks, passages),
-                            "parts": tuple(
-                                sub.model_copy(update={"blocks": _inlined(sub.blocks, passages)})
-                                for sub in part.parts
-                            ),
-                        }
-                    )
-                    for part in question.parts
-                ),
-            }
-        )
-        for question in questions
+    return tuple(_printed(unrestated(question), passages) for question in questions)
+
+
+def _printed(
+    question: CanonicalQuestion, passages: Mapping[str, CanonicalPassage]
+) -> CanonicalQuestion:
+    return question.model_copy(
+        update={
+            "blocks": _inlined(question.blocks, passages),
+            "parts": tuple(
+                part.model_copy(
+                    update={
+                        "blocks": _inlined(part.blocks, passages),
+                        "parts": tuple(
+                            sub.model_copy(update={"blocks": _inlined(sub.blocks, passages)})
+                            for sub in part.parts
+                        ),
+                    }
+                )
+                for part in question.parts
+            ),
+        }
     )
 
 
@@ -686,9 +692,10 @@ async def _place_figures(
     """Every request cropped, filed and placed. The requests are consumed, never stored."""
     if not extraction.figures or source is None:
         return extraction.model_copy(update={"figures": ()})
+    folder = await _figures_folder(client)
     placed: list[tuple[FigureRequest, CanonicalFigureBlock]] = []
     for number, request in enumerate(extraction.figures, start=1):
-        block = await _figure(client, source, request, number)
+        block = await _figure(client, source, request, number, folder)
         if block is not None:
             placed.append((request, block))
     return extraction.model_copy(
@@ -696,8 +703,33 @@ async def _place_figures(
     )
 
 
+async def _figures_folder(client: DirectusClient) -> UUID | None:
+    """A crop filed outside the shared folder is one no other tutor may read.
+
+    A folder this caller cannot see leaves the crops where an unbootstrapped Directus has
+    always put them: an extraction is never lost over where its pictures are filed.
+    """
+    try:
+        folder = await client.find_folder(FIGURES_FOLDER)
+    except DirectusClientError as exc:
+        logger.warning("the %s folder could not be read: %s", FIGURES_FOLDER, exc)
+        return None
+    if folder is None:
+        logger.warning(
+            "Directus has no %s folder, so these crops are readable by their uploader alone; "
+            "run scripts/directus-bootstrap.sh",
+            FIGURES_FOLDER,
+        )
+        return None
+    return folder.id
+
+
 async def _figure(
-    client: DirectusClient, source: bytes, request: FigureRequest, number: int
+    client: DirectusClient,
+    source: bytes,
+    request: FigureRequest,
+    number: int,
+    folder: UUID | None = None,
 ) -> CanonicalFigureBlock | None:
     """A crop that fails is logged and dropped: the paper is the work, not the picture."""
     try:
@@ -717,6 +749,7 @@ async def _figure(
         cropped.jpeg,
         FIGURE_TYPE,
         title=request.caption or f"Figure {number}",
+        folder=folder,
     )
     return CanonicalFigureBlock(
         asset=f"{uploaded.id}{FIGURE_SUFFIX}",

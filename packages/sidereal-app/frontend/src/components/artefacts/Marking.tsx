@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 
 import { Button, Field, Input, Textarea } from "@/components/ui";
 import { markingTotals, marksLabel } from "@/lib/marking";
@@ -21,7 +21,8 @@ export interface MarkingProps {
   marking: MarkingValue | null;
   /** `submitted` is being marked; `marked` is being corrected. */
   status: "submitted" | "marked";
-  onSave: (marking: MarkingValue) => Promise<void>;
+  /** Saves the marks. `finish` also moves the hand-in to marked. */
+  onSave: (marking: MarkingValue, finish: boolean) => Promise<void>;
 }
 
 interface Row {
@@ -95,6 +96,16 @@ function marked(row: Row): MarkedQuestion {
   };
 }
 
+/** Everything typed, as one string: what "saved" and "since saved" are compared by. */
+function typed(draft: Draft): string {
+  return JSON.stringify([
+    draft.rows.map((row) => [row.number, row.awarded, row.available, row.comment]),
+    draft.comment,
+    draft.awarded,
+    draft.available,
+  ]);
+}
+
 /** The first mark that cannot be right, said the way a tutor would say it. */
 function refuse(draft: Draft): string | null {
   if (draft.rows.length === 0) {
@@ -133,10 +144,30 @@ export function Marking({ questions, marking, status, onSave }: MarkingProps) {
   const [problem, setProblem] = useState<string | null>(null);
   const signature = JSON.stringify([questions, marking]);
   const [draft, setDraft] = useState(() => build(questions, marking, signature));
+  const [saved, setSaved] = useState(() => typed(draft));
 
   if (draft.signature !== signature) {
-    setDraft(build(questions, marking, signature));
+    const next = build(questions, marking, signature);
+    setDraft(next);
+    setSaved(typed(next));
   }
+
+  const dirty = typed(draft) !== saved;
+
+  // Marking is typed a question at a time and a tutor reloads to check it is safe. The
+  // browser's own warning is the only one a reload or a closed tab will show.
+  useEffect(() => {
+    if (!dirty) {
+      return;
+    }
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => {
+      window.removeEventListener("beforeunload", warn);
+    };
+  }, [dirty]);
 
   const edit = (next: Partial<Draft>) => {
     setProblem(null);
@@ -158,7 +189,7 @@ export function Marking({ questions, marking, status, onSave }: MarkingProps) {
       : { awarded: toMarks(draft.awarded) ?? 0, available: toMarks(draft.available) ?? 0 };
   const label = marksLabel(totals.awarded, totals.available);
 
-  const save = async () => {
+  const save = async (finish: boolean) => {
     const trouble = refuse(draft);
     if (trouble) {
       setProblem(trouble);
@@ -173,7 +204,8 @@ export function Marking({ questions, marking, status, onSave }: MarkingProps) {
     };
     setSaving(true);
     try {
-      await onSave(built);
+      await onSave(built, finish);
+      setSaved(typed(draft));
     } catch {
       // The caller says what went wrong; everything typed stays where it is.
     } finally {
@@ -306,11 +338,26 @@ export function Marking({ questions, marking, status, onSave }: MarkingProps) {
       ) : null}
 
       <div className={styles.actions}>
+        {dirty ? (
+          <p className={styles.unsaved} aria-live="polite">
+            Unsaved marks
+          </p>
+        ) : null}
+        {status === "submitted" ? (
+          <Button
+            loading={saving}
+            onClick={() => {
+              void save(false);
+            }}
+          >
+            Save marks
+          </Button>
+        ) : null}
         <Button
           variant="primary"
           loading={saving}
           onClick={() => {
-            void save();
+            void save(status === "submitted");
           }}
         >
           {status === "submitted" ? "Finish marking" : "Save marking"}

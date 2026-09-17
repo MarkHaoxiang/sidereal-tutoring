@@ -72,6 +72,32 @@ export function diagnosticPlace(diagnostic: Diagnostic): string | null {
   return diagnostic.column === null ? line : `${line}, column ${String(diagnostic.column)}`;
 }
 
+function isFigure(node: unknown, named: ReadonlySet<string>): boolean {
+  const row = asRecord(node);
+  const asset = row?.["asset"];
+  return row?.["type"] === "figure" && typeof asset === "string" && named.has(asset);
+}
+
+/**
+ * The document without the `figure` blocks naming any of `assets`, at whatever depth they
+ * sit. A figure whose image cannot be read is left out rather than sent as a name with no
+ * bytes, which the renderer refuses for the whole question.
+ */
+export function withoutFigures<T>(value: T, assets: readonly string[]): T {
+  const named = new Set(assets);
+  const walk = (node: unknown): unknown => {
+    if (Array.isArray(node)) {
+      return node.filter((item) => !isFigure(item, named)).map(walk);
+    }
+    const row = asRecord(node);
+    if (row === undefined) {
+      return node;
+    }
+    return Object.fromEntries(Object.entries(row).map(([key, item]) => [key, walk(item)]));
+  };
+  return walk(value) as T;
+}
+
 /** Every `figure` block's asset name in a canonical document, in the order they are met. */
 export function figureAssets(value: unknown): string[] {
   const found: string[] = [];

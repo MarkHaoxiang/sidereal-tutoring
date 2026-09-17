@@ -26,14 +26,3 @@
   color: var(--color-border-strong);
 }
 
-.passwordRow {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.password {
-  flex: 1 1 10rem;
-  font-family: ui-monospace, "SFMono-Regular", "Menlo", monospace;
-  letter-spacing: 0.04em;
-}

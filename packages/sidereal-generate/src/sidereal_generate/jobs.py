@@ -45,6 +45,7 @@ from sidereal_core.models import (
     SessionStatus,
     Student,
 )
+from sidereal_core.students import StudentNotVisibleError, visible_student
 from sidereal_core.typeset import TypesetClient, TypesetError, TypesetUnavailableError
 
 from sidereal_generate.base import (
@@ -90,10 +91,15 @@ MATERIAL_GONE = (401, 403, 404)
 ERROR_DETAIL = 400
 # Far enough ahead to find the next lesson without reading a term's worth of them.
 SESSION_LOOKAHEAD = 50
+STUDENT_GONE = "That job's student no longer exists, so it cannot be run again."
 
 
 class JobInputError(Exception):
     """A job row whose `input` cannot drive its kind. The message is what a tutor reads."""
+
+
+class JobStudentGoneError(Exception):
+    """A job whose student has been deleted. Its history stays; it cannot be run again."""
 
 
 class JobInput(BaseModel):
@@ -182,9 +188,27 @@ async def start_job(
 async def retry_job(client: DirectusClient, generators: Generators, job_id: UUID) -> GenerationJob:
     """A new job carrying the old one's input. The row that failed stays as the history."""
     job = await client.get_item(Collection.GENERATION_JOBS, GenerationJob, job_id)
-    return await start_job(
-        client, job.kind, JobInput.model_validate(job.input), model=generators.for_kind(job.kind)
-    )
+    job_input = await _replayable(client, job)
+    return await start_job(client, job.kind, job_input, model=generators.for_kind(job.kind))
+
+
+async def _replayable(client: DirectusClient, job: GenerationJob) -> JobInput:
+    """The old input, with a student the practice still has.
+
+    Deleting a student nulls the job's own `student` and leaves its `input` naming a row
+    Directus will refuse: a retry that sent it back would answer with a foreign key.
+    """
+    job_input = JobInput.model_validate(job.input)
+    if job.kind is GenerationKind.PAPER_EXTRACT:
+        return job_input
+    student = job_input.student or job.student
+    if student is None:
+        raise JobStudentGoneError(STUDENT_GONE)
+    try:
+        await visible_student(client, student)
+    except StudentNotVisibleError as exc:
+        raise JobStudentGoneError(STUDENT_GONE) from exc
+    return job_input.model_copy(update={"student": student})
 
 
 async def run_job(

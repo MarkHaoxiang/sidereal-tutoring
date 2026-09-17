@@ -108,3 +108,35 @@ def test_only_feedback_is_written_about_a_hand_in(
     assert response.status_code == 422
     assert response.json()["detail"]["code"] == "homework_unsupported"
     assert not fake_directus.rows(Collection.GENERATION_JOBS)
+
+
+def test_a_retry_of_a_deleted_students_job_is_refused_in_words(
+    client: TestClient, fake_directus: FakeDirectus, student_id: UUID, auth: dict[str, str]
+) -> None:
+    """The live failure: a raw Directus foreign key reached the toast and nothing was queued."""
+    first = client.post(
+        "/api/jobs/feedback", headers=auth, json={"student_id": str(student_id)}
+    ).json()
+    client.delete(f"/api/students/{student_id}", headers=auth)
+    queued = len(fake_directus.rows(Collection.GENERATION_JOBS))
+
+    response = client.post(f"/api/jobs/{first['id']}/retry", headers=auth)
+
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "student_gone"
+    assert response.json()["detail"]["message"] == (
+        "That job's student no longer exists, so it cannot be run again."
+    )
+    assert len(fake_directus.rows(Collection.GENERATION_JOBS)) == queued
+
+
+def test_the_admin_jobs_listing_still_names_a_deleted_students_work(
+    client: TestClient, fake_directus: FakeDirectus, student_id: UUID, auth: dict[str, str]
+) -> None:
+    client.post("/api/jobs/feedback", headers=auth, json={"student_id": str(student_id)})
+    fake_directus.admin = True
+
+    client.delete(f"/api/students/{student_id}", headers=auth)
+    rows = client.get("/api/admin/jobs", headers=auth).json()
+
+    assert [row["student_name"] for row in rows] == ["A. Tutee"]

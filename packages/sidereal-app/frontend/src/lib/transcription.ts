@@ -1,4 +1,5 @@
 import type { TranscribedQuestion, Transcription, TranscriptionConfidence } from "@/lib/schema";
+import { plainText } from "@/lib/typstText";
 
 /** What the transcriber writes where it could not read the page. */
 const UNREADABLE = "[?]";
@@ -42,6 +43,25 @@ export function readTranscription(value: unknown): Transcription | null {
       return parsed ? [parsed] : [];
     }),
   };
+}
+
+/** The whole of what the photo said, as one piece of markdown. */
+export function transcriptionText(value: Transcription): string {
+  const text = value.text?.trim();
+  if (text) {
+    return plainText(text);
+  }
+  return value.questions
+    .map((question) => `**${question.number}** ${plainText(question.text)}`)
+    .join("\n\n");
+}
+
+/** What the photo said for one question, when it was read question by question. */
+export function questionTranscription(value: Transcription, number: number): string | null {
+  const row = value.questions.find(
+    (question) => Number.parseInt(question.number.replace(/[^0-9]/g, ""), 10) === number
+  );
+  return row ? plainText(row.text) : null;
 }
 
 export function hasTranscription(value: Transcription | null): boolean {

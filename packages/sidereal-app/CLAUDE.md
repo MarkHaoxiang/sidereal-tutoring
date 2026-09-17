@@ -62,6 +62,8 @@ Top layer. Imports core, ingest and generate; never sidereal-mcp.
   `homework_unsupported` before a job row exists.
 - `POST /api/jobs/{id}/retry` answers 202 with a new queued row and runs it in the background. The
   job that failed is left as it stands.
+- A retry of a job whose student has been deleted is 422 `student_gone`, and no row is written: a
+  Directus foreign key is never what a tutor reads.
 - `POST /api/jobs/paper_extract` takes exactly one document and no student; every other kind takes a
   student. Both are 422 with a `code` before a job row exists.
 - `pages` is on `paper_extract` alone: any other kind carrying it, even `false`, is 422

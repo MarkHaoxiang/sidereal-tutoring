@@ -14,7 +14,12 @@ import {
   useTranscribeSubmission,
 } from "@/lib/queries";
 import type { MyHomework } from "@/lib/queries";
-import { hasTranscription, readTranscription } from "@/lib/transcription";
+import {
+  hasTranscription,
+  questionTranscription,
+  readTranscription,
+  transcriptionText,
+} from "@/lib/transcription";
 import { plainText } from "@/lib/typstText";
 
 import { joinAnswers, splitAnswers } from "./answers";
@@ -24,6 +29,14 @@ import styles from "./student.module.css";
 
 const ACCEPT = ".pdf,.png,.jpg,.jpeg,.heic,.webp";
 const FALLBACK = "your working";
+
+/** "Q3", "Q3 and Q5", "Q1, Q3 and Q5" — the way it would be said out loud. */
+function listed(names: string[]): string {
+  if (names.length < 3) {
+    return names.join(" and ");
+  }
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1] ?? ""}`;
+}
 
 /** The photo as it was taken; anything else as a link to open. */
 function Attachment({ fileId }: { fileId: string }) {
@@ -60,10 +73,12 @@ interface AnswerBoxProps {
   value: string;
   onChange: (value: string) => void;
   onCaret: (at: number) => void;
+  /** Writes what the photo said for this question into this box, and nowhere else. */
+  onInsert?: (() => void) | undefined;
 }
 
 /** One box, as tall as what is in it. */
-function AnswerBox({ label, question, value, onChange, onCaret }: AnswerBoxProps) {
+function AnswerBox({ label, question, value, onChange, onCaret, onInsert }: AnswerBoxProps) {
   const wrapper = useRef<HTMLDivElement | null>(null);
 
   useLayoutEffect(() => {
@@ -80,6 +95,21 @@ function AnswerBox({ label, question, value, onChange, onCaret }: AnswerBoxProps
     <div ref={wrapper}>
       <Field label={label}>
         {question === null ? null : <p className={styles.questionText}>{question}</p>}
+        {onInsert ? (
+          <div className={styles.boxTools}>
+            <Button
+              size="sm"
+              variant="ghost"
+              // The caret stays where the student left it, so the text lands there.
+              onMouseDown={(event) => {
+                event.preventDefault();
+              }}
+              onClick={onInsert}
+            >
+              Insert here
+            </Button>
+          </div>
+        ) : null}
         <Textarea
           rows={4}
           value={value}
@@ -108,6 +138,8 @@ export function AnswerCard({ homework, questions }: AnswerCardProps) {
   const saved = homework.submission ?? "";
   const attachmentId = fileIdOf(homework.submission_file);
   const transcription = readTranscription(homework.submission_transcription);
+  // What the photo said, when it said anything: null is "there is nothing to insert".
+  const photo = transcription !== null && hasTranscription(transcription) ? transcription : null;
   const [parts, setParts] = useState(() => splitAnswers(saved, questions));
   const [confirming, setConfirming] = useState(false);
   const [restore, setRestore] = useState<{ index: number; at: number } | null>(null);
@@ -211,9 +243,7 @@ export function AnswerCard({ homework, questions }: AnswerCardProps) {
             <p className={styles.quiet}>Nothing written.</p>
           )}
           {attachment}
-          {transcription !== null && hasTranscription(transcription) ? (
-            <TranscriptionPanel transcription={transcription} />
-          ) : null}
+          {photo !== null ? <TranscriptionPanel transcription={photo} /> : null}
         </div>
       </Card>
     );
@@ -221,15 +251,17 @@ export function AnswerCard({ homework, questions }: AnswerCardProps) {
 
   const submission = joinAnswers(parts, questions);
   const written = parts.some((part) => part.trim() !== "");
+  const blanks = questions
+    .map((_, index) => (parts[index]?.trim() ? null : `Q${String(index + 1)}`))
+    .filter((name): name is string => name !== null);
   const reading = transcribe.isPending;
 
   const setPart = (index: number, value: string) => {
     setParts((current) => current.map((part, at) => (at === index ? value : part)));
   };
 
-  const insert = (text: string) => {
+  const insertInto = (index: number, text: string) => {
     const mark = caret.current;
-    const index = Math.min(mark?.index ?? parts.length - 1, parts.length - 1);
     const value = parts[index] ?? "";
     const at =
       mark !== null && mark.index === index ? Math.min(mark.at, value.length) : value.length;
@@ -277,6 +309,16 @@ export function AnswerCard({ homework, questions }: AnswerCardProps) {
                 onCaret={(at) => {
                   caret.current = { index, at };
                 }}
+                onInsert={
+                  photo === null
+                    ? undefined
+                    : () => {
+                        insertInto(
+                          index,
+                          questionTranscription(photo, index + 1) ?? transcriptionText(photo)
+                        );
+                      }
+                }
               />
             ))
           ) : (
@@ -317,8 +359,17 @@ export function AnswerCard({ homework, questions }: AnswerCardProps) {
           </label>
         )}
 
-        {transcription !== null && hasTranscription(transcription) ? (
-          <TranscriptionPanel transcription={transcription} onInsert={insert} />
+        {photo !== null ? (
+          <TranscriptionPanel
+            transcription={photo}
+            {...(questions.length === 0
+              ? {
+                  onInsert: (text: string) => {
+                    insertInto(0, text);
+                  },
+                }
+              : {})}
+          />
         ) : null}
 
         <p className={styles.quiet}>Once handed in, your answers cannot be changed.</p>
@@ -351,7 +402,11 @@ export function AnswerCard({ homework, questions }: AnswerCardProps) {
           setConfirming(false);
         }}
         title="Hand this homework in?"
-        message="Your answers cannot be changed afterwards."
+        message={
+          blanks.length === 0
+            ? "Your answers cannot be changed afterwards."
+            : `${listed(blanks)} ${blanks.length === 1 ? "is" : "are"} blank. Hand in anyway? Your answers cannot be changed afterwards.`
+        }
         confirmLabel="Hand in"
         cancelLabel="Not yet"
         onConfirm={async () => {

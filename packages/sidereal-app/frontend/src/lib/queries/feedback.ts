@@ -50,7 +50,7 @@ function fetchFeedback(id: string) {
         "date_created",
         { student: ["id", "name"] },
         { session: ["id", "scheduled_at"] },
-        { homework: ["id", "title", "status", "due_on"] },
+        { homework: ["id", "title", "status", "due_on", "marking"] },
       ],
     })
   );

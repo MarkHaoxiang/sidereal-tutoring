@@ -5,10 +5,7 @@ import { Button, Dialog, Field, Input } from "@/components/ui";
 import { ApiError, apiError } from "@/lib/api";
 import { useCreateStudentLogin, useResetStudentPassword } from "@/lib/queries";
 
-import { generatePassword } from "./password";
-import styles from "./students.module.css";
-
-const PASSWORD_HELP = "Copy it now — it is not shown again.";
+import { PasswordField, PasswordHandover } from "./PasswordField";
 
 export interface LoginDialogProps {
   open: boolean;
@@ -25,6 +22,8 @@ export function LoginDialog({ open, onClose, studentId, mode }: LoginDialogProps
   const [password, setPassword] = useState("");
   const [emailError, setEmailError] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
+  // Set, and still on screen: the dialog stays open on the password until it is copied.
+  const [handed, setHanded] = useState<string | null>(null);
   const wasOpen = useRef(false);
 
   // Clear the form as the dialog opens, so a password from a previous visit is never
@@ -35,6 +34,7 @@ export function LoginDialog({ open, onClose, studentId, mode }: LoginDialogProps
       setPassword("");
       setEmailError(null);
       setPasswordError(null);
+      setHanded(null);
     }
     wasOpen.current = open;
   }, [open]);
@@ -60,7 +60,7 @@ export function LoginDialog({ open, onClose, studentId, mode }: LoginDialogProps
         await resetPassword.mutateAsync({ studentId, password });
         toast.success("Saved");
       }
-      onClose();
+      setHanded(password);
     } catch (error) {
       const code = error instanceof ApiError ? error.code : undefined;
       const message = apiError(error);
@@ -81,59 +81,60 @@ export function LoginDialog({ open, onClose, studentId, mode }: LoginDialogProps
       title={creating ? "Set up a login" : "Reset password"}
       busy={pending}
       footer={
-        <>
-          <Button variant="ghost" onClick={onClose} disabled={pending}>
-            Cancel
+        handed !== null ? (
+          <Button variant="primary" onClick={onClose}>
+            I have copied it
           </Button>
-          <Button
-            variant="primary"
-            loading={pending}
-            onClick={() => {
-              void save();
-            }}
-          >
-            {creating ? "Create login" : "Save password"}
-          </Button>
-        </>
+        ) : (
+          <>
+            <Button variant="ghost" onClick={onClose} disabled={pending}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              loading={pending}
+              onClick={() => {
+                void save();
+              }}
+            >
+              {creating ? "Create login" : "Save password"}
+            </Button>
+          </>
+        )
       }
     >
-      {creating ? (
-        <Field label="Email" required help="They sign in with this address." error={emailError}>
-          <Input
-            type="email"
-            value={email}
-            autoFocus
-            autoComplete="off"
-            onChange={(event) => {
-              setEmail(event.target.value);
-              setEmailError(null);
-            }}
-          />
-        </Field>
-      ) : null}
-      <Field label="Password" required help={PASSWORD_HELP} error={passwordError}>
-        <div className={styles.passwordRow}>
-          <Input
-            className={styles.password}
+      {handed !== null ? (
+        <PasswordHandover
+          password={handed}
+          what={creating ? "The login is set up." : "The password is changed."}
+        />
+      ) : (
+        <>
+          {creating ? (
+            <Field label="Email" required help="They sign in with this address." error={emailError}>
+              <Input
+                type="email"
+                value={email}
+                autoFocus
+                autoComplete="off"
+                onChange={(event) => {
+                  setEmail(event.target.value);
+                  setEmailError(null);
+                }}
+              />
+            </Field>
+          ) : null}
+          <PasswordField
             value={password}
-            autoComplete="off"
-            spellCheck={false}
+            error={passwordError}
             autoFocus={!creating}
-            onChange={(event) => {
-              setPassword(event.target.value);
+            onChange={(next) => {
+              setPassword(next);
               setPasswordError(null);
             }}
           />
-          <Button
-            onClick={() => {
-              setPassword(generatePassword());
-              setPasswordError(null);
-            }}
-          >
-            Generate
-          </Button>
-        </div>
-      </Field>
+        </>
+      )}
     </Dialog>
   );
 }

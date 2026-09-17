@@ -5,7 +5,8 @@ from datetime import date
 from typing import Any
 
 from sidereal_core.canonical import CanonicalQuestion
-from sidereal_core.models import Document, Question
+from sidereal_core.homework import sheet_text
+from sidereal_core.models import Document, Homework, Question
 from sidereal_core.typst_text import plain_text
 from sidereal_ingest.transcribe import PaperQuestion
 
@@ -22,11 +23,19 @@ _MATHS_TAIL = (
     'a segment, product or pair of points is `$P Q$` or `$"PQ"$` — `$PQ$` is an unknown variable '
     "and will not compile."
 )
+# A PDF's text layer prints a superscript on the line, so a copied exponent arrives flattened.
+_SCRIPTS = (
+    " Anything the paper prints raised or lowered is maths wherever it appears — in a stem, in "
+    'a table cell, in a heading: `$2.4 times 10^3$`, `$"kg m"^(-3)$`, `$""^4_2"He"$`. A sign or '
+    "more than one character is a group, `$10^(-2)$` and not `$10^-2$`, which raises the sign "
+    "alone. The text below a page image flattens them onto the line; the image does not, so "
+    "copy what the page shows and never `2.4 x 103` for a power of ten."
+)
 _TYPST_MATHS = (
     f"{_MATHS_HEAD}, and so is a `#` call: a field is text, never Typst code.{_MATHS_TAIL}"
 )
 # The renderer escapes; a model warned about `#` escapes it too, and `#0` prints as `\#0`.
-_TYPST_MATHS_COPIED = f"{_MATHS_HEAD}.{_MATHS_TAIL}"
+_TYPST_MATHS_COPIED = f"{_MATHS_HEAD}.{_MATHS_TAIL}{_SCRIPTS}"
 _AUDIENCE = (
     "You write for a private tutor and their student. Plain language, no jargon, no filler. "
     "Use only the material you are given; if it does not cover something, leave it out rather "
@@ -65,12 +74,17 @@ FEEDBACK_PROMPT = (
     "You produce written feedback on one student's recent work for their tutor to send. "
     f"{_AUDIENCE}{_MARKDOWN} Say what went well before what to work on, name the specific piece "
     f"of work each point refers to, and end with one concrete next step.{_DATES}"
-    " Where a hand-in is given below you have the questions as they were set, what the student "
-    "wrote, the transcription of any working they photographed, and the tutor's marks. Work from "
-    "those: quote what the student actually wrote, say which question each point is about, and "
-    "account for the marks the tutor gave. Anything not in the hand-in you did not see — never "
-    "praise or describe working that is not there, and say a question was left blank only when "
-    "the hand-in shows it was."
+    " Where a hand-in is given below you have the sheet the student was given, the questions it "
+    "was generated from, what the student wrote, the transcription of any working they "
+    "photographed, and the tutor's marks. Work from those: quote what the student actually "
+    "wrote, say which question each point is about, and account for the marks the tutor gave. "
+    "Anything not in the hand-in you did not see — never praise or describe working that is not "
+    "there, and say a question was left blank only when the hand-in shows it was."
+    " `<sheet>` is the homework as the student received it and `<questions>` is what it was "
+    "generated from; a tutor who edited a question changed the sheet alone, so where the two "
+    "differ describe the sheet and never a question it does not ask."
+    " Give the mark: where the tutor has marked the work, say the total they gave — '5 out of "
+    "20' — in your own sentence. It is the first thing the student looks for."
 )
 
 PLAN_PROMPT = (
@@ -182,8 +196,11 @@ BLOCK_BATCH_PROMPT = (
     "`passage_ref` block naming its `id` instead. A passage's `text` is verbatim — every line "
     "break and blank line as printed, and nothing in it is markup. A program listing is a "
     "`code` block with its `language`, verbatim too, never prose. A printed data table is a "
-    "`table` block with its `header` and `rows`; an empty table for the student to fill in is "
-    "not material and is left out. Return no blocks at all rather than inventing one.\n"
+    "`table` block with its `header` and `rows`; every cell and header is written the way a "
+    "stem is, maths included, and an empty table for the student to fill in is not material and "
+    "is left out. A question's own wording is not material either: it is already transcribed, "
+    "and a passage repeating it prints the question twice. Return no blocks at all rather than "
+    "inventing one.\n"
     f"{_TYPST_MATHS_COPIED}"
 )
 BLOCK_BATCH_PAGES_PROMPT = f"{BLOCK_BATCH_PROMPT}\n{_PAGE_IMAGES}"
@@ -418,11 +435,18 @@ def render_homework(handed_in: MarkedHomework) -> str:
         lines.append("<questions>")
         lines.extend(_question(question) for question in handed_in.questions)
         lines.append("</questions>")
+    lines.append(_sheet(homework))
     lines.append(f"<submission>{homework.submission or 'nothing was typed in'}</submission>")
     lines.append(_transcription(homework.submission_transcription))
     lines.append(_marking(homework.marking))
     lines.append("</homework>")
     return "\n".join(line for line in lines if line)
+
+
+def _sheet(homework: Homework) -> str:
+    """The sheet the student answered, which a tutor's edit changes and the questions do not."""
+    sheet = sheet_text(homework)
+    return "" if not sheet else f"<sheet>{sheet}</sheet>"
 
 
 def _question(question: Question) -> str:

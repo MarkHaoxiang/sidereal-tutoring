@@ -57,6 +57,8 @@ _MATH = re.compile(r"(?<!\\)\$(.*?)(?<!\\)\$", re.DOTALL)
 _QUOTED = re.compile(r'"[^"]*"')
 # A span opening on `^` or `_` — `kg$^-1$` — has no base to attach the script to.
 _LEADING_SCRIPT = re.compile(r"^(\s*)([_^])")
+# A script takes one atom, so `10^-2` raises the sign alone and leaves the 2 on the line.
+_SIGNED_SCRIPT = re.compile(r"([_^])\s*([+-])\s*([0-9]+(?:\.[0-9]+)?|[A-Za-z][A-Za-z0-9]*)")
 # `dx`, `d x` — a differential, not the product of `d` and `x`.
 _DIFFERENTIAL = re.compile(r"\bd[ ]?([xyztθ])\b")
 # An identifier Typst would look up: letters then letters or digits, unquoted, not a field
@@ -89,7 +91,8 @@ def _span(maths: str) -> str:
 
 def _names(maths: str) -> str:
     """Differentials first: `dx` is one name, and quoting it would keep it one."""
-    return _IDENTIFIER.sub(_quoted, _DIFFERENTIAL.sub(r"dif \1", maths))
+    grouped = _SIGNED_SCRIPT.sub(r"\1(\2\3)", maths)
+    return _IDENTIFIER.sub(_quoted, _DIFFERENTIAL.sub(r"dif \1", grouped))
 
 
 def _quoted(match: re.Match[str]) -> str:

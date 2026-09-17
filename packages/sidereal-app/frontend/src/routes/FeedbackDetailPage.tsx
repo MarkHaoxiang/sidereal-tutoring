@@ -48,6 +48,7 @@ export function FeedbackDetailPage() {
       meta={
         <>
           <StatusChip status={feedback.status} />
+          {about?.marks ? <span>{about.marks} marks</span> : null}
           <span>{formatDateTime(feedback.date_created)}</span>
           {about ? <Link to={`/students/${id ?? ""}/homework/${about.id}`}>Homework</Link> : null}
         </>

@@ -168,6 +168,12 @@ class DirectusFile(Record):
     uploaded_by: UUID | None = None
 
 
+class DirectusFolder(Record):
+    """A row of Directus's own `directus_folders`, read through `/folders`."""
+
+    name: str
+
+
 class StudentDraft(Draft):
     name: str
     level: str | None = None

@@ -138,9 +138,13 @@ export function HomeworkDetailPage() {
               questions={questions}
               marking={readMarking(homework.marking)}
               status={homework.status === "marked" ? "marked" : "submitted"}
-              onSave={async (marking) => {
-                await saveMarking.mutateAsync({ id: homework.id, marking, status: "marked" });
-                toast.success("Marked");
+              onSave={async (marking, finish) => {
+                await saveMarking.mutateAsync({
+                  id: homework.id,
+                  marking,
+                  ...(finish ? { status: "marked" as const } : {}),
+                });
+                toast.success(finish ? "Marked" : "Marks saved");
               }}
             />
           ) : null}

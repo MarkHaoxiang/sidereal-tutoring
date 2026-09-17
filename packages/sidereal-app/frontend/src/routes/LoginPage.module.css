@@ -72,6 +72,18 @@
   letter-spacing: var(--tracking-display);
 }
 
+.notice {
+  margin: 0;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-bg-raised);
+  color: var(--color-fg-muted);
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+  text-wrap: pretty;
+}
+
 .submit {
   margin-top: 0.25rem;
   min-height: 2.5rem;

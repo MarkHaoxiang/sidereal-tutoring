@@ -58,6 +58,13 @@
   font-size: var(--font-size-small);
 }
 
+/* What the hand-in scored, which is what a tutor scans a marked list for. */
+.marks {
+  color: var(--color-fg);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 .status {
   display: flex;
   align-items: center;

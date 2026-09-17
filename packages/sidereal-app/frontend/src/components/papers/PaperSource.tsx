@@ -33,7 +33,7 @@ export function PaperSource({ structure, fileName }: PaperSourceProps) {
     () => ({ kind: "paper" as const, document: structure, output: "source" as const }),
     [structure]
   );
-  const rendered = useRenderTypst(useRenderAssets(asSource));
+  const rendered = useRenderTypst(useRenderAssets(asSource).body);
   const source = rendered.data?.source ?? null;
   const lines = source === null ? [] : source.split("\n");
 

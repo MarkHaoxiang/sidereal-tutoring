@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
@@ -10,12 +11,16 @@ from sidereal_core.directus import DirectusClient
 from sidereal_core.models import (
     Collection,
     Homework,
+    HomeworkFormat,
     HomeworkMarking,
     HomeworkQuestion,
     HomeworkStatus,
     Question,
 )
 from sidereal_core.typst_text import plain_text
+
+# The template's own line, always at the head of a rendered sheet and never indented.
+_SHOW = re.compile(r"^#show:", re.MULTILINE)
 
 
 class QuestionText(BaseModel):
@@ -27,6 +32,43 @@ class QuestionText(BaseModel):
     number: str | None = None
     marks: int | None = None
     text: str
+
+
+def sheet_text(homework: Homework) -> str:
+    """The sheet as the student received it: the house preamble off, its maths readable.
+
+    A homework's questions are the ones it was generated from; the sheet is what the tutor
+    edited and the student answered, and after an edit the two say different things.
+    """
+    content = (homework.content or "").strip()
+    if homework.format is HomeworkFormat.TYPST:
+        content = _body(content)
+    return plain_text(content)
+
+
+def _body(source: str) -> str:
+    """Everything after the template's `#show:` call. The preamble is the renderer's, not work."""
+    shown = [match.end() for match in _SHOW.finditer(source)]
+    if not shown:
+        return source
+    return source[_call(source, shown[-1]) :].strip()
+
+
+def _call(source: str, start: int) -> int:
+    """Where the `#show:` line ends: after its arguments, or at the newline when it has none."""
+    line = source.find("\n", start)
+    opened = source.find("(", start)
+    if opened == -1 or (line != -1 and opened > line):
+        return len(source) if line == -1 else line + 1
+    depth = 0
+    for index in range(opened, len(source)):
+        if source[index] == "(":
+            depth += 1
+        elif source[index] == ")":
+            depth -= 1
+            if depth == 0:
+                return index + 1
+    return len(source)
 
 
 async def ordered_questions(client: DirectusClient, homework_id: UUID) -> list[Question]:

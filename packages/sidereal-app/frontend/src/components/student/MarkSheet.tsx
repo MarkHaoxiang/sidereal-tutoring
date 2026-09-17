@@ -1,21 +1,21 @@
 import { Card } from "@/components/ui";
-import { hasMarking, marksLabel, questionLabel } from "@/lib/marking";
+import { hasMarking, marksLabel } from "@/lib/marking";
 import type { Marking } from "@/lib/marking";
 
-import type { StudentQuestion } from "./homework";
 import styles from "./student.module.css";
 
 export interface MarkSheetProps {
   marking: Marking | null;
-  questions: StudentQuestion[];
+  /** What was handed in, box by box, so each mark sits under the answer it is for. */
+  answers: string[];
 }
 
-function questionText(questions: StudentQuestion[], number: string): string | null {
+function answerFor(answers: string[], number: string): string {
   const index = Number.parseInt(number, 10) - 1;
-  return questions[index]?.text ?? null;
+  return (answers[index] ?? "").trim();
 }
 
-export function MarkSheet({ marking, questions }: MarkSheetProps) {
+export function MarkSheet({ marking, answers }: MarkSheetProps) {
   if (marking === null || !hasMarking(marking)) {
     return null;
   }
@@ -27,19 +27,25 @@ export function MarkSheet({ marking, questions }: MarkSheetProps) {
       </p>
       {marking.questions.length > 0 ? (
         <ul className={styles.markList}>
-          {marking.questions.map((question) => (
-            <li key={question.number} className={styles.markRow}>
-              <div className={styles.markHead}>
-                <span className={styles.markQuestion}>
-                  {questionLabel(question.number, questionText(questions, question.number))}
-                </span>
-                <span className={styles.markScore}>
-                  {marksLabel(question.marks_awarded, question.marks_available)}
-                </span>
-              </div>
-              {question.comment ? <p className={styles.markComment}>{question.comment}</p> : null}
-            </li>
-          ))}
+          {marking.questions.map((question) => {
+            const answer = answerFor(answers, question.number);
+            return (
+              <li key={question.number} className={styles.markRow}>
+                <div className={styles.markHead}>
+                  <span className={styles.markQuestion}>Q{question.number}</span>
+                  <span className={styles.markScore}>
+                    {marksLabel(question.marks_awarded, question.marks_available)}
+                  </span>
+                </div>
+                {answer ? (
+                  <p className={styles.markAnswer}>{answer}</p>
+                ) : (
+                  <p className={styles.markBlank}>You left this one blank.</p>
+                )}
+                {question.comment ? <p className={styles.markComment}>{question.comment}</p> : null}
+              </li>
+            );
+          })}
         </ul>
       ) : null}
       {marking.comment ? <p className={styles.markNote}>{marking.comment}</p> : null}

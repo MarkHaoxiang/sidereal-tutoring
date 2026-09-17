@@ -19,6 +19,7 @@ from sidereal_generate.base import (
     PaperExtractor,
     PlanGenerator,
     strict_schema,
+    unescaped,
     unstringify,
 )
 from sidereal_generate.chunks import BATCH_QUESTIONS
@@ -148,7 +149,8 @@ class AnthropicGenerator[OutputT: BaseModel]:
 
     def _validate(self, payload: object) -> OutputT:
         try:
-            return self._output_model.model_validate(unstringify(payload, self._output_model))
+            payload = unescaped(unstringify(payload, self._output_model))
+            return self._output_model.model_validate(payload)
         except ValidationError as exc:
             raise GenerationError(f"{self._tool_name} returned an unusable payload: {exc}") from exc
 

@@ -3,10 +3,12 @@ from __future__ import annotations
 import base64
 import io
 import json
+import logging
 from collections.abc import Sequence
 from typing import Any
 from uuid import UUID
 
+import httpx
 import httpx2
 import pytest
 from anthropic import AsyncAnthropic
@@ -22,6 +24,7 @@ from sidereal_core.canonical import (
     CanonicalSection,
     CanonicalSubPart,
 )
+from sidereal_core.files import FIGURES_FOLDER
 from sidereal_core.models import Collection, Document
 from sidereal_core.testing import FakeDirectus, FakeTypeset
 from sidereal_core.typeset import MAX_ASSET_BYTES
@@ -76,8 +79,10 @@ def text_pdf(text: str = "1. A question.") -> bytes:
     return out.getvalue()
 
 
-def seeded(pdf: bytes | None = None, *, filename: str = "paper.pdf") -> FakeDirectus:
-    fake = FakeDirectus()
+def seeded(
+    pdf: bytes | None = None, *, filename: str = "paper.pdf", fake: FakeDirectus | None = None
+) -> FakeDirectus:
+    fake = FakeDirectus() if fake is None else fake
     file_id = (
         None if pdf is None else fake.register_file(filename, pdf, media_type="application/pdf")
     )
@@ -510,3 +515,50 @@ async def test_the_width_a_figure_prints_at_is_the_ingest_measurement() -> None:
 
     structure = fake.items[Collection.PAPERS][str(paper_id)]["structure"]
     assert structure["questions"][0]["blocks"][0]["width_mm"] == measured.width_mm
+
+
+async def test_a_crop_is_filed_in_the_shared_figures_folder() -> None:
+    """Nothing points at a crop, so the folder is the only thing a tutor's read rule can match."""
+    fake, typeset = seeded(image_pdf()), FakeTypeset()
+    folder = fake.seed("directus_folders", {"name": FIGURES_FOLDER})
+
+    paper_id = await extracted(fake, typeset, Extractor([figure()]), pages=True)
+
+    structure = fake.items[Collection.PAPERS][str(paper_id)]["structure"]
+    file_id = structure["questions"][0]["blocks"][0]["asset"].rsplit(".", 1)[0]
+    assert fake.files[file_id][0]["folder"] == folder["id"]
+
+
+async def test_a_crop_is_still_filed_when_directus_has_no_figures_folder(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    fake, typeset = seeded(image_pdf()), FakeTypeset()
+
+    with caplog.at_level(logging.WARNING):
+        paper_id = await extracted(fake, typeset, Extractor([figure()]), pages=True)
+
+    structure = fake.items[Collection.PAPERS][str(paper_id)]["structure"]
+    file_id = structure["questions"][0]["blocks"][0]["asset"].rsplit(".", 1)[0]
+    assert "folder" not in fake.files[file_id][0]
+    assert "directus-bootstrap.sh" in caplog.text
+
+
+async def test_a_folder_the_caller_cannot_read_does_not_lose_the_extraction() -> None:
+    """Where the crops are filed is never worth failing a paper the model has already read."""
+
+    class NoFolders(FakeDirectus):
+        def handle(self, request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/folders":
+                return httpx.Response(
+                    403,
+                    json={"errors": [{"message": "no", "extensions": {"code": "FORBIDDEN"}}]},
+                )
+            return super().handle(request)
+
+    fake = seeded(image_pdf(), fake=NoFolders())
+    typeset = FakeTypeset()
+
+    paper_id = await extracted(fake, typeset, Extractor([figure()]), pages=True)
+
+    structure = fake.items[Collection.PAPERS][str(paper_id)]["structure"]
+    assert structure["questions"][0]["blocks"][0]["type"] == "figure"

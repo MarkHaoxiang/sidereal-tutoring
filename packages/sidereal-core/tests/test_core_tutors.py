@@ -205,6 +205,24 @@ async def test_jobs_carry_the_student_and_that_students_tutor(fake: FakeDirectus
     assert len(fake.requests) - before == 3
 
 
+async def test_a_deleted_students_job_is_still_attributable(fake: FakeDirectus) -> None:
+    """The row's `student` is null; what the deletion wrote into `input` is what names it."""
+    fake.seed(
+        Collection.GENERATION_JOBS,
+        {
+            "kind": GenerationKind.FEEDBACK.value,
+            "status": JobStatus.SUCCEEDED.value,
+            "student": None,
+            "input": {"student_name": "Leo", "tutor_email": "priya@sidereal.example.com"},
+        },
+    )
+
+    async with fake.client() as client:
+        rows = await list_jobs(client)
+
+    assert (rows[0].student_name, rows[0].tutor_email) == ("Leo", "priya@sidereal.example.com")
+
+
 async def test_jobs_can_be_filtered_by_status(fake: FakeDirectus) -> None:
     for status in (JobStatus.SUCCEEDED, JobStatus.FAILED):
         fake.seed(

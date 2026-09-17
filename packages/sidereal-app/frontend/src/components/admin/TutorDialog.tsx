@@ -1,15 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import { generatePassword } from "@/components/students/password";
+import { PasswordField, PasswordHandover } from "@/components/students/PasswordField";
 import { Button, Dialog, Field, Input } from "@/components/ui";
 import { ApiError, apiError } from "@/lib/api";
 import { useCreateTutor, useResetTutorPassword } from "@/lib/queries";
 import type { TutorAccount } from "@/lib/queries";
 
 import styles from "./admin.module.css";
-
-const PASSWORD_HELP = "Copy it now — it is not shown again.";
 
 export interface TutorDialogProps {
   open: boolean;
@@ -28,6 +26,8 @@ export function TutorDialog({ open, onClose, mode, tutor }: TutorDialogProps) {
   const [password, setPassword] = useState("");
   const [emailError, setEmailError] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
+  // Set, and still on screen: the dialog stays open on the password until it is copied.
+  const [handed, setHanded] = useState<string | null>(null);
   const wasOpen = useRef(false);
 
   // Clear the form as the dialog opens, so a password from a previous visit is never
@@ -40,6 +40,7 @@ export function TutorDialog({ open, onClose, mode, tutor }: TutorDialogProps) {
       setPassword("");
       setEmailError(null);
       setPasswordError(null);
+      setHanded(null);
     }
     wasOpen.current = open;
   }, [open]);
@@ -73,7 +74,7 @@ export function TutorDialog({ open, onClose, mode, tutor }: TutorDialogProps) {
         await resetPassword.mutateAsync({ userId: tutor.user_id, password });
         toast.success("Saved");
       }
-      onClose();
+      setHanded(password);
     } catch (error) {
       const code = error instanceof ApiError ? error.code : undefined;
       const message = apiError(error);
@@ -94,82 +95,83 @@ export function TutorDialog({ open, onClose, mode, tutor }: TutorDialogProps) {
       title={creating ? "Add a tutor" : "Reset password"}
       busy={pending}
       footer={
-        <>
-          <Button variant="ghost" onClick={onClose} disabled={pending}>
-            Cancel
+        handed !== null ? (
+          <Button variant="primary" onClick={onClose}>
+            I have copied it
           </Button>
-          <Button
-            variant="primary"
-            loading={pending}
-            onClick={() => {
-              void save();
-            }}
-          >
-            {creating ? "Add tutor" : "Save password"}
-          </Button>
-        </>
+        ) : (
+          <>
+            <Button variant="ghost" onClick={onClose} disabled={pending}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              loading={pending}
+              onClick={() => {
+                void save();
+              }}
+            >
+              {creating ? "Add tutor" : "Save password"}
+            </Button>
+          </>
+        )
       }
     >
-      {creating ? (
+      {handed !== null ? (
+        <PasswordHandover
+          password={handed}
+          what={creating ? "The tutor is added." : "The password is changed."}
+        />
+      ) : (
         <>
-          <Field label="Email" required help="They sign in with this address." error={emailError}>
-            <Input
-              type="email"
-              value={email}
-              autoFocus
-              autoComplete="off"
-              onChange={(event) => {
-                setEmail(event.target.value);
-                setEmailError(null);
-              }}
-            />
-          </Field>
-          <div className={styles.nameRow}>
-            <Field label="First name" className={styles.nameField}>
-              <Input
-                value={firstName}
-                autoComplete="off"
-                onChange={(event) => {
-                  setFirstName(event.target.value);
-                }}
-              />
-            </Field>
-            <Field label="Last name" className={styles.nameField}>
-              <Input
-                value={lastName}
-                autoComplete="off"
-                onChange={(event) => {
-                  setLastName(event.target.value);
-                }}
-              />
-            </Field>
-          </div>
-        </>
-      ) : null}
+          {creating ? (
+            <>
+              <Field label="Email" required help="They sign in with this address." error={emailError}>
+                <Input
+                  type="email"
+                  value={email}
+                  autoFocus
+                  autoComplete="off"
+                  onChange={(event) => {
+                    setEmail(event.target.value);
+                    setEmailError(null);
+                  }}
+                />
+              </Field>
+              <div className={styles.nameRow}>
+                <Field label="First name" className={styles.nameField}>
+                  <Input
+                    value={firstName}
+                    autoComplete="off"
+                    onChange={(event) => {
+                      setFirstName(event.target.value);
+                    }}
+                  />
+                </Field>
+                <Field label="Last name" className={styles.nameField}>
+                  <Input
+                    value={lastName}
+                    autoComplete="off"
+                    onChange={(event) => {
+                      setLastName(event.target.value);
+                    }}
+                  />
+                </Field>
+              </div>
+            </>
+          ) : null}
 
-      <Field label="Password" required help={PASSWORD_HELP} error={passwordError}>
-        <div className={styles.passwordRow}>
-          <Input
-            className={styles.password}
+          <PasswordField
             value={password}
-            autoComplete="off"
-            spellCheck={false}
+            error={passwordError}
             autoFocus={!creating}
-            onChange={(event) => {
-              setPassword(event.target.value);
+            onChange={(next) => {
+              setPassword(next);
               setPasswordError(null);
             }}
           />
-          <Button
-            onClick={() => {
-              setPassword(generatePassword());
-              setPasswordError(null);
-            }}
-          >
-            Generate
-          </Button>
-        </div>
-      </Field>
+        </>
+      )}
     </Dialog>
   );
 }

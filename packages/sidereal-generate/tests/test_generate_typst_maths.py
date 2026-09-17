@@ -22,11 +22,19 @@ from sidereal_generate.typst_maths import normalise, normalise_model
         # A subscript word is a name too.
         ("$x_total$", '$x_"total"$'),
         # A unit exponent the model wrote as a span of its own has no base to attach to.
-        ("$5.2 times 10^7$ C kg$^-1$", '$5.2 times 10^7$ C kg$""^-1$'),
-        ("m s$^-1$", 'm s$""^-1$'),
-        ("km h$^-1$", 'km h$""^-1$'),
+        ("$5.2 times 10^7$ C kg$^-1$", '$5.2 times 10^7$ C kg$""^(-1)$'),
+        ("m s$^-1$", 'm s$""^(-1)$'),
+        ("km h$^-1$", 'km h$""^(-1)$'),
         ("$_2^4$He", '$""_2^4$He'),
-        ("$ ^-1$", '$ ""^-1$'),
+        ("$ ^-1$", '$ ""^(-1)$'),
+        # A script takes one atom, so a signed exponent needs the group the model left off.
+        ("$4.8 times 10^-2$ m", "$4.8 times 10^(-2)$ m"),
+        ("$2.4 times 10^+3$", "$2.4 times 10^(+3)$"),
+        ("$10^-2.5$", "$10^(-2.5)$"),
+        ("$x^-1$", "$x^(-1)$"),
+        ('$"kg m"^-3$', '$"kg m"^(-3)$'),
+        ("$x_-1$", "$x_(-1)$"),
+        ("$10^-n$", "$10^(-n)$"),
         # The empty base does not stop a name after it being quoted.
         ("$^total$", '$""^"total"$'),
     ],
@@ -107,4 +115,4 @@ def test_a_code_block_is_verbatim() -> None:
 
     assert isinstance(block, CanonicalCodeBlock)
     assert block.text == listing
-    assert fixed.questions[0].stem == 'Correct the line, given $F$ is in N kg$""^-1$.'
+    assert fixed.questions[0].stem == 'Correct the line, given $F$ is in N kg$""^(-1)$.'

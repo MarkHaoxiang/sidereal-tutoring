@@ -22,8 +22,8 @@
 //             useUpdateTopic · useDeleteTopic · useTagDocument · useTagHomework
 //   typeset   usePreviewTypst() (source → SVG pages) · useRenderTypst(body)
 //             (a canonical document → SVG pages or its Typst, cached by a hash of the
-//             body) · useRenderAssets(body) (the body with every figure's bytes, null
-//             while they load) · useCompileHomework(id)
+//             body) · useRenderAssets(body) (the body with every figure's bytes, and how
+//             many figures were dropped as unreadable) · useCompileHomework(id)
 //   jobs      useCreateJob() then useJob(jobId) — it polls until succeeded/failed ·
 //             useStudentJobs(studentId,kind) (what is running or failed) · useRetryJob(jobId)
 //   logins    the student's sign-in, through the FastAPI app rather than Directus:

@@ -20,11 +20,16 @@ export interface AuthContextValue {
   isAuthenticated: boolean;
   /** The stored session is still being checked; nothing may redirect to /login yet. */
   isChecking: boolean;
+  /** The app refused the caller the stored session belonged to, so they were signed out. */
+  refused: boolean;
   login: (email: string, password: string) => Promise<Me | null>;
   logout: () => Promise<void>;
   /** Re-reads the signed-in user, so a saved name or photo reaches the shell. */
   refreshUser: () => Promise<void>;
 }
+
+/** What a caller refused after signing in is told, whatever refused them. */
+export const SIGNED_OUT = "You have been signed out. Sign in to continue.";
 
 // Undefined outside a provider, so `useAuth` can tell "no provider" apart from
 // "provider says logged out".

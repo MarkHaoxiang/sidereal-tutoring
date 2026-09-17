@@ -8,14 +8,3 @@
   flex: 1 1 9rem;
 }
 
-.passwordRow {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.password {
-  flex: 1 1 10rem;
-  font-family: var(--font-mono);
-  letter-spacing: 0.04em;
-}

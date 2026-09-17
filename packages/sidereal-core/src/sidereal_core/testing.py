@@ -16,7 +16,11 @@ from sidereal_core.typeset import TypesetClient
 
 BASE_URL = "http://directus.test"
 # Directus's own collections answer outside `/items`; the rows are stored the same way.
-SYSTEM_ROUTES = {"users": "directus_users", "roles": "directus_roles"}
+SYSTEM_ROUTES = {
+    "users": "directus_users",
+    "roles": "directus_roles",
+    "folders": "directus_folders",
+}
 # Which collection a nested create on a relation field writes into.
 RELATED = {"user": "directus_users"}
 DEFAULT_TOKEN = "tutor-token"  # noqa: S105 - a test double's token, not a credential.
@@ -35,7 +39,7 @@ FAKE_SVG = (
 
 
 class FakeDirectus:
-    """Items, `/users` and `/roles` CRUD over `httpx.MockTransport`.
+    """Items, `/users`, `/roles` and `/folders` CRUD over `httpx.MockTransport`.
 
     Filters understand one shape — `{"field": {"_eq": value}}` — which is all the
     workspace asks of Directus.
@@ -109,8 +113,9 @@ class FakeDirectus:
         name, content, media_type = fields.get("file", ("upload.bin", b"", "text/plain"))
         file_id = self.register_file(name, content, media_type=media_type)
         row = self.files[file_id][0]
-        if "title" in fields:
-            row["title"] = fields["title"][1].decode()
+        for field in ("title", "folder"):
+            if field in fields:
+                row[field] = fields[field][1].decode()
         return httpx.Response(200, json={"data": row})
 
     def _nested(self, payload: dict[str, Any]) -> dict[str, Any]:

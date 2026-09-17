@@ -319,6 +319,14 @@
   }
 }
 
+.fragmentNote {
+  margin: 0;
+  color: var(--color-fg-muted);
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+  text-wrap: pretty;
+}
+
 .fragmentProblem {
   margin: 0;
   padding: 0.5rem 0.75rem;

@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from sidereal_core.models import (
     DirectusFile,
+    DirectusFolder,
     DirectusLicense,
     DirectusRole,
     DirectusServerInfo,
@@ -162,6 +163,13 @@ class DirectusClient:
         roles = await self._list("/roles", DirectusRole, filter={"name": {"_eq": name}}, limit=1)
         return roles[0] if roles else None
 
+    async def find_folder(self, name: str) -> DirectusFolder | None:
+        """`directus_folders` is a system collection too: it answers on `/folders`."""
+        folders = await self._list(
+            "/folders", DirectusFolder, filter={"name": {"_eq": name}}, limit=1
+        )
+        return folders[0] if folders else None
+
     async def list_users(
         self,
         *,
@@ -229,10 +237,23 @@ class DirectusClient:
         await self._request("DELETE", f"/files/{file_id}")
 
     async def upload_file(
-        self, filename: str, content: bytes, content_type: str, *, title: str | None = None
+        self,
+        filename: str,
+        content: bytes,
+        content_type: str,
+        *,
+        title: str | None = None,
+        folder: UUID | str | None = None,
     ) -> DirectusFile:
-        """Multipart, because `/files` takes the bytes themselves and not a JSON body."""
-        data = {"title": title} if title is not None else {}
+        """Multipart, because `/files` takes the bytes themselves and not a JSON body.
+
+        A field has to precede the file part, which is why they go in `data` and not after.
+        """
+        data: dict[str, str] = {}
+        if title is not None:
+            data["title"] = title
+        if folder is not None:
+            data["folder"] = str(folder)
         uploaded = await self._request(
             "POST", "/files", data=data, files={"file": (filename, content, content_type)}
         )

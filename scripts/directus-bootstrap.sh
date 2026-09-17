@@ -37,6 +37,7 @@ admin_password="${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set in .env}"
 
 role_name="Tutor"
 student_role_name="Student"
+service_policy_name="Service"
 agent_email="agent@sidereal.example.com"
 
 app_collections=(
@@ -131,6 +132,18 @@ ensure_file_user_set_null() {
 ensure_file_user_set_null uploaded_by
 ensure_file_user_set_null modified_by
 
+# --- the figures folder ----------------------------------------------------------------------
+# A paper's figure crops are named inside its `structure` and nothing points at them, so no
+# ownership rule can reach one. The folder is what a tutor's read rule matches; the extraction
+# files every crop in it (`sidereal_core.files.FIGURES_FOLDER`).
+figures_folder="$(
+  api GET "/folders?filter[name][_eq]=Figures&limit=1" | jq -r '.data[0].id // empty'
+)"
+if [ -z "$figures_folder" ]; then
+  figures_folder="$(api POST /folders '{"name": "Figures"}' | jq -r '.data.id')"
+  echo "created the Figures folder ($figures_folder)"
+fi
+
 # --- policies, roles, access ----------------------------------------------------------------
 ensure_policy() {
   # ensure_policy <name> <icon> <description> <app-access> -> echoes the policy id
@@ -182,6 +195,21 @@ ensure_access() {
   fi
 }
 
+ensure_user_access() {
+  # ensure_user_access <user-id> <policy-id>. A policy is attached to one user rather than to a
+  # role when it must not widen everyone else holding that role.
+  local user="$1" policy="$2" existing
+  existing="$(
+    api GET "/access?filter[user][_eq]=$user&filter[policy][_eq]=$policy&fields=id&limit=1" |
+      jq -r '.data[0].id // empty'
+  )"
+  if [ -z "$existing" ]; then
+    api POST /access "$(jq -nc --arg u "$user" --arg p "$policy" \
+      '{user: $u, policy: $p, sort: 1}')" >/dev/null
+    echo "attached policy to user"
+  fi
+}
+
 policy_id="$(ensure_policy "$role_name" school \
   "Full access to the sidereal tutoring collections." true)"
 role_id="$(ensure_role "$role_name" school \
@@ -193,6 +221,11 @@ student_policy_id="$(ensure_policy "$student_role_name" face \
 student_role_id="$(ensure_role "$student_role_name" face \
   "Students signing in to see their own work. API only; no admin app.")"
 ensure_access "$student_role_id" "$student_policy_id"
+
+# The service account's own policy, attached to the user and never to the Tutor role: the agent
+# answers why a sign-in was refused, which no tutor may do.
+service_policy_id="$(ensure_policy "$service_policy_name" smart_toy \
+  "Reading any sign-in address's account status. The service account's alone." false)"
 
 # --- permissions -------------------------------------------------------------------------
 # Every row this script intends to exist, as "<policy-id> <collection> <action>", checked
@@ -392,8 +425,10 @@ if [ "$custom_rules" = true ]; then
     {homework_pdf: {student: {tutor: {_eq: $u}}}},
     {homework_submission_file: {student: {tutor: {_eq: $u}}}}
   ]}')"
-  tutor_files_read="$(jq -nc --arg u "$current_user" --argjson w "$tutor_files_write" '{_or: [
+  tutor_files_read="$(jq -nc --arg u "$current_user" --argjson w "$tutor_files_write" \
+    --arg figures "$figures_folder" '{_or: [
     $w._or[],
+    {folder: {_eq: $figures}},
     {document_file: {_some: {student: {tutor: {_eq: $u}}}}},
     {document_file: {_some: {student: {_null: true}}}},
     {document_page: {_some: {document: {student: {tutor: {_eq: $u}}}}}},
@@ -420,6 +455,10 @@ else
   done
   tutor_unscoped=true
 fi
+
+# A figure crop is filed in the Figures folder and found by its name, so filing one means
+# reading the folder list. Names alone, and no writing: the folders are the practice's.
+ensure_permission "$policy_id" directus_folders read '["id","name"]' '{}'
 
 # Student logins, managed from the tutor's student page. The row filter keeps a tutor to the
 # Student-role users linked to their own students, plus themselves for /users/me; `role` is
@@ -545,6 +584,13 @@ ensure_filtered_permission "$student_policy_id" plans read \
 ensure_filtered_permission "$student_policy_id" directus_users read \
   '["id","email","first_name","last_name","role","avatar","appearance"]' "$account_self"
 
+# --- Service permissions ----------------------------------------------------------------------
+# One row, and the policy holds nothing else: `POST /api/auth/status` tells someone who has just
+# been refused a sign-in why, and the agent's Tutor scope cannot see a user outside its own
+# students. Unfiltered over three fields — an id, the address the caller already typed, and the
+# status — so no name, role or token of anyone's is reachable through it.
+ensure_filtered_permission "$service_policy_id" directus_users read '["id","email","status"]' '{}'
+
 if [ "$tutor_unscoped" = true ]; then
   cat >&2 <<'WARNING'
 
@@ -565,7 +611,8 @@ if [ "$skipped_filtered" = true ]; then
   role and policy exist but carry no permissions: a student login can sign in and see
   nothing. Student data isolation is unavailable without a license, and the grants are
   skipped rather than widened because an unfiltered read would show every student every
-  other student's work. Tutors likewise cannot manage student logins here.
+  other student's work. Tutors likewise cannot manage student logins here, and the service
+  account cannot read an account's status, so a refused sign-in is never explained.
 
 WARNING
 fi
@@ -615,6 +662,10 @@ else
   token="$(api GET "/users/$agent_id?fields=token" | jq -r '.data.token // empty')"
   echo "service account $agent_email exists ($agent_id)"
 fi
+
+ensure_user_access "$agent_id" "$service_policy_id"
+# The attachment is an access row, and access rows are cached with the permissions behind them.
+api POST "/utils/cache/clear?system" >/dev/null
 
 echo
 if [ -n "${token:-}" ] && [ "$token" != "**********" ]; then
