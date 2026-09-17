@@ -35,7 +35,12 @@ from sidereal_generate.fake import (
 )
 from sidereal_generate.jobs import Generators, JobInput, run_job, start_job
 from sidereal_generate.models import MarkSchemeExtraction, PaperExtraction
-from sidereal_generate.papers import PaperError, paper_worksheet, rerender_paper
+from sidereal_generate.papers import (
+    PaperError,
+    extract_paper_mark_scheme,
+    paper_worksheet,
+    rerender_paper,
+)
 from sidereal_generate.prompts import MARK_SCHEME_TOOL, QUESTIONS_TOOL, SKELETON_TOOL
 from sidereal_generate.usage import UsageTally
 
@@ -706,3 +711,91 @@ async def test_a_render_that_works_clears_an_earlier_failure_warning() -> None:
 
     assert paper.rendered_pdf is not None
     assert "warning" not in (paper.generated_from or {})
+
+
+class PartialScheme(FakePaperExtractor):
+    """A mark scheme that came back covering only part of the paper."""
+
+    async def extract_mark_scheme(
+        self,
+        document: Document,
+        paper: CanonicalPaper,
+        *,
+        usage: UsageTally | None = None,
+    ) -> MarkSchemeExtraction:
+        raise GenerationError("The mark scheme has no answer for question 2.")
+
+
+async def run_partial(fake: FakeDirectus, typeset: FakeTypeset) -> GenerationJob:
+    async with fake.client() as client:
+        job = await start_job(
+            client,
+            GenerationKind.PAPER_EXTRACT,
+            JobInput(documents=(DOCUMENT_ID, SCHEME_ID)),
+            model="fake",
+        )
+        return await run_job(
+            client,
+            Generators(
+                homework=FakeHomeworkGenerator(),
+                feedback=FakeFeedbackGenerator(),
+                plan=FakePlanGenerator(),
+                paper=PartialScheme(),
+            ),
+            job.id,
+            typeset=typeset.client(),
+        )
+
+
+async def test_a_mark_scheme_that_could_not_be_read_still_files_the_paper() -> None:
+    """Losing a read paper because its mark scheme came back short is the wrong trade."""
+    fake, typeset = seeded_with_scheme(), FakeTypeset()
+
+    finished = await run_partial(fake, typeset)
+
+    assert finished.status is JobStatus.SUCCEEDED
+    paper = fake.rows(Collection.PAPERS)[0]
+    assert paper["mark_scheme"] is None
+    assert paper["mark_scheme_pdf"] is None
+    assert "read the mark scheme again" in paper["generated_from"]["warning"]
+    assert [question["number"] for question in paper["structure"]["questions"]] == ["1", "2"]
+    assert fake.files[paper["rendered_pdf"]][1].startswith(b"%PDF")
+    assert [question["number"] for question in fake.rows(Collection.QUESTIONS)] == ["1", "2"]
+
+
+async def test_reading_the_mark_scheme_again_files_it_renders_it_and_clears_the_warning() -> None:
+    fake, typeset = seeded_with_scheme(), FakeTypeset()
+    finished = await run_partial(fake, typeset)
+    paper_id = finished.output_id
+    assert paper_id is not None
+
+    async with fake.client() as client:
+        paper = await extract_paper_mark_scheme(
+            client, FakePaperExtractor(), typeset.client(), paper_id, SCHEME_ID
+        )
+
+    assert paper.mark_scheme is not None
+    assert [question["number"] for question in paper.mark_scheme["questions"]] == ["1", "2"]
+    assert paper.mark_scheme_pdf is not None
+    assert fake.files[str(paper.mark_scheme_pdf)][1].startswith(b"%PDF")
+    assert typeset.rendered[-1]["kind"] == "mark_scheme"
+    generated_from = paper.generated_from or {}
+    assert generated_from["mark_scheme_document"] == str(SCHEME_ID)
+    assert generated_from["job"] == str(finished.id)
+    assert "warning" not in generated_from
+
+
+async def test_reading_the_mark_scheme_again_needs_a_document_with_text() -> None:
+    fake, typeset = seeded_with_scheme(), FakeTypeset()
+    paper_id = await extracted(fake, typeset, (DOCUMENT_ID,))
+    empty = fake.seed(Collection.DOCUMENTS, {"title": "Empty", "kind": "upload", "text": ""})
+
+    async with fake.client() as client:
+        with pytest.raises(PaperError, match="no text yet"):
+            await extract_paper_mark_scheme(
+                client,
+                FakePaperExtractor(),
+                typeset.client(),
+                paper_id,
+                UUID(empty["id"]),
+            )

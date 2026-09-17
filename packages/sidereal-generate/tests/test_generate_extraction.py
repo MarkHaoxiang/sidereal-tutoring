@@ -82,6 +82,11 @@ def batch(*numbers: str, figures: list[dict[str, Any]] | None = None) -> dict[st
     }
 
 
+def answers(*numbers: str) -> dict[str, Any]:
+    """A mark-scheme run that answers every number it was asked about."""
+    return {"questions": [{"number": number, "answer": f"Answer {number}"} for number in numbers]}
+
+
 def extractor(replies: dict[str, list[Any]], *, size: int = 6) -> tuple[Caller, Any]:
     caller = Caller(replies)
     return caller, ChunkedPaperExtractor(caller, size=size)
@@ -473,7 +478,7 @@ async def test_the_usage_tally_sums_the_shape_the_batches_and_the_mark_scheme() 
         {
             SKELETON_TOOL: [shape(questions=[stub("1"), stub("2")])],
             QUESTIONS_TOOL: [batch("1"), batch("2")],
-            MARK_SCHEME_TOOL: [{"questions": []}],
+            MARK_SCHEME_TOOL: [answers("1"), answers("2")],
         },
         size=1,
     )
@@ -494,7 +499,7 @@ async def test_every_call_carries_the_schema_of_the_answer_it_asks_for() -> None
             SKELETON_TOOL: [shape(questions=[stub("1", material=True)])],
             QUESTIONS_TOOL: [batch("1")],
             BLOCKS_TOOL: [{"blocks": []}],
-            MARK_SCHEME_TOOL: [{"questions": []}],
+            MARK_SCHEME_TOOL: [answers("1")],
         }
     )
 
@@ -603,7 +608,7 @@ async def test_every_call_an_extraction_makes_stays_under_the_measured_ceiling()
             SKELETON_TOOL: [shape(questions=[stub("1", material=True)])],
             QUESTIONS_TOOL: [batch("1")],
             BLOCKS_TOOL: [{"blocks": []}],
-            MARK_SCHEME_TOOL: [{"questions": []}],
+            MARK_SCHEME_TOOL: [answers("1")],
         }
     )
 
@@ -662,7 +667,7 @@ async def test_a_sub_part_carries_its_own_answer_block_and_scheme_label() -> Non
                     ]
                 }
             ],
-            MARK_SCHEME_TOOL: [{"questions": []}],
+            MARK_SCHEME_TOOL: [answers("1")],
         }
     )
 
@@ -814,3 +819,69 @@ async def test_a_question_that_came_back_with_its_wording_is_asked_nothing_extra
     await reader.extract(document(), pages=[b"one"])
 
     assert len(caller.asked(QUESTIONS_TOOL)) == 1
+
+
+async def test_a_mark_scheme_run_that_answered_some_of_its_numbers_is_asked_once_more() -> None:
+    """The live run asked about 01 to 06 and answered only 01, and nothing compared the two."""
+    caller, reader = extractor(
+        {
+            SKELETON_TOOL: [shape(questions=[stub(number) for number in ("01", "02", "03")])],
+            QUESTIONS_TOOL: [batch("01", "02", "03")],
+            MARK_SCHEME_TOOL: [answers("01"), answers("01", "02", "03")],
+        }
+    )
+    paper = (await reader.extract(document())).paper
+
+    scheme = await reader.extract_mark_scheme(document(), paper)
+
+    assert [question.number for question in scheme.mark_scheme.questions] == ["01", "02", "03"]
+    asked = caller.asked(MARK_SCHEME_TOOL)
+    assert len(asked) == 2
+    assert "no entry for 02, 03" in asked[1].prompt
+    # The second ask carries the scheme itself again, not the missing numbers alone.
+    assert asked[0].prompt in asked[1].prompt
+
+
+async def test_a_mark_scheme_still_missing_after_the_retry_names_what_it_left_out() -> None:
+    caller, reader = extractor(
+        {
+            SKELETON_TOOL: [shape(questions=[stub(number) for number in ("01", "02", "03")])],
+            QUESTIONS_TOOL: [batch("01", "02", "03")],
+            MARK_SCHEME_TOOL: [answers("01")],
+        }
+    )
+    paper = (await reader.extract(document())).paper
+
+    with pytest.raises(GenerationError, match="no answer for question 02, 03"):
+        await reader.extract_mark_scheme(document(), paper)
+
+    assert len(caller.asked(MARK_SCHEME_TOOL)) == 2
+
+
+async def test_a_mark_scheme_that_answers_nothing_at_all_says_so_differently() -> None:
+    _, reader = extractor(
+        {
+            SKELETON_TOOL: [shape(questions=[stub("01"), stub("02")])],
+            QUESTIONS_TOOL: [batch("01", "02")],
+            MARK_SCHEME_TOOL: [{"questions": []}],
+        }
+    )
+    paper = (await reader.extract(document())).paper
+
+    with pytest.raises(GenerationError, match="answers none of this paper"):
+        await reader.extract_mark_scheme(document(), paper)
+
+
+async def test_a_run_that_answered_every_number_is_asked_nothing_more() -> None:
+    caller, reader = extractor(
+        {
+            SKELETON_TOOL: [shape(questions=[stub("01"), stub("02")])],
+            QUESTIONS_TOOL: [batch("01", "02")],
+            MARK_SCHEME_TOOL: [answers("01", "02")],
+        }
+    )
+    paper = (await reader.extract(document())).paper
+
+    await reader.extract_mark_scheme(document(), paper)
+
+    assert len(caller.asked(MARK_SCHEME_TOOL)) == 1

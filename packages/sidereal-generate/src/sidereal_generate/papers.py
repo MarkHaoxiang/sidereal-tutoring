@@ -54,7 +54,12 @@ RENDER_WARNING = (
     "The paper could not be rendered, so it has no PDFs yet. Its structure is saved; "
     "render it again once the typeset service answers."
 )
+SCHEME_WARNING = (
+    "The mark scheme could not be read in full, so this paper has none yet. Its questions are "
+    "saved; read the mark scheme again on its own."
+)
 NO_PDF = "That document has no PDF, so its pages cannot be read as images."
+NO_SCHEME_TEXT = "That mark scheme has no text yet."
 # Two rounds: the compiler names one fault at a time, and a third round has never been the
 # difference between a paper that renders and one that does not.
 REPAIR_ROUNDS = 2
@@ -97,9 +102,7 @@ async def extract_paper(
         client, document_id, "That document has no text yet, so there is no paper to read."
     )
     scheme = (
-        None
-        if mark_scheme_id is None
-        else await _readable(client, mark_scheme_id, "That mark scheme has no text yet.")
+        None if mark_scheme_id is None else await _readable(client, mark_scheme_id, NO_SCHEME_TEXT)
     )
     source = await _source_pdf(client, document)
     images, drawn = _pages(source, pages)
@@ -115,13 +118,7 @@ async def extract_paper(
         await extractor.extract(document, pages=images, drawn=drawn, usage=usage)
     )
     extraction = await _place_figures(client, source, extraction)
-    marks = (
-        None
-        if scheme is None
-        else normalise_model(
-            await extractor.extract_mark_scheme(scheme, extraction.paper, usage=usage)
-        )
-    )
+    marks, warning = await _mark_scheme(extractor, scheme, extraction.paper, usage)
     paper = await client.create_item(
         Collection.PAPERS,
         Paper,
@@ -137,7 +134,7 @@ async def extract_paper(
             document=document_id,
             structure=extraction.paper.model_dump(mode="json"),
             mark_scheme=_dump(None if marks is None else marks.mark_scheme),
-            generated_from=provenance,
+            generated_from=provenance if warning is None else {**provenance, "warning": warning},
         ),
     )
     extraction, marks = await _link_pdfs(
@@ -145,6 +142,43 @@ async def extract_paper(
     )
     await _write_questions(client, paper.id, document_id, extraction, marks)
     return paper.id
+
+
+async def extract_paper_mark_scheme(
+    client: DirectusClient,
+    extractor: PaperExtractor,
+    typeset: TypesetClient,
+    paper_id: UUID,
+    document_id: UUID,
+    *,
+    usage: UsageTally | None = None,
+) -> Paper:
+    """Read a mark scheme for a paper already filed, against the structure it is stored under."""
+    paper = await client.get_item(Collection.PAPERS, Paper, paper_id)
+    structure = _canonical(CanonicalPaper, paper.structure, "This paper has no structure.")
+    document = await _readable(client, document_id, NO_SCHEME_TEXT)
+    marks = normalise_model(await extractor.extract_mark_scheme(document, structure, usage=usage))
+    marks, rendered = await _with_repairs(
+        "mark scheme",
+        marks,
+        lambda scheme: _render(client, typeset, RenderKind.MARK_SCHEME, scheme.mark_scheme),
+        lambda scheme, diagnostics: extractor.repair_mark_scheme(scheme, diagnostics, usage=usage),
+    )
+    generated_from = dict(paper.generated_from or {})
+    generated_from["mark_scheme_document"] = str(document_id)
+    # The scheme was read, so a warning that it could not be is no longer true of this row.
+    if generated_from.get("warning") == SCHEME_WARNING:
+        del generated_from["warning"]
+    return await client.update_item(
+        Collection.PAPERS,
+        Paper,
+        paper_id,
+        {
+            "mark_scheme": marks.mark_scheme.model_dump(mode="json"),
+            "mark_scheme_pdf": str(rendered),
+            "generated_from": generated_from,
+        },
+    )
 
 
 async def rerender_paper(
@@ -222,6 +256,23 @@ async def paper_worksheet(
     return WorksheetResult(
         source=source, pdf_file_id=await upload_pdf(client, worksheet.title, pdf)
     )
+
+
+async def _mark_scheme(
+    extractor: PaperExtractor,
+    scheme: Document | None,
+    paper: CanonicalPaper,
+    usage: UsageTally | None,
+) -> tuple[MarkSchemeExtraction | None, str | None]:
+    """A scheme that cannot be read in full leaves the paper filed and says so, as a render does."""
+    if scheme is None:
+        return None, None
+    try:
+        marks = await extractor.extract_mark_scheme(scheme, paper, usage=usage)
+    except GenerationError:
+        logger.exception("the mark scheme in document %s could not be read", scheme.id)
+        return None, SCHEME_WARNING
+    return normalise_model(marks), None
 
 
 async def _link_pdfs(

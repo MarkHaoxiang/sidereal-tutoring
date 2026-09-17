@@ -9,7 +9,11 @@ from dataclasses import dataclass, replace
 from typing import Any, Protocol
 
 from pydantic import BaseModel, ValidationError
-from sidereal_core.canonical import CanonicalMarkScheme, CanonicalMarkSchemeQuestion, CanonicalPaper
+from sidereal_core.canonical import (
+    CanonicalMarkSchemeQuestion,
+    CanonicalPaper,
+    CanonicalQuestion,
+)
 from sidereal_core.models import Document
 
 from sidereal_generate.base import GenerationError, strict_schema, unstringify
@@ -28,6 +32,7 @@ from sidereal_generate.chunks import (
     block_batches,
     images,
     merge,
+    merge_scheme,
     question_batches,
     question_runs,
     reconciled,
@@ -43,6 +48,7 @@ from sidereal_generate.prompts import (
     BLOCK_BATCH_PROMPT,
     BLOCKS_TOOL,
     FIGURE_WORDING,
+    MARK_SCHEME_MISSING,
     MARK_SCHEME_PROMPT,
     MARK_SCHEME_REPAIR,
     MARK_SCHEME_TOOL,
@@ -146,24 +152,47 @@ class ChunkedPaperExtractor:
     ) -> MarkSchemeExtraction:
         answers: list[CanonicalMarkSchemeQuestion] = []
         for run in question_runs(paper, size=self._size):
-            named = f"the mark scheme for questions {_listed(q.number for q in run)}"
-            batch = await self._read(
+            answers.extend(await self._scheme(document, run, usage))
+        return MarkSchemeExtraction(mark_scheme=merge_scheme(paper, answers))
+
+    async def _scheme(
+        self,
+        document: Document,
+        run: Sequence[CanonicalQuestion],
+        usage: UsageTally | None,
+    ) -> list[CanonicalMarkSchemeQuestion]:
+        """One run, and one more for the numbers it answered nothing under."""
+        wanted = tuple(question.number for question in run)
+        named = f"the mark scheme for questions {_listed(wanted)}"
+        prompt = render_mark_scheme(document, run)
+        answered = _answers(
+            await self._read(
                 MarkSchemeBatch,
                 system=MARK_SCHEME_PROMPT,
-                prompt=render_mark_scheme(document, run),
+                prompt=prompt,
                 tool=MARK_SCHEME_TOOL,
                 named=named,
                 usage=usage,
             )
-            answers.extend(
-                CanonicalMarkSchemeQuestion.model_validate(answer.model_dump())
-                for answer in batch.questions
-            )
-        return MarkSchemeExtraction(
-            mark_scheme=CanonicalMarkScheme(
-                title=f"{paper.title}: mark scheme", questions=tuple(answers)
+        )
+        missing = tuple(number for number in wanted if number not in answered)
+        if not missing:
+            return list(answered.values())
+        listed = _listed(missing)
+        logger.warning("%s came back with no answer under %s, asking once more", named, listed)
+        again = _answers(
+            await self._read(
+                MarkSchemeBatch,
+                system=MARK_SCHEME_PROMPT,
+                prompt=f"{prompt}\n\n{MARK_SCHEME_MISSING.format(named=listed)}",
+                tool=MARK_SCHEME_TOOL,
+                named=named,
+                usage=usage,
             )
         )
+        # Only the gaps are taken from the second answer: the first read the rest already.
+        filled = {number: again[number] for number in missing if number in again}
+        return list((answered | filled).values())
 
     async def repair(
         self,
@@ -321,6 +350,13 @@ class ChunkedPaperExtractor:
             except ValidationError as second:
                 logger.warning("%s did not fit a second time: %s", named, second)
                 raise GenerationError(UNREADABLE.format(named=named.capitalize())) from second
+
+
+def _answers(batch: MarkSchemeBatch) -> dict[str, CanonicalMarkSchemeQuestion]:
+    return {
+        answer.number: CanonicalMarkSchemeQuestion.model_validate(answer.model_dump())
+        for answer in batch.questions
+    }
 
 
 def _repair_prompt(run: Sequence[BaseModel], diagnostics: str) -> str:

@@ -47,6 +47,12 @@ class WorksheetRequest(BaseModel):
     due: date | None = None
 
 
+class MarkSchemeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    document_id: UUID
+
+
 class TypstRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

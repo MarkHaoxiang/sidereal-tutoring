@@ -250,6 +250,12 @@ BATCH_RETRY = (
     "Your previous answer did not fit the structure. Answer this call again, corrected, and "
     "return the same questions. The validator reported:"
 )
+MARK_SCHEME_MISSING = (
+    "Your previous answer had no entry for {named}. Answer this call again with one entry per "
+    "question in the list below, under the number the list prints. The scheme marks every "
+    "question the paper asks, so an entry you did not find is one to look for again — it may be "
+    "printed under a heading, in a table, or on a later page than the questions around it."
+)
 FIGURE_WORDING = (
     "Your previous answer left {named} with a figure and no wording at all. Answer this call "
     "again with every question and part transcribed in full. A question's wording is printed on "

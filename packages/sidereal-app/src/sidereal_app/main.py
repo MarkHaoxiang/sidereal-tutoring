@@ -35,6 +35,7 @@ from sidereal_core.typeset import (
     TypesetError,
     TypesetUnavailableError,
 )
+from sidereal_generate.base import GenerationError, GenerationNotConfiguredError
 from sidereal_generate.jobs import default_generators
 from sidereal_generate.papers import PaperError
 from sidereal_generate.typst import NotTypstError
@@ -48,6 +49,7 @@ from sidereal_app.api.errors import (
     DIRECTUS_REJECTED,
     DIRECTUS_UNAVAILABLE,
     FORMAT_UNSUPPORTED,
+    GENERATION_NOT_CONFIGURED,
     INVALID_EMAIL,
     LOGIN_EXISTS,
     LOGIN_FAILED,
@@ -129,6 +131,8 @@ def create_app() -> FastAPI:
     app.add_exception_handler(TypesetError, _typeset_failed)
     app.add_exception_handler(NotTypstError, _not_typst)
     app.add_exception_handler(PaperError, _paper_unusable)
+    app.add_exception_handler(GenerationNotConfiguredError, _generation_not_configured)
+    app.add_exception_handler(GenerationError, _paper_unusable)
     app.add_exception_handler(DocumentError, _material_unusable)
     app.add_exception_handler(IngestError, _material_unusable)
     return app
@@ -181,8 +185,19 @@ def _not_typst(request: Request, exc: Exception) -> JSONResponse:
 
 
 def _paper_unusable(request: Request, exc: Exception) -> JSONResponse:
-    """A paper whose structure cannot be rendered. The sentence is the one generate wrote."""
+    """A paper or mark scheme generate could not produce. The sentence is the one it wrote."""
     return JSONResponse(status_code=422, content=error_body(PAPER_UNUSABLE, str(exc)))
+
+
+def _generation_not_configured(request: Request, exc: Exception) -> JSONResponse:
+    """No key for the generation backend: an administrator's problem, not a malformed paper."""
+    return JSONResponse(
+        status_code=503,
+        content=error_body(
+            GENERATION_NOT_CONFIGURED,
+            "Generation is not set up yet. Ask an administrator to configure it.",
+        ),
+    )
 
 
 def _material_unusable(request: Request, exc: Exception) -> JSONResponse:

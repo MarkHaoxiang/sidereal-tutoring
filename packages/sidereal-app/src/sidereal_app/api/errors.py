@@ -30,6 +30,7 @@ STUDENT_REQUIRED = "student_required"
 DOCUMENT_REQUIRED = "document_required"
 PAPER_UNUSABLE = "paper_unusable"
 MATERIAL_UNUSABLE = "material_unusable"
+GENERATION_NOT_CONFIGURED = "generation_not_configured"
 
 
 def detail(code: str, message: str, **extra: Any) -> dict[str, Any]:

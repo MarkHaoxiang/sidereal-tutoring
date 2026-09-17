@@ -191,6 +191,12 @@ def _register(resolve: Resolve) -> MCPServer:
             return await tools.extract_paper(services, document_id, mark_scheme_id, pages)
 
     @server.tool()
+    async def extract_paper_mark_scheme(ctx: Context, paper_id: UUID, document_id: UUID) -> Paper:
+        """Read a filed paper's mark scheme again from a document, leaving its structure alone."""
+        async with caller(ctx) as services:
+            return await tools.extract_mark_scheme(services, paper_id, document_id)
+
+    @server.tool()
     async def render_paper(ctx: Context, paper_id: UUID) -> Paper:
         """Render a paper's stored structure again, replacing both of its PDFs."""
         async with caller(ctx) as services:

@@ -54,6 +54,7 @@ from sidereal_generate.papers import (
     PaperError,
     WorksheetResult,
     extract_paper,
+    extract_paper_mark_scheme,
     paper_worksheet,
     rerender_paper,
 )
@@ -134,6 +135,7 @@ __all__ = [
     "default_generators",
     "default_transcriber",
     "extract_paper",
+    "extract_paper_mark_scheme",
     "feedback_generator",
     "generate_settings",
     "generate_typst",

@@ -5,7 +5,7 @@ import logging
 from typing import Any
 
 import pytest
-from sidereal_core.canonical import CanonicalPaper
+from sidereal_core.canonical import CanonicalMarkSchemeQuestion, CanonicalPaper
 from sidereal_generate.base import GenerationError, strict_schema
 from sidereal_generate.chunks import (
     BatchQuestion,
@@ -17,6 +17,7 @@ from sidereal_generate.chunks import (
     block_batches,
     images,
     merge,
+    merge_scheme,
     question_batches,
     question_runs,
     reconciled,
@@ -314,3 +315,138 @@ def test_a_node_that_carries_its_wording_is_not_named() -> None:
     )
 
     assert wordless(batch) == ()
+
+
+def test_a_lone_unlabelled_part_is_the_questions_stem() -> None:
+    """The live paper's questions 16 and 25: no stem, and one part carrying the whole thing."""
+    answered = {
+        "16": BatchQuestion.model_validate(
+            {
+                "number": "16",
+                "stem": None,
+                "parts": [
+                    {
+                        "label": "",
+                        "text": "Explain why the resistance falls.",
+                        "marks": 4,
+                        "answer": {"type": "lines", "lines": 6},
+                    }
+                ],
+            }
+        )
+    }
+    blocks = [
+        BlockPlacement.model_validate(
+            {
+                "question_number": "16",
+                "part_label": "",
+                "block": {"type": "passage", "text": "The extract."},
+            }
+        )
+    ]
+
+    question = merge(shape(questions=[stub("16")]), answered, blocks).questions[0]
+
+    assert question.stem == "Explain why the resistance falls."
+    assert question.parts == ()
+    assert question.marks == 4
+    assert question.answer is not None
+    assert question.answer.lines == 6
+    assert [block.type for block in question.blocks] == ["passage"]
+
+
+def test_a_lone_unlabelled_parts_own_parts_come_up_with_it() -> None:
+    answered = {
+        "16": BatchQuestion.model_validate(
+            {
+                "number": "16",
+                "parts": [
+                    {
+                        "label": " ",
+                        "text": "A trolley on a ramp.",
+                        "parts": [part("i", "State the force."), part("ii", "Find it.")],
+                    }
+                ],
+            }
+        )
+    }
+
+    question = merge(shape(questions=[stub("16")]), answered).questions[0]
+
+    assert question.stem == "A trolley on a ramp."
+    assert [nested.label for nested in question.parts] == ["i", "ii"]
+
+
+def test_a_labelled_part_or_a_second_part_leaves_the_question_as_it_was() -> None:
+    answered = {
+        "1": BatchQuestion.model_validate({"number": "1", "parts": [part("a", "Find it.")]}),
+        "2": BatchQuestion.model_validate(
+            {"number": "2", "parts": [part("", "First."), part("", "Second.")]}
+        ),
+    }
+
+    paper = merge(shape(questions=[stub("1"), stub("2")]), answered)
+
+    assert paper.questions[0].stem is None
+    assert [nested.label for nested in paper.questions[0].parts] == ["a"]
+    assert [nested.text for nested in paper.questions[1].parts] == ["First.", "Second."]
+
+
+def test_a_question_whose_stem_is_its_lone_part_is_not_wordless() -> None:
+    batch = QuestionBatch.model_validate(
+        {
+            "figures": [figure_request()],
+            "questions": [{"number": "1", "parts": [part("", "The circuit shown is series.")]}],
+        }
+    )
+
+    assert wordless(batch) == ()
+
+
+def test_a_lone_unlabelled_part_with_no_wording_leaves_the_question_with_none() -> None:
+    batch = QuestionBatch.model_validate(
+        {"figures": [figure_request()], "questions": [{"number": "1", "parts": [part("", "  ")]}]}
+    )
+
+    assert wordless(batch) == ("question 1",)
+
+
+def answered_question(number: str) -> CanonicalMarkSchemeQuestion:
+    return CanonicalMarkSchemeQuestion(number=number, answer=f"Answer {number}")
+
+
+def sectioned(*numbers: str) -> CanonicalPaper:
+    return CanonicalPaper.model_validate(
+        {
+            "title": "Physics Paper 1",
+            "sections": [{"questions": [{"number": number} for number in numbers]}],
+        }
+    )
+
+
+def test_a_mark_scheme_missing_entries_is_refused_rather_than_stored() -> None:
+    """The live scheme held 26 of 31 answers and nothing noticed. Five questions are named."""
+    with pytest.raises(GenerationError) as raised:
+        merge_scheme(sectioned("01", "02", "03"), [answered_question("01")])
+
+    assert "no answer for question 02, 03" in str(raised.value)
+
+
+def test_a_mark_scheme_that_answered_nothing_says_so_in_its_own_words() -> None:
+    with pytest.raises(GenerationError) as raised:
+        merge_scheme(sectioned("01", "02"), [])
+
+    assert "answers none of this paper's questions" in str(raised.value)
+
+
+def test_a_complete_mark_scheme_comes_back_in_the_papers_own_order(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    given = [answered_question("02"), answered_question("9"), answered_question("01")]
+
+    with caplog.at_level(logging.WARNING):
+        scheme = merge_scheme(sectioned("01", "02"), given)
+
+    assert scheme.title == "Physics Paper 1: mark scheme"
+    assert [question.number for question in scheme.questions] == ["01", "02"]
+    assert "the mark scheme answered question 9" in caplog.text

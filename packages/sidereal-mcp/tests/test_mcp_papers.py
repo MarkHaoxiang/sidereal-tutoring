@@ -58,6 +58,23 @@ async def test_render_paper_replaces_the_pdfs_from_the_structure() -> None:
     assert paper.mark_scheme_pdf is not None
 
 
+async def test_extract_mark_scheme_reads_the_scheme_against_the_stored_structure() -> None:
+    fake = FakeDirectus()
+    services = build_services(fake)
+    job = await tools.extract_paper(services, seed_document(fake))
+    assert job.output_id is not None
+    structure = fake.rows(Collection.PAPERS)[0]["structure"]
+    document_id = seed_document(fake)
+
+    paper = await tools.extract_mark_scheme(services, job.output_id, document_id)
+
+    assert paper.mark_scheme is not None
+    assert paper.mark_scheme_pdf is not None
+    assert paper.structure == structure
+    assert paper.generated_from is not None
+    assert paper.generated_from["mark_scheme_document"] == str(document_id)
+
+
 async def test_a_worksheet_comes_back_as_its_source_and_a_filed_pdf() -> None:
     fake = FakeDirectus()
     typeset = FakeTypeset()

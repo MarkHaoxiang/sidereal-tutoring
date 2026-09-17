@@ -22,8 +22,9 @@ Sits beside sidereal-app. Imports core, ingest and generate; never sidereal-app.
   administrator's, and the server's token usually is not one.
 - A tool that writes against a student calls `visible_student` first: Directus cannot check a create
   through a relation, so nothing else keeps one tutor's work out of another's student.
-- `extract_paper` runs its job to completion like the other generation tools; `render_paper` and
-  `paper_worksheet` call the same `sidereal_generate.papers` functions the app's endpoints do.
+- `extract_paper` runs its job to completion like the other generation tools; `render_paper`,
+  `paper_worksheet` and `extract_paper_mark_scheme` call the same `sidereal_generate.papers`
+  functions the app's endpoints do.
 - `scan_pages` runs the same `create_document` / `process_document` path the app does, to
   completion: pages that could not be read are a `failed` row, not an exception.
 - `ingest_source` routes on the source string and runs the same `create_document` / `process_document`

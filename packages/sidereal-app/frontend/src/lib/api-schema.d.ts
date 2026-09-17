@@ -337,6 +337,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/papers/{paper_id}/extract_mark_scheme": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Extract Mark Scheme
+         * @description Read a mark scheme document against the paper's stored structure, leaving it untouched.
+         */
+        post: operations["extract_mark_scheme_api_papers__paper_id__extract_mark_scheme_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/papers/{paper_id}/worksheet": {
         parameters: {
             query?: never;
@@ -1019,6 +1039,14 @@ export interface components {
              */
             kind: "mark_scheme";
             document: components["schemas"]["CanonicalMarkScheme"];
+        };
+        /** MarkSchemeRequest */
+        MarkSchemeRequest: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
         };
         /** MarkupRenderRequest */
         MarkupRenderRequest: {
@@ -1897,6 +1925,41 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Paper"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    extract_mark_scheme_api_papers__paper_id__extract_mark_scheme_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                paper_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MarkSchemeRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             202: {

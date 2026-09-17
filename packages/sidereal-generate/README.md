@@ -28,11 +28,12 @@ homework = await homework_generator().generate(
 ```
 
 ```python
-from sidereal_generate import paper_worksheet, rerender_paper
+from sidereal_generate import extract_paper_mark_scheme, paper_worksheet, rerender_paper
 
 job = await run_job(directus, generators, job_id, typeset=typeset)  # kind `paper_extract`
 paper = await rerender_paper(directus, typeset, paper_id, extractor)  # after a review edit
 worksheet = await paper_worksheet(directus, typeset, paper_id, ["1", "4"], student_id=student.id)
+scheme = await extract_paper_mark_scheme(directus, extractor, typeset, paper_id, document_id)
 ```
 
 A `paper_extract` job takes one or two document ids and no student: the paper, and its mark
@@ -41,6 +42,10 @@ scheme, and files one `questions` row per question. Maths is normalised first â€
 name Typst does not know becomes quoted text and `dx` becomes `dif x` â€” and whatever the compiler
 still refuses goes back to the model with its diagnostics, each document on its own and at most
 twice; what compiles is what is stored.
+
+A mark-scheme run that answers fewer questions than it was asked about is asked once more, and a
+scheme still short of the paper is refused: the paper is filed with `mark_scheme` null and a
+warning, and `extract_paper_mark_scheme` reads the scheme again on its own.
 
 The paper is read in several calls rather than one, because a schema over a whole paper is a
 grammar the provider will not compile: its shape (metadata, sections, passages and a stub per

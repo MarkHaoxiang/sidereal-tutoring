@@ -882,6 +882,62 @@
         }
       }
     },
+    "/api/papers/{paper_id}/extract_mark_scheme": {
+      "post": {
+        "summary": "Extract Mark Scheme",
+        "description": "Read a mark scheme document against the paper's stored structure, leaving it untouched.",
+        "operationId": "extract_mark_scheme_api_papers__paper_id__extract_mark_scheme_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "paper_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Paper Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkSchemeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Paper"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/papers/{paper_id}/worksheet": {
       "post": {
         "summary": "Paper Worksheet Pdf",
@@ -2929,6 +2985,21 @@
           "document"
         ],
         "title": "MarkSchemeRenderRequest"
+      },
+      "MarkSchemeRequest": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "document_id"
+        ],
+        "title": "MarkSchemeRequest"
       },
       "MarkupRenderRequest": {
         "properties": {

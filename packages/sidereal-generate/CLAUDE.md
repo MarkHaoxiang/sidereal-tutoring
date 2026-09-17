@@ -77,6 +77,13 @@ Sits above sidereal-ingest. Imports core and ingest only.
 - A question or part a batch asked a figure for and gave no wording is asked once more, once per
   batch; a second wordless answer is a `GenerationError`. A figure never carries a question's
   only text.
+- A stemless question's lone unlabelled part is its stem: its text, answer and blocks come up with
+  it and its own parts become the question's. A labelled part, or a second one, is left alone, and
+  a question that got its stem this way is not wordless.
+- A mark-scheme run is checked against the numbers it was asked for and asked once more naming the
+  ones it answered nothing under; only those gaps are taken from the second answer.
+- A scheme still missing entries is a `GenerationError` naming them, and one that answered none of
+  the paper says that instead. A scheme covering part of a paper is never stored.
 - A sectioned paper's top-level `questions` stays empty. That is the paper's shape, not a loss.
 - The merged result is validated as a whole `CanonicalPaper`; one that will not validate is a
   `GenerationError` and no half paper is written.
@@ -127,6 +134,10 @@ Sits above sidereal-ingest. Imports core and ingest only.
   top-level one, and a worksheet may take either.
 - A render that fails leaves the row, a `generated_from.warning` and a succeeded job — the structure
   is the work. A `rerender_paper` failure is the tutor's to see, so it raises.
+- A mark scheme that cannot be completed does the same: the paper is stored with `mark_scheme` null,
+  a `generated_from.warning` and a succeeded job, never lost with the scheme.
+- `extract_paper_mark_scheme` reads the scheme alone against a stored paper's structure, files the
+  document it read under `generated_from`, and clears that warning when it succeeds.
 - `paper_extract` carries one document and no student, or two with the mark scheme second; every
   other kind carries a student. Either mismatch is a `JobInputError` whose sentence the tutor reads.
 - Maths is normalised before any compile and after every repair: inside `$...$`, a name Typst does

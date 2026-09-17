@@ -21,6 +21,7 @@ EXPECTED = {
     "transcribe_submission",
     "generate_homework",
     "extract_paper",
+    "extract_paper_mark_scheme",
     "render_paper",
     "paper_worksheet",
     "preview_typst",
@@ -112,6 +113,10 @@ async def test_every_tool_reaches_its_delegate() -> None:
 
     paper = fake.rows(Collection.PAPERS)[0]
     for name, arguments in (
+        (
+            "extract_paper_mark_scheme",
+            {"paper_id": paper["id"], "document_id": str(document.id)},
+        ),
         ("render_paper", {"paper_id": paper["id"]}),
         ("paper_worksheet", {"paper_id": paper["id"], "question_numbers": ["1"]}),
     ):

@@ -1,14 +1,61 @@
 from __future__ import annotations
 
+import dataclasses
+from collections.abc import Sequence
 from typing import Any
 from uuid import UUID
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
-from sidereal_core.models import Collection
+from sidereal_app.deps import get_generators, get_http_client, get_ingesters, get_typeset
+from sidereal_app.main import create_app
+from sidereal_core.canonical import CanonicalPaper
+from sidereal_core.models import Collection, Document
 from sidereal_core.testing import DEFAULT_USER_ID, FakeDirectus, FakeTypeset
+from sidereal_generate.base import GenerationError, GenerationNotConfiguredError
+from sidereal_generate.fake import FakePaperExtractor
+from sidereal_generate.jobs import Generators
+from sidereal_generate.models import MarkSchemeExtraction
+from sidereal_generate.usage import UsageTally
+from sidereal_ingest.base import Ingester
 
 PAPER_TEXT = "1. Show that $1 + 1 = 2$.\n2. Differentiate $y = x^2$."
+MISSING_QUESTION = "The mark scheme has no answer for question 2."
+
+
+class IncompleteMarkScheme(FakePaperExtractor):
+    """A mark scheme that stays short of the paper's own questions, even after a retry."""
+
+    async def extract_mark_scheme(
+        self, document: Document, paper: CanonicalPaper, *, usage: UsageTally | None = None
+    ) -> MarkSchemeExtraction:
+        raise GenerationError(MISSING_QUESTION)
+
+
+class Unconfigured(FakePaperExtractor):
+    """The backend with no key, so nothing was asked of it."""
+
+    async def extract_mark_scheme(
+        self, document: Document, paper: CanonicalPaper, *, usage: UsageTally | None = None
+    ) -> MarkSchemeExtraction:
+        raise GenerationNotConfiguredError("OPENROUTER_API_KEY is not set.")
+
+
+def client_with(
+    fake_directus: FakeDirectus,
+    fake_typeset: FakeTypeset,
+    generators: Generators,
+    ingesters: Sequence[Ingester],
+) -> TestClient:
+    """A client whose paper extractor is swapped for one that fails, to reach the handler."""
+    app = create_app()
+    pool = httpx.AsyncClient(transport=fake_directus.transport())
+    app.dependency_overrides[get_http_client] = lambda: pool
+    app.dependency_overrides[get_generators] = lambda: generators
+    app.dependency_overrides[get_ingesters] = lambda: ingesters
+    app.dependency_overrides[get_typeset] = lambda: fake_typeset.client()
+    return TestClient(app)
 
 
 @pytest.fixture
@@ -164,6 +211,144 @@ def test_a_paper_with_no_structure_says_so(
 
     assert response.status_code == 422
     assert response.json()["detail"]["code"] == "paper_unusable"
+
+
+def test_a_mark_scheme_that_stays_incomplete_is_paper_unusable(
+    fake_directus: FakeDirectus,
+    fake_typeset: FakeTypeset,
+    generators: Generators,
+    ingesters: Sequence[Ingester],
+    document_id: UUID,
+    auth: dict[str, str],
+) -> None:
+    """`extract_mark_scheme` calls generate directly: `GenerationError` must still reach 422."""
+    with client_with(
+        fake_directus,
+        fake_typeset,
+        dataclasses.replace(generators, paper=IncompleteMarkScheme()),
+        ingesters,
+    ) as client:
+        extract(client, auth, document_id)
+        paper = fake_directus.rows(Collection.PAPERS)[0]
+
+        response = client.post(
+            f"/api/papers/{paper['id']}/extract_mark_scheme",
+            headers=auth,
+            json={"document_id": str(document_id)},
+        )
+
+    assert response.status_code == 422
+    body = response.json()
+    assert body["detail"]["code"] == "paper_unusable"
+    assert body["detail"]["message"] == MISSING_QUESTION
+
+
+def test_generation_with_no_key_is_a_service_problem_not_a_bad_paper(
+    fake_directus: FakeDirectus,
+    fake_typeset: FakeTypeset,
+    generators: Generators,
+    ingesters: Sequence[Ingester],
+    document_id: UUID,
+    auth: dict[str, str],
+) -> None:
+    """A missing key is an administrator's problem: it must not read as `paper_unusable`."""
+    with client_with(
+        fake_directus,
+        fake_typeset,
+        dataclasses.replace(generators, paper=Unconfigured()),
+        ingesters,
+    ) as client:
+        extract(client, auth, document_id)
+        paper = fake_directus.rows(Collection.PAPERS)[0]
+
+        response = client.post(
+            f"/api/papers/{paper['id']}/extract_mark_scheme",
+            headers=auth,
+            json={"document_id": str(document_id)},
+        )
+
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "generation_not_configured"
+
+
+def test_re_extracting_a_mark_scheme_answers_with_the_updated_paper(
+    client: TestClient,
+    fake_directus: FakeDirectus,
+    fake_typeset: FakeTypeset,
+    document_id: UUID,
+    auth: dict[str, str],
+) -> None:
+    extract(client, auth, document_id)
+    paper = fake_directus.rows(Collection.PAPERS)[0]
+    structure = paper["structure"]
+    scheme = fake_directus.seed(
+        Collection.DOCUMENTS,
+        {"title": "Mark scheme", "kind": "upload", "status": "ready", "text": "1 (a) 3x^2 (2)"},
+    )
+
+    response = client.post(
+        f"/api/papers/{paper['id']}/extract_mark_scheme",
+        headers=auth,
+        json={"document_id": scheme["id"]},
+    )
+
+    assert response.status_code == 202
+    body = response.json()
+    assert [question["number"] for question in body["mark_scheme"]["questions"]] == ["1", "2"]
+    assert fake_directus.files[body["mark_scheme_pdf"]][1].startswith(b"%PDF")
+    assert body["generated_from"]["mark_scheme_document"] == scheme["id"]
+    # The scheme alone was re-read: the paper's own structure is what it already was.
+    assert body["structure"] == structure
+    rendered = [call for call in fake_typeset.rendered if call["kind"] == "mark_scheme"][-1]
+    assert [question["number"] for question in rendered["document"]["questions"]] == ["1", "2"]
+
+
+def test_a_mark_scheme_for_a_paper_the_caller_cannot_see_is_directuss_own_answer(
+    client: TestClient, document_id: UUID, auth: dict[str, str]
+) -> None:
+    response = client.post(
+        f"/api/papers/{UUID(int=9)}/extract_mark_scheme",
+        headers=auth,
+        json={"document_id": str(document_id)},
+    )
+
+    assert response.status_code == 404
+
+
+def test_a_student_may_not_re_extract_a_mark_scheme(
+    client: TestClient, fake_directus: FakeDirectus, document_id: UUID, auth: dict[str, str]
+) -> None:
+    extract(client, auth, document_id)
+    paper = fake_directus.rows(Collection.PAPERS)[0]
+    make_student(fake_directus)
+
+    response = client.post(
+        f"/api/papers/{paper['id']}/extract_mark_scheme",
+        headers=auth,
+        json={"document_id": str(document_id)},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "tutor_only"
+
+
+@pytest.mark.parametrize("body", [None, {}, {"document_id": "not-a-uuid"}, {"document": "1"}])
+def test_a_mark_scheme_needs_one_document_id(
+    client: TestClient,
+    fake_directus: FakeDirectus,
+    document_id: UUID,
+    auth: dict[str, str],
+    body: dict[str, str] | None,
+) -> None:
+    extract(client, auth, document_id)
+    paper = fake_directus.rows(Collection.PAPERS)[0]
+
+    response = client.post(
+        f"/api/papers/{paper['id']}/extract_mark_scheme", headers=auth, json=body
+    )
+
+    assert response.status_code == 422
+    assert paper["mark_scheme_pdf"] is None
 
 
 def test_a_worksheet_takes_the_questions_asked_for_and_files_a_pdf(

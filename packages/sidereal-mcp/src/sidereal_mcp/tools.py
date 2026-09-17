@@ -27,7 +27,12 @@ from sidereal_core.models import (
 from sidereal_core.students import visible_student
 from sidereal_core.tutors import AdminHealth, AdminJob, TutorAccount, TutorStatus
 from sidereal_generate.jobs import JobInput, run_job, start_job
-from sidereal_generate.papers import WorksheetResult, paper_worksheet, rerender_paper
+from sidereal_generate.papers import (
+    WorksheetResult,
+    extract_paper_mark_scheme,
+    paper_worksheet,
+    rerender_paper,
+)
 from sidereal_generate.settings import generate_settings
 from sidereal_generate.typst import recompile_homework
 from sidereal_ingest import submissions
@@ -177,6 +182,12 @@ async def extract_paper(
     documents = (document_id,) if mark_scheme_id is None else (document_id, mark_scheme_id)
     return await _generate(
         services, GenerationKind.PAPER_EXTRACT, JobInput(documents=documents, pages=pages)
+    )
+
+
+async def extract_mark_scheme(services: Services, paper_id: UUID, document_id: UUID) -> Paper:
+    return await extract_paper_mark_scheme(
+        services.directus, services.generators.paper, services.typeset, paper_id, document_id
     )
 
 

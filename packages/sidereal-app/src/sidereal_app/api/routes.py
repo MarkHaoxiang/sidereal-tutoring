@@ -41,7 +41,12 @@ from sidereal_core.tutors import (
     set_tutor_status,
 )
 from sidereal_generate.jobs import JobInput, run_job, start_job
-from sidereal_generate.papers import WorksheetResult, paper_worksheet, rerender_paper
+from sidereal_generate.papers import (
+    WorksheetResult,
+    extract_paper_mark_scheme,
+    paper_worksheet,
+    rerender_paper,
+)
 from sidereal_generate.settings import generate_settings
 from sidereal_generate.typst import recompile_homework
 from sidereal_ingest.documents import create_document, process_document
@@ -61,6 +66,7 @@ from sidereal_app.api.models import (
     Health,
     JobRequest,
     LoginRequest,
+    MarkSchemeRequest,
     PasswordRequest,
     QuestionRenderRequest,
     RenderRequest,
@@ -347,6 +353,22 @@ async def render_paper(
     """
     await client.get_item(Collection.PAPERS, Paper, paper_id)
     return await rerender_paper(client, typeset, paper_id, generators.paper)
+
+
+@router.post("/papers/{paper_id}/extract_mark_scheme", status_code=202)
+async def extract_mark_scheme(
+    paper_id: UUID,
+    body: MarkSchemeRequest,
+    tutor: Tutor,
+    client: Directus,
+    typeset: Typeset,
+    generators: GeneratorSet,
+) -> Paper:
+    """Read a mark scheme document against the paper's stored structure, leaving it untouched."""
+    await client.get_item(Collection.PAPERS, Paper, paper_id)
+    return await extract_paper_mark_scheme(
+        client, generators.paper, typeset, paper_id, body.document_id
+    )
 
 
 @router.post("/papers/{paper_id}/worksheet")

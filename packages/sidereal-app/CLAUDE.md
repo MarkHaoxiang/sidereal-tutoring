@@ -50,9 +50,14 @@ Top layer. Imports core, ingest and generate; never sidereal-mcp.
   student. Both are 422 with a `code` before a job row exists.
 - `pages` is on `paper_extract` alone: any other kind carrying it, even `false`, is 422
   `pages_unsupported` before a job row exists.
-- Papers are the tutor's: render and worksheet are `require_tutor`, and each reads the paper with the
-  caller's own token first, so a paper they cannot see is Directus's own answer.
-- A `PaperError` is 422 `paper_unusable`, carrying the sentence generate wrote.
+- Papers are the tutor's: render, worksheet and re-extracting a mark scheme are `require_tutor`, and
+  each reads the paper with the caller's own token first, so a paper they cannot see is Directus's
+  own answer.
+- `POST /api/papers/{id}/extract_mark_scheme` reads the named document against the stored structure:
+  the paper's structure, questions and rendered PDF are left as they are.
+- A `PaperError` or a `GenerationError` reaching a response is 422 `paper_unusable`, carrying the
+  sentence generate wrote — except `GenerationNotConfiguredError`, which is 503
+  `generation_not_configured`: a missing key is an administrator's problem, not a bad paper.
 - A `DocumentError` or an `IngestError` that reaches a response is 422 `material_unusable`, carrying
   the sentence ingest wrote.
 - A scan is a document source like any other: `POST /api/documents` files the pages and transcribes

@@ -37,6 +37,7 @@ uv run --package sidereal-app pytest packages/sidereal-app/tests
 | `POST` | `/api/jobs/{kind}` | `kind` is `homework`, `feedback`, `plan` or `paper_extract`. `format` is `markdown` or `typst` and only homework takes `typst`. `paper_extract` takes one `document_ids` entry and no student, and alone takes `pages`: `true` or `false` to force sending the PDF's pages as images, `null` (default) to decide from the PDF. Returns 202 and the queued job. |
 | `GET` | `/api/jobs/{id}` | The job, including `output_collection` and `output_id` once it succeeds. |
 | `POST` | `/api/papers/{id}/render` | Tutors only. Renders the stored structure again and returns 202 and the row. |
+| `POST` | `/api/papers/{id}/extract_mark_scheme` | Tutors only. `{document_id}`. Reads that mark scheme against the stored structure and returns 202 and the row. |
 | `POST` | `/api/papers/{id}/worksheet` | Tutors only. `{question_numbers, student_id?, title?, due?}`. 200 and `{source, pdf_file_id}`. |
 | `POST` | `/api/typeset/preview` | `{source}`. Tutors only. 200 and `{pages: [svg]}`, or 422 with `diagnostics`. |
 | `POST` | `/api/homework/{id}/transcribe` | The tutor, or the student the homework belongs to. Reads `submission_file` into `submission_transcription` (`{text, confidence, questions, model, usage}`) and returns 200 and the row. |

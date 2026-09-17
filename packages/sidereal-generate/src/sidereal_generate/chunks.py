@@ -40,6 +40,14 @@ UNTRANSCRIBED = (
     "No call transcribed question {numbers}, so the paper would carry a one-line summary where "
     "its wording belongs. Try the extraction again."
 )
+UNANSWERED = (
+    "The mark scheme has no answer for question {numbers}, so it covers only part of the paper. "
+    "Read the mark scheme again."
+)
+NOTHING_ANSWERED = (
+    "That mark scheme answers none of this paper's questions. Check it is the scheme for this "
+    "paper, then read it again."
+)
 
 _BATCH = ConfigDict(frozen=True, extra="forbid")
 
@@ -176,6 +184,11 @@ class Batch:
         return tuple(stub.number for stub in self.stubs)
 
 
+def _asked(paper: CanonicalPaper) -> tuple[CanonicalQuestion, ...]:
+    """Every question the paper asks, loose ones first, then each section's own."""
+    return (*paper.questions, *(q for section in paper.sections for q in section.questions))
+
+
 def stubs(skeleton: PaperSkeleton) -> tuple[QuestionStub, ...]:
     """Every question the skeleton names, loose ones first, then each section's own."""
     return (
@@ -205,7 +218,7 @@ def question_runs(
     paper: CanonicalPaper, *, size: int = BATCH_QUESTIONS
 ) -> tuple[tuple[CanonicalQuestion, ...], ...]:
     """A read paper's own questions, in the runs one mark-scheme or repair call takes."""
-    questions = (*paper.questions, *(q for section in paper.sections for q in section.questions))
+    questions = _asked(paper)
     return tuple(questions[start : start + size] for start in range(0, len(questions), size))
 
 
@@ -331,6 +344,25 @@ def merge(
     return paper
 
 
+def merge_scheme(
+    paper: CanonicalPaper, answered: Sequence[CanonicalMarkSchemeQuestion]
+) -> CanonicalMarkScheme:
+    """The paper's questions, each under the answer read for it. A gap is refused, never stored."""
+    wanted = tuple(question.number for question in _asked(paper))
+    answers = {answer.number: answer for answer in answered}
+    for number in sorted(set(answers) - set(wanted)):
+        logger.warning("the mark scheme answered question %s, which the paper has not", number)
+    missing = tuple(number for number in wanted if number not in answers)
+    if missing and len(missing) == len(wanted):
+        raise GenerationError(NOTHING_ANSWERED)
+    if missing:
+        raise GenerationError(UNANSWERED.format(numbers=", ".join(missing)))
+    return CanonicalMarkScheme(
+        title=f"{paper.title}: mark scheme",
+        questions=tuple(answers[number] for number in wanted),
+    )
+
+
 def reconciled(skeleton: PaperSkeleton, answered: Mapping[str, BatchQuestion]) -> PaperSkeleton:
     """The shape resettled on what was transcribed, where the two disagree about a question.
 
@@ -361,7 +393,10 @@ def wordless(batch: QuestionBatch) -> tuple[str, ...]:
         if question is None:
             continue
         if request.part_label is None:
-            if not (question.stem or "").strip() and not question.parts:
+            lone = _hoistable(question.stem, question.parts)
+            stem = question.stem if lone is None else lone.text
+            under = question.parts if lone is None else lone.parts
+            if not (stem or "").strip() and not under:
                 named.append(f"question {question.number}")
             continue
         text = _labelled(question, request.part_label)
@@ -500,14 +535,39 @@ def _question(
 ) -> CanonicalQuestion:
     question = answered[stub.number]
     blocks = tuple(placed.pop((stub.number, None), ()))
-    return CanonicalQuestion(
-        number=stub.number,
-        stem=question.stem,
-        marks=stub.marks if question.marks is None else question.marks,
-        answer=question.answer,
-        parts=tuple(_part(stub.number, part, placed) for part in question.parts),
-        blocks=blocks,
+    return _hoisted(
+        CanonicalQuestion(
+            number=stub.number,
+            stem=question.stem,
+            marks=stub.marks if question.marks is None else question.marks,
+            answer=question.answer,
+            parts=tuple(_part(stub.number, part, placed) for part in question.parts),
+            blocks=blocks,
+        )
     )
+
+
+def _hoisted(question: CanonicalQuestion) -> CanonicalQuestion:
+    """A lone part the paper printed no label for is the question's stem, not a part of it."""
+    part = _hoistable(question.stem, question.parts)
+    if part is None:
+        return question
+    return question.model_copy(
+        update={
+            "stem": part.text,
+            "marks": part.marks if question.marks is None else question.marks,
+            "answer": question.answer if part.answer is None else part.answer,
+            "blocks": (*question.blocks, *part.blocks),
+            "parts": tuple(CanonicalPart.model_validate(sub.model_dump()) for sub in part.parts),
+        }
+    )
+
+
+def _hoistable[P: (BatchPart, CanonicalPart)](stem: str | None, parts: Sequence[P]) -> P | None:
+    """The one part a stemless question's wording was left in, where it was left in one."""
+    if (stem or "").strip() or len(parts) != 1 or parts[0].label.strip():
+        return None
+    return parts[0]
 
 
 def _part(number: str, part: BatchPart, placed: _Placed) -> CanonicalPart:
