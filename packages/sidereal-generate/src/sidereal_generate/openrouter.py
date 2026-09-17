@@ -6,7 +6,6 @@ import base64
 import json
 import logging
 from collections.abc import Sequence
-from dataclasses import dataclass
 from typing import Any
 
 import httpx2
@@ -19,8 +18,7 @@ from openai.types.chat import (
 )
 from openai.types.completion_usage import CompletionUsage
 from pydantic import BaseModel, ValidationError
-from sidereal_core.canonical import CanonicalPaper
-from sidereal_core.models import Document, HomeworkFormat
+from sidereal_core.models import HomeworkFormat
 
 from sidereal_generate.base import (
     FeedbackGenerator,
@@ -33,12 +31,12 @@ from sidereal_generate.base import (
     strict_schema,
     unstringify,
 )
+from sidereal_generate.chunks import BATCH_QUESTIONS
+from sidereal_generate.extraction import Ask, ChunkedPaperExtractor
 from sidereal_generate.models import (
     FeedbackOutput,
     GenerationRequest,
     HomeworkOutput,
-    MarkSchemeExtraction,
-    PaperExtraction,
     PlanOutput,
 )
 from sidereal_generate.prompts import (
@@ -47,22 +45,9 @@ from sidereal_generate.prompts import (
     HOMEWORK_PROMPT,
     HOMEWORK_TOOL,
     HOMEWORK_TYPST_PROMPT,
-    MARK_SCHEME_PROMPT,
-    MARK_SCHEME_REPAIR,
-    MARK_SCHEME_RETRY,
-    MARK_SCHEME_TOOL,
-    PAPER_FIGURES_RETRY,
-    PAPER_PAGES_PROMPT,
-    PAPER_PROMPT,
-    PAPER_REPAIR,
-    PAPER_RETRY,
-    PAPER_TOOL,
     PLAN_PROMPT,
     PLAN_TOOL,
-    page_numbers,
     render,
-    render_document,
-    render_mark_scheme,
 )
 from sidereal_generate.settings import ReasoningEffort, generate_settings
 from sidereal_generate.usage import UsageTally
@@ -80,6 +65,8 @@ NO_KEY = "OPENROUTER_API_KEY is not set, so the OpenRouter backend cannot be cal
 CUT_OFF = "ran out of output budget"
 # Ask the gateway to price every call, so a job can file what it cost.
 PRICED: dict[str, Any] = {"usage": {"include": True}}
+# How much of a raw answer the DEBUG line carries.
+DEBUG_PREFIX = 2000
 
 
 class OpenRouterCall:
@@ -267,6 +254,9 @@ class OpenRouterCall:
     def _decode(self, raw: str | None, name: str) -> object:
         if not raw:
             raise GenerationError(f"{self._model} returned nothing for {name}")
+        # What the model actually sent, bounded: a 12,000-token answer must not flood a log,
+        # and a payload nothing else explains is read here.
+        logger.debug("%s answered %d bytes: %s", name, len(raw), raw[:DEBUG_PREFIX])
         try:
             return json.loads(raw)
         except json.JSONDecodeError as exc:
@@ -409,32 +399,30 @@ def plan_generator(
     )
 
 
-@dataclass(frozen=True, slots=True)
-class _Call:
-    """What one extraction call is named, and what an unusable answer to it is called."""
+class _Caller:
+    """The chunked extraction's seam, answered by one OpenRouter call each time."""
 
-    tool: str
-    description: str
-    noun: str
+    def __init__(self, call: OpenRouterCall) -> None:
+        self._call = call
+
+    @property
+    def model(self) -> str:
+        return self._call.model
+
+    async def ask(self, ask: Ask, *, usage: UsageTally | None = None) -> object:
+        return await self._call.payload(
+            system=ask.system,
+            prompt=ask.prompt,
+            name=ask.tool,
+            description=ask.description,
+            schema=ask.schema,
+            images=ask.pages,
+            usage=usage,
+        )
 
 
-_PAPER = _Call(PAPER_TOOL, "Return the paper as structure.", "paper")
-_MARK_SCHEME = _Call(MARK_SCHEME_TOOL, "Return the mark scheme as structure.", "mark scheme")
-
-
-def _validated[M: BaseModel](model: type[M], call: _Call, payload: object) -> M:
-    try:
-        return model.model_validate(unstringify(payload, model))
-    except ValidationError as exc:
-        raise GenerationError(f"{call.tool} returned an unusable {call.noun}: {exc}") from exc
-
-
-class OpenRouterPaperExtractor:
-    """A paper, then its mark scheme, each against its own strict schema.
-
-    A payload the canonical models refuse is asked for once more with the errors appended;
-    a second refusal is a `GenerationError`, never a half-read paper.
-    """
+class OpenRouterPaperExtractor(ChunkedPaperExtractor):
+    """The paper read in chunks, each against a schema small enough to compile."""
 
     def __init__(
         self,
@@ -444,161 +432,20 @@ class OpenRouterPaperExtractor:
         max_tokens: int | None = None,
         http_client: httpx2.AsyncClient | None = None,
         reasoning: ReasoningEffort | None = None,
+        size: int = BATCH_QUESTIONS,
     ) -> None:
         settings = generate_settings()
-        self._call = OpenRouterCall(
-            client=client,
-            model=model,
-            max_tokens=max_tokens or settings.extract_max_tokens,
-            http_client=http_client,
-            reasoning=reasoning or settings.extract_reasoning,
-        )
-
-    @property
-    def model(self) -> str:
-        return self._call.model
-
-    async def extract(
-        self,
-        document: Document,
-        *,
-        pages: Sequence[bytes] = (),
-        drawn: Sequence[int] = (),
-        usage: UsageTally | None = None,
-    ) -> PaperExtraction:
-        drawn = tuple(drawn) if pages else ()
-        prompt = render_document(document, drawn)
-        extraction = await self._extracted(
-            PaperExtraction,
-            _PAPER,
-            PAPER_PAGES_PROMPT if pages else PAPER_PROMPT,
-            prompt,
-            PAPER_RETRY,
-            usage,
-            pages,
-        )
-        if drawn and not extraction.figures:
-            return await self._figures_again(prompt, drawn, pages, usage, extraction)
-        return extraction
-
-    async def _figures_again(
-        self,
-        prompt: str,
-        drawn: Sequence[int],
-        pages: Sequence[bytes],
-        usage: UsageTally | None,
-        first: PaperExtraction,
-    ) -> PaperExtraction:
-        """One more ask, and only one: a drawn paper with no figures at all is a bad answer.
-
-        Whatever comes back is taken, none included — a drawn page can be page furniture.
-        """
-        numbers = page_numbers(drawn)
-        logger.warning(
-            "%s returned no figures for a paper whose pages %s are drawn; asking once more",
-            self._call.model,
-            numbers,
-        )
-        retry = PAPER_FIGURES_RETRY.format(pages=numbers)
-        payload = await self._ask(
-            PaperExtraction, _PAPER, PAPER_PAGES_PROMPT, f"{prompt}\n\n{retry}", usage, pages
-        )
-        try:
-            return _validated(PaperExtraction, _PAPER, payload)
-        except GenerationError:
-            # The first answer validated; a bad second one costs the figures, not the paper.
-            logger.exception("the second ask for figures could not be read")
-            return first
-
-    async def extract_mark_scheme(
-        self,
-        document: Document,
-        paper: CanonicalPaper,
-        *,
-        usage: UsageTally | None = None,
-    ) -> MarkSchemeExtraction:
-        return await self._extracted(
-            MarkSchemeExtraction,
-            _MARK_SCHEME,
-            MARK_SCHEME_PROMPT,
-            render_mark_scheme(document, paper),
-            MARK_SCHEME_RETRY,
-            usage,
-        )
-
-    async def repair(
-        self,
-        extraction: PaperExtraction,
-        diagnostics: str,
-        *,
-        usage: UsageTally | None = None,
-    ) -> PaperExtraction:
-        return await self._repaired(
-            PaperExtraction, _PAPER, PAPER_REPAIR, extraction, diagnostics, usage
-        )
-
-    async def repair_mark_scheme(
-        self,
-        extraction: MarkSchemeExtraction,
-        diagnostics: str,
-        *,
-        usage: UsageTally | None = None,
-    ) -> MarkSchemeExtraction:
-        return await self._repaired(
-            MarkSchemeExtraction, _MARK_SCHEME, MARK_SCHEME_REPAIR, extraction, diagnostics, usage
-        )
-
-    async def _extracted[M: BaseModel](
-        self,
-        model: type[M],
-        call: _Call,
-        system: str,
-        prompt: str,
-        retry: str,
-        usage: UsageTally | None,
-        pages: Sequence[bytes] = (),
-    ) -> M:
-        payload = await self._ask(model, call, system, prompt, usage, pages)
-        try:
-            return model.model_validate(unstringify(payload, model))
-        except ValidationError as first:
-            logger.warning(
-                "%s returned an unusable %s, asking once more: %s", call.tool, call.noun, first
-            )
-            payload = await self._ask(
-                model, call, system, f"{prompt}\n\n{retry}\n{first}", usage, pages
-            )
-        return _validated(model, call, payload)
-
-    async def _repaired[M: BaseModel](
-        self,
-        model: type[M],
-        call: _Call,
-        system: str,
-        extraction: M,
-        diagnostics: str,
-        usage: UsageTally | None,
-    ) -> M:
-        prompt = f"{extraction.model_dump_json()}\n\n{diagnostics}"
-        return _validated(model, call, await self._ask(model, call, system, prompt, usage))
-
-    async def _ask(
-        self,
-        model: type[BaseModel],
-        call: _Call,
-        system: str,
-        prompt: str,
-        usage: UsageTally | None,
-        pages: Sequence[bytes] = (),
-    ) -> object:
-        return await self._call.payload(
-            system=system,
-            prompt=prompt,
-            name=call.tool,
-            description=call.description,
-            schema=strict_schema(model),
-            images=pages,
-            usage=usage,
+        super().__init__(
+            _Caller(
+                OpenRouterCall(
+                    client=client,
+                    model=model,
+                    max_tokens=max_tokens or settings.extract_max_tokens,
+                    http_client=http_client,
+                    reasoning=reasoning or settings.extract_reasoning,
+                )
+            ),
+            size=size,
         )
 
 

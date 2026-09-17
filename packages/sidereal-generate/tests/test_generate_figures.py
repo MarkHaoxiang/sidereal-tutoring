@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import base64
 import io
-import json
 from collections.abc import Sequence
 from typing import Any
 from uuid import UUID
@@ -24,10 +23,10 @@ from sidereal_core.canonical import (
 from sidereal_core.models import Collection, Document
 from sidereal_core.testing import FakeDirectus, FakeTypeset
 from sidereal_core.typeset import MAX_ASSET_BYTES
-from sidereal_generate.base import GenerationError, strict_schema
+from sidereal_generate.base import GenerationError
 from sidereal_generate.claude import NO_PAGES, AnthropicPaperExtractor
 from sidereal_generate.fake import FakePaperExtractor
-from sidereal_generate.models import FigureRequest, MarkSchemeExtraction, PaperExtraction
+from sidereal_generate.models import FigureRequest, PaperExtraction
 from sidereal_generate.papers import PaperError, extract_paper, paper_worksheet, rerender_paper
 from sidereal_generate.typst_maths import normalise_model
 from sidereal_generate.usage import UsageTally
@@ -408,40 +407,6 @@ def test_a_code_block_keeps_its_dollars() -> None:
     assert isinstance(listing, CanonicalCodeBlock)
     assert listing.text == "total=$(wc -l < data)\necho $total  # PQ"
     assert fixed.questions[0].stem == "Read the program. Find $dif y/dif x$."
-
-
-def schema_keys(value: Any) -> set[str]:
-    match value:
-        case dict():
-            return set(value) | {key for item in value.values() for key in schema_keys(item)}
-        case list():
-            return {key for item in value for key in schema_keys(item)}
-        case _:
-            return set()
-
-
-def self_referencing(schema: dict[str, Any]) -> set[str]:
-    """`$def`s that refer to themselves: the recursion the provider refused to compile."""
-    return {
-        name
-        for name, definition in schema.get("$defs", {}).items()
-        if f'"#/$defs/{name}"' in json.dumps(definition)
-    }
-
-
-def test_both_extraction_schemas_stay_within_strict_structured_output() -> None:
-    """A tuple or a bounded list carries keywords a strict schema is refused for."""
-    paper = strict_schema(PaperExtraction)
-    scheme = strict_schema(MarkSchemeExtraction)
-    keys = schema_keys(paper)
-    scheme_keys = schema_keys(scheme)
-
-    assert keys.isdisjoint({"oneOf", "prefixItems", "minItems", "maxItems"})
-    assert scheme_keys.isdisjoint({"oneOf", "prefixItems", "minItems", "maxItems"})
-    assert "bbox" in keys
-    # `CanonicalPart -> CanonicalPart` is what the provider named when it refused strict mode.
-    assert self_referencing(paper) == set()
-    assert self_referencing(scheme) == set()
 
 
 async def test_the_drawn_pages_are_named_to_the_extractor_by_number() -> None:

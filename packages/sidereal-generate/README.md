@@ -36,21 +36,26 @@ worksheet = await paper_worksheet(directus, typeset, paper_id, ["1", "4"], stude
 ```
 
 A `paper_extract` job takes one or two document ids and no student: the paper, and its mark
-scheme second when the tutor filed one. The paper is read in one call and the mark scheme in a
-second, under the paper's own numbers and labels. It writes a `papers` row from the text, renders
-the paper and its mark scheme, and files one `questions` row per question. Maths is normalised
-first — inside `$...$`, a name Typst does not know becomes quoted text and `dx` becomes `dif x` —
-and whatever the compiler still refuses goes back to the model with its diagnostics, each document
-on its own and at most twice; what compiles is what is stored.
+scheme second when the tutor filed one. It writes a `papers` row, renders the paper and its mark
+scheme, and files one `questions` row per question. Maths is normalised first — inside `$...$`, a
+name Typst does not know becomes quoted text and `dx` becomes `dif x` — and whatever the compiler
+still refuses goes back to the model with its diagnostics, each document on its own and at most
+twice; what compiles is what is stored.
+
+The paper is read in several calls rather than one, because a schema over a whole paper is a
+grammar the provider will not compile: its shape (metadata, sections, passages and a stub per
+question), then its questions six at a time, then the printed material of the questions whose
+stub said they have some, then the mark scheme in the same runs. A call whose answer does not fit
+is asked once more; a second failure fails the job. `ChunkedPaperExtractor` takes a `BatchCaller`,
+so a backend supplies one `ask` and nothing else.
 
 `JobInput(pages=True)` sends the source PDF's pages to the model as images as well as its text,
 so it can read what the text layer does not carry: ruled answer lines, answer boxes, grids, and
-every diagram, graph and figure. The tutor gets those figures cropped out of the PDF, filed as
-Directus images, and printed in the rendered paper. The request names which of those pages carry
-drawn content; a paper that comes back with no figures at all costs one further call, and
-whatever that answers is taken. `pages=False` reads the text alone, and the
-default decides from the PDF — a paper with images on a fifth of its pages or more gets them.
-Only the `openrouter` backend can see a page image; the others answer with a sentence saying so.
+every diagram, graph and figure. The shape call sees every page; each later run sees only the
+pages its own questions span. The tutor gets the figures cropped out of the PDF, filed as Directus
+images, and printed in the rendered paper. `pages=False` reads the text alone, and the default
+decides from the PDF — a paper with images on a fifth of its pages or more gets them. Only the
+`openrouter` backend can see a page image; the others answer with a sentence saying so.
 
 Every job files what its calls cost in `generated_from.usage` — `calls`, `prompt_tokens`,
 `completion_tokens`, `total_tokens`, and `reasoning_tokens`, `images`, `image_tokens` and

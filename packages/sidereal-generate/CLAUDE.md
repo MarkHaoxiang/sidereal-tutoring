@@ -53,32 +53,55 @@ Sits above sidereal-ingest. Imports core and ingest only.
   nothing is read back out of a PDF.
 - A paper's `questions` rows are derived from the same structure: an extract writes them, and they
   are never merged into by hand. Re-extracting a document writes a new paper with its own rows.
-- Extraction is transcription, not generation: the paper is one strict tool call against
-  `PaperExtraction`, then the mark scheme is a second against `MarkSchemeExtraction`, carrying the
-  paper's numbers and labels so the two line up. Each call sends only its own model's schema: one
-  schema over both is a grammar the provider refuses to compile.
-- A payload the canonical models refuse is asked for once more with the errors appended, and those
-  errors go in a WARNING; a second refusal is a `GenerationError` and no paper is written.
-- An object field that arrives as a JSON string is parsed once and the model named in a WARNING;
-  a string that is not an object or an array is left for validation to refuse. A forced tool call
-  is not grammar-constrained, so a stringified field is a real answer, never text to store.
+- Extraction is transcription, not generation, and it is chunked: a shape call, then the
+  questions in runs of `BATCH_QUESTIONS`, then a block call for the questions the shape flagged,
+  then the mark scheme in the same runs. One schema over a whole paper is a grammar the provider
+  refuses to compile.
+- Every schema an extraction or a repair sends stays at or under 4,101 bytes and 8 `$defs` — the
+  largest the provider was proved to compile, against 6,521 it refused. Tests assert it per
+  schema and over every call one extraction makes.
+- The block union the model authors is `passage`, `passage_ref`, `code` and `table`: a `figure`
+  is the app's to crop and place, and the union without it is part of what makes the schemas fit.
+- `chunks.py` is pure — the splitting, the page selection and the merge — and
+  `ChunkedPaperExtractor` sits on one `BatchCaller.ask`, so the whole flow is driven in tests
+  with no network. A backend supplies the caller and nothing else.
+- The shape is the paper's order of record: its question order, its sections and its passages are
+  what the merge rebuilds. A batch answer the shape did not ask for is logged and dropped, and a
+  question no batch transcribed keeps the one line the shape gave it.
+- A sectioned paper's top-level `questions` stays empty. That is the paper's shape, not a loss.
+- The merged result is validated as a whole `CanonicalPaper`; one that will not validate is a
+  `GenerationError` and no half paper is written.
+- A call whose answer does not fit is asked once more with the validator's errors, and those
+  errors go in a WARNING; a second failure is a `GenerationError` whose sentence names what could
+  not be read.
+- A repair goes out in the same runs against the same batch schema. Only wording comes back from
+  it: marks, answers, blocks, sections and passages are kept from what was already read.
+- An object field that arrives as a JSON string is parsed once and the model named in a WARNING.
+  Text that opens as JSON and will not parse says so at WARNING and has its invalid escapes
+  doubled once — `\p` is the backslash a maths field meant — and if it still will not parse it is
+  left for validation to refuse. A string that is not JSON is untouched. A forced tool call is not
+  grammar-constrained, so a stringified field is a real answer, never text to store.
+- Every model call logs the raw answer it was given at DEBUG, cut to `DEBUG_PREFIX` bytes.
 - A paper is read from its text unless its pages go up as images too: `pages=True` sends them,
   `False` never does, and the default asks the PDF — images on a fifth of its pages or more. A
-  retry carries the same pages and the same drawn page numbers, and an extraction that sends
-  pages says at INFO how many went and how many of them are drawn.
-- A pages extraction names the drawn pages by number, from `raster_pages` and never from the
-  model's judgement, and asks for a figure request per question that depends on one.
-- `figures` is required like every other `_OUTPUT` field: an omitted key is a `ValidationError`
-  down the retry path, never an empty list a paper with figures reads the same as.
-- Pages mode, drawn pages and no figures at all is one more ask, naming those pages, and exactly
-  one — whatever comes back is taken, none included, because a drawn page can be page furniture.
+  retry carries the same pages, and an extraction that sends pages says at INFO how many went and
+  how many of them are drawn.
+- The shape call is the one that sees every page image, because it is what says which page each
+  question starts on. Each later run sees only the pages its questions span, through to where the
+  next run starts, which is what makes a batch cheaper than the whole paper.
+- The pages a run is shown are named to it by the paper's own number, never by their position in
+  the batch, so a figure request locates itself in the source PDF. The drawn ones among them come
+  from `raster_pages` and never from the model's judgement.
+- `QuestionBatch.figures` carries no default: an omitted key is a `ValidationError` down the
+  retry path, never an empty list a run with figures reads the same as.
 - `pages=True` on a document with no PDF behind it is a `PaperError` the tutor reads; a PDF that
   will not rasterise fails the same way, and falls back to the text when nobody asked for pages.
 - Only `SIDEREAL_GENERATE_BACKEND=openrouter` can see a page image. Every other backend answers
   one sentence naming it — a text-only extraction a tutor believes read the figures is worse.
-- `PaperExtraction.figures` is the model's side list, never structure and never stored: each
-  request is cropped out of the source PDF, filed, and appended as a `figure` block to the
-  question or part it names, searching the sections as well as the top level. A request naming a
+- The figure requests a run returns are the model's side list, gathered into
+  `PaperExtraction.figures`, never structure and never stored: each request is cropped out of the
+  source PDF, filed, and appended as a `figure` block to the question or part it names, searching
+  the sections as well as the top level. A request naming a
   node the paper has not got, and a crop that fails, are logged and dropped — the paper is the
   work.
 - A figure's asset name is `<file id>.jpg`: the service refuses a name that is not a file name,
@@ -95,7 +118,8 @@ Sits above sidereal-ingest. Imports core and ingest only.
 - `paper_extract` carries one document and no student, or two with the mark scheme second; every
   other kind carries a student. Either mismatch is a `JobInputError` whose sentence the tutor reads.
 - Maths is normalised before any compile and after every repair: inside `$...$`, a name Typst does
-  not know becomes quoted text and `dx` becomes `dif x`. The compiler stops at the first unknown
+  not know becomes quoted text, `dx` becomes `dif x`, and a span opening on `^` or `_` — `kg$^-1$`
+  — is given the empty base it has no operand without. The compiler stops at the first unknown
   variable, so a fault left in costs a whole round-trip to the model to find. A `passage` and a
   `code` block are verbatim, so their `text` is never normalised.
 - Source the compiler still refuses is sent back with its diagnostics for a repair that may change
@@ -103,8 +127,9 @@ Sits above sidereal-ingest. Imports core and ingest only.
   document that failed alone, so a fault in the mark scheme never costs a paper round. What
   compiled is written back to the row, so a tutor's next render starts from source the renderer
   accepts.
-- A job files what its calls cost in `generated_from.usage`, summed over the extraction, its retry
-  and every repair. A price is filed only when every call in the job carried one.
+- A job files what its calls cost in `generated_from.usage`, summed over every call it made — the
+  shape, every run, the blocks, the mark scheme, each retry and each repair. A price is filed only
+  when every call in the job carried one.
 - Transcription asks for little thinking: an extraction and a repair send
   `SIDEREAL_GENERATE_REASONING` (`low` by default) and file the effort they used, because reasoning
   is spent from the same budget as the answer. Writing homework, feedback or a plan sends no effort

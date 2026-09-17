@@ -22,6 +22,9 @@ from sidereal_generate.usage import UsageTally
 
 logger = logging.getLogger(__name__)
 
+# What a backslash may introduce inside a JSON string. Anything else is the model's own.
+ESCAPES = frozenset('"\\/bfnrtu')
+
 
 class GenerationError(Exception):
     """The model answered, but not with the artefact we asked for."""
@@ -69,11 +72,8 @@ def unstringify(payload: object, model: type[BaseModel]) -> object:
 
 def _parsed(value: object, nested: type[BaseModel], owner: type[BaseModel], name: str) -> object:
     if isinstance(value, str):
-        try:
-            loaded = json.loads(value)
-        except json.JSONDecodeError:
-            return value
-        if not isinstance(loaded, dict | list):
+        loaded = _loaded(value, owner, name)
+        if loaded is None:
             return value
         logger.warning(
             "%s stringified %s: the %s arrived as JSON text and was parsed back",
@@ -85,6 +85,50 @@ def _parsed(value: object, nested: type[BaseModel], owner: type[BaseModel], name
     if isinstance(value, list):
         return [unstringify(item, nested) for item in value]
     return unstringify(value, nested)
+
+
+def _loaded(text: str, owner: type[BaseModel], name: str) -> dict[str, Any] | list[Any] | None:
+    """The object behind a string that was meant to be one, or nothing to leave it alone.
+
+    A string that does not open as JSON is the field's own value. One that does and will not
+    parse is said so, and its invalid escapes are doubled once — `\\p` in a maths field is the
+    backslash the model meant, and `json.loads` refuses it.
+    """
+    if not text.strip().startswith(("{", "[")):
+        return None
+    try:
+        return _object(json.loads(text))
+    except json.JSONDecodeError as exc:
+        logger.warning("%s.%s reads as JSON but would not parse: %s", owner.__name__, name, exc)
+    try:
+        loaded = _object(json.loads(_escaped(text)))
+    except json.JSONDecodeError:
+        return None
+    logger.warning("%s.%s parsed once its invalid escapes were doubled", owner.__name__, name)
+    return loaded
+
+
+def _object(loaded: object) -> dict[str, Any] | list[Any] | None:
+    return loaded if isinstance(loaded, dict | list) else None
+
+
+def _escaped(text: str) -> str:
+    """Every backslash JSON does not know as an escape, doubled into a literal one."""
+    out: list[str] = []
+    index = 0
+    while index < len(text):
+        character = text[index]
+        out.append(character)
+        index += 1
+        if character != "\\":
+            continue
+        following = text[index : index + 1]
+        if following and following in ESCAPES:
+            out.append(following)
+            index += 1
+            continue
+        out.append("\\")
+    return "".join(out)
 
 
 def _nested(annotation: object) -> type[BaseModel] | None:

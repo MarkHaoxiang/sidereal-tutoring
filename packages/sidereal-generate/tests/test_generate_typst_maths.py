@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 import pytest
-from sidereal_core.canonical import CanonicalPaper, CanonicalPart, CanonicalQuestion
+from sidereal_core.canonical import (
+    CanonicalCodeBlock,
+    CanonicalPaper,
+    CanonicalPart,
+    CanonicalQuestion,
+)
 from sidereal_generate.typst_maths import normalise, normalise_model
 
 
@@ -16,6 +21,14 @@ from sidereal_generate.typst_maths import normalise, normalise_model
         ("$cos4x$", '$"cos4x"$'),
         # A subscript word is a name too.
         ("$x_total$", '$x_"total"$'),
+        # A unit exponent the model wrote as a span of its own has no base to attach to.
+        ("$5.2 times 10^7$ C kg$^-1$", '$5.2 times 10^7$ C kg$""^-1$'),
+        ("m s$^-1$", 'm s$""^-1$'),
+        ("km h$^-1$", 'km h$""^-1$'),
+        ("$_2^4$He", '$""_2^4$He'),
+        ("$ ^-1$", '$ ""^-1$'),
+        # The empty base does not stop a name after it being quoted.
+        ("$^total$", '$""^"total"$'),
     ],
 )
 def test_a_name_typst_does_not_know_becomes_text(wrote: str, compiles: str) -> None:
@@ -39,6 +52,8 @@ def test_a_name_typst_does_not_know_becomes_text(wrote: str, compiles: str) -> N
         "$lim_(n -> infinity) u_n$",
         "$RR$",
         "$u_(n+1) = p u_n + 70$",
+        "$10^7$",
+        "$a_1$",
     ],
 )
 def test_maths_typst_already_accepts_is_left_alone(maths: str) -> None:
@@ -46,10 +61,10 @@ def test_maths_typst_already_accepts_is_left_alone(maths: str) -> None:
 
 
 def test_prose_outside_the_delimiters_is_never_touched() -> None:
-    wrote = "The points P and Q lie on the curve. Find $PQ$ where dy means nothing here."
+    wrote = "The points P and Q lie on the curve. Find $PQ$ where dy^2 means nothing here."
 
     assert normalise(wrote) == (
-        'The points P and Q lie on the curve. Find $"PQ"$ where dy means nothing here.'
+        'The points P and Q lie on the curve. Find $"PQ"$ where dy^2 means nothing here.'
     )
 
 
@@ -72,3 +87,24 @@ def test_every_string_in_a_structure_is_normalised() -> None:
     assert fixed.questions[0].parts[0].text == 'Show $"AB"$ is $sqrt(2)$.'
     # Nothing but the maths moves.
     assert fixed.questions[0].number == "1"
+
+
+def test_a_code_block_is_verbatim() -> None:
+    listing = "price = base$^-1$ # $PQ$"
+    paper = CanonicalPaper(
+        title="Gravitational fields",
+        questions=(
+            CanonicalQuestion(
+                number="1",
+                stem="Correct the line, given $F$ is in N kg$^-1$.",
+                blocks=(CanonicalCodeBlock(language="python", text=listing),),
+            ),
+        ),
+    )
+
+    fixed = normalise_model(paper)
+    block = fixed.questions[0].blocks[0]
+
+    assert isinstance(block, CanonicalCodeBlock)
+    assert block.text == listing
+    assert fixed.questions[0].stem == 'Correct the line, given $F$ is in N kg$""^-1$.'

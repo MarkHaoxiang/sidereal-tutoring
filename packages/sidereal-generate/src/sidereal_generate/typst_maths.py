@@ -55,6 +55,8 @@ VERBATIM = frozenset({"passage", "code"})
 _MATH = re.compile(r"(?<!\\)\$(.*?)(?<!\\)\$", re.DOTALL)
 # A quoted run is already text: Typst asks no questions of it, and neither do we.
 _QUOTED = re.compile(r'"[^"]*"')
+# A span opening on `^` or `_` — `kg$^-1$` — has no base to attach the script to.
+_LEADING_SCRIPT = re.compile(r"^(\s*)([_^])")
 # `dx`, `d x` — a differential, not the product of `d` and `x`.
 _DIFFERENTIAL = re.compile(r"\bd[ ]?([xyztθ])\b")
 # An identifier Typst would look up: letters then letters or digits, unquoted, not a field
@@ -73,6 +75,8 @@ def normalise_model[M: BaseModel](model: M) -> M:
 
 
 def _span(maths: str) -> str:
+    """The empty base goes in first: it is a quoted run the names pass then skips."""
+    maths = _LEADING_SCRIPT.sub(r'\1""\2', maths)
     out: list[str] = []
     cursor = 0
     for quoted in _QUOTED.finditer(maths):

@@ -18,6 +18,7 @@ from sidereal_generate.claude import (
     paper_extractor,
     plan_generator,
 )
+from sidereal_generate.extraction import Ask, BatchCaller, ChunkedPaperExtractor
 from sidereal_generate.fake import (
     FailingGenerator,
     FakeFeedbackGenerator,
@@ -87,6 +88,9 @@ __all__ = [
     "DEFAULT_OPENROUTER_MODEL",
     "AnthropicGenerator",
     "AnthropicPaperExtractor",
+    "Ask",
+    "BatchCaller",
+    "ChunkedPaperExtractor",
     "Compiled",
     "FailingGenerator",
     "FakeFeedbackGenerator",

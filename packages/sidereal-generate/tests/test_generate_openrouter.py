@@ -17,6 +17,7 @@ from sidereal_generate.base import (
     GenerationTruncatedError,
     strict_schema,
 )
+from sidereal_generate.chunks import MarkSchemeBatch, PaperSkeleton, QuestionBatch
 from sidereal_generate.models import (
     GenerationRequest,
     HomeworkOutput,
@@ -35,8 +36,10 @@ from sidereal_generate.prompts import (
     HOMEWORK_TOOL,
     HOMEWORK_TYPST_PROMPT,
     MARK_SCHEME_TOOL,
-    PAPER_PAGES_PROMPT,
-    PAPER_TOOL,
+    QUESTION_BATCH_PAGES_PROMPT,
+    QUESTIONS_TOOL,
+    SKELETON_PAGES_PROMPT,
+    SKELETON_TOOL,
 )
 from sidereal_generate.settings import DEFAULT_EXTRACT_MAX_TOKENS
 from sidereal_generate.usage import UsageTally
@@ -79,8 +82,34 @@ PAPER: dict[str, Any] = {
     },
     "figures": [],
 }
-DRAWN_PAPER: dict[str, Any] = {
-    **PAPER,
+SHAPE: dict[str, Any] = {
+    "title": "Pure Mathematics 1",
+    "source": "Edexcel 2025",
+    "board": "Edexcel",
+    "year": 2025,
+    "time_minutes": 90,
+    "total_marks": 75,
+    "instructions": None,
+    "questions": [
+        {"number": "1", "stem": "Differentiation", "page": 1, "has_material": False, "marks": 3}
+    ],
+    "sections": [],
+    "passages": [],
+}
+QUESTIONS: dict[str, Any] = {
+    "questions": [
+        {
+            "number": "1",
+            "stem": "Find $(d y) / (d x)$ when $y = x^3$.",
+            "marks": 3,
+            "answer": {"type": "lines", "lines": 5},
+            "parts": [],
+        }
+    ],
+    "figures": [],
+}
+DRAWN_QUESTIONS: dict[str, Any] = {
+    **QUESTIONS,
     "figures": [
         {
             "page": 2,
@@ -91,12 +120,14 @@ DRAWN_PAPER: dict[str, Any] = {
         }
     ],
 }
+UNUSABLE: dict[str, Any] = {"questions": [{"stem": "no number"}], "figures": []}
 MARK_SCHEME: dict[str, Any] = {
     "mark_scheme": {
         "title": "Pure Mathematics 1: mark scheme",
         "questions": [{"number": "1", "answer": "$3 x^2$"}],
     }
 }
+SCHEME: dict[str, Any] = {"questions": [{"number": "1", "answer": "$3 x^2$"}]}
 
 Handler = Callable[[httpx2.Request], httpx2.Response]
 
@@ -324,43 +355,6 @@ async def test_a_fallback_with_no_tool_call_is_a_generation_error() -> None:
         await generator_for(handler).generate(request())
 
 
-async def test_one_answer_becomes_a_paper() -> None:
-    seen, handler = replayer(httpx2.Response(200, json=answered(PAPER)))
-
-    extraction = await paper_extractor(client=client_for(handler), model=MODEL).extract(document())
-
-    assert extraction.paper.board == "Edexcel"
-
-    sent = json.loads(seen[0].content)
-    assert sent["response_format"]["json_schema"]["name"] == PAPER_TOOL
-    assert "numbering" in sent["messages"][0]["content"].lower()
-    assert "$y = x^3$" in sent["messages"][1]["content"]
-
-
-async def test_a_paper_that_does_not_validate_is_asked_for_once_more_with_the_errors() -> None:
-    seen, handler = replayer(
-        httpx2.Response(200, json=answered({"paper": {"title": "x", "questions": [{}]}})),
-        httpx2.Response(200, json=answered(PAPER)),
-    )
-
-    extraction = await paper_extractor(client=client_for(handler), model=MODEL).extract(document())
-
-    assert extraction.paper.title == "Pure Mathematics 1"
-    assert len(seen) == 2
-    retried = json.loads(seen[1].content)["messages"][1]["content"]
-    assert "did not fit the structure" in retried
-    assert "number" in retried
-
-
-async def test_a_second_unusable_paper_is_a_generation_error() -> None:
-    _, handler = replayer(
-        httpx2.Response(200, json=answered({"paper": {"title": "x", "questions": [{}]}}))
-    )
-
-    with pytest.raises(GenerationError, match="unusable paper"):
-        await paper_extractor(client=client_for(handler), model=MODEL).extract(document())
-
-
 async def test_the_key_base_url_and_attribution_headers_come_from_the_environment(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -436,17 +430,6 @@ async def test_an_answer_with_no_choices_is_a_generation_error() -> None:
         await generator_for(handler).generate(request())
 
 
-async def test_a_paper_asks_for_the_larger_output_budget(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A whole transcribed paper is the longest answer asked for, and is budgeted as one."""
-    monkeypatch.delenv("SIDEREAL_GENERATE_EXTRACT_MAX_TOKENS", raising=False)
-    monkeypatch.delenv("SIDEREAL_GENERATE_MAX_TOKENS", raising=False)
-    seen, handler = replayer(httpx2.Response(200, json=answered(PAPER)))
-
-    await paper_extractor(client=client_for(handler), model=MODEL).extract(document())
-
-    assert json.loads(seen[0].content)["max_tokens"] == DEFAULT_EXTRACT_MAX_TOKENS
-
-
 async def test_a_call_records_what_it_spent_including_reasoning_and_price() -> None:
     body = answered(HOMEWORK)
     body["usage"] = {
@@ -509,24 +492,208 @@ async def test_an_unpriced_call_files_no_price() -> None:
     assert "cost_usd" not in (usage.provenance() or {})
 
 
-async def test_a_repair_asks_for_the_same_schema_with_the_diagnostics() -> None:
-    seen, handler = replayer(httpx2.Response(200, json=answered(PAPER)))
-    extraction = PaperExtraction.model_validate(PAPER)
+def asked_name(body: dict[str, Any]) -> str:
+    """Which schema a request asks for, whether as `response_format` or as a tool."""
+    if "response_format" in body:
+        return str(body["response_format"]["json_schema"]["name"])
+    return str(body["tools"][0]["function"]["name"])
 
-    repaired = await paper_extractor(client=client_for(handler), model=MODEL).repair(
-        extraction, "line 219, column 42: unknown variable: PQ"
+
+def sent(http_request: httpx2.Request) -> dict[str, Any]:
+    body: dict[str, Any] = json.loads(http_request.content)
+    return body
+
+
+def schema_of(http_request: httpx2.Request) -> dict[str, Any]:
+    body = sent(http_request)
+    if "response_format" in body:
+        schema: dict[str, Any] = body["response_format"]["json_schema"]["schema"]
+        return schema
+    parameters: dict[str, Any] = body["tools"][0]["function"]["parameters"]
+    return parameters
+
+
+def extraction(
+    replies: dict[str, list[dict[str, Any]]], usage: dict[str, Any] | None = None
+) -> tuple[list[httpx2.Request], Handler]:
+    """Answers each call with the next payload queued for the schema it asks for."""
+    seen: list[httpx2.Request] = []
+
+    def handler(http_request: httpx2.Request) -> httpx2.Response:
+        seen.append(http_request)
+        queue = replies[asked_name(sent(http_request))]
+        body = answered(queue.pop(0) if len(queue) > 1 else queue[0])
+        if usage is not None:
+            body["usage"] = usage
+        return httpx2.Response(200, json=body)
+
+    return seen, handler
+
+
+def prompt_of(http_request: httpx2.Request) -> str:
+    """The text the model reads, whether it went up alone or behind the page images."""
+    content = sent(http_request)["messages"][1]["content"]
+    return content if isinstance(content, str) else content[-1]["text"]
+
+
+async def test_a_paper_is_read_as_a_shape_and_then_its_questions() -> None:
+    seen, handler = extraction({SKELETON_TOOL: [SHAPE], QUESTIONS_TOOL: [QUESTIONS]})
+
+    read = await paper_extractor(client=client_for(handler), model=MODEL).extract(document())
+
+    assert read.paper.board == "Edexcel"
+    assert read.paper.questions[0].answer is not None
+    assert [asked_name(sent(request)) for request in seen] == [SKELETON_TOOL, QUESTIONS_TOOL]
+    assert schema_of(seen[0]) == strict_schema(PaperSkeleton)
+    assert schema_of(seen[1]) == strict_schema(QuestionBatch)
+    assert "$y = x^3$" in prompt_of(seen[0])
+    assert '<question number="1" page="1">' in prompt_of(seen[1])
+
+
+async def test_every_extraction_call_asks_for_the_larger_output_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A transcribed paper is the longest answer asked for, and every run is budgeted as one."""
+    monkeypatch.delenv("SIDEREAL_GENERATE_EXTRACT_MAX_TOKENS", raising=False)
+    monkeypatch.delenv("SIDEREAL_GENERATE_MAX_TOKENS", raising=False)
+    seen, handler = extraction({SKELETON_TOOL: [SHAPE], QUESTIONS_TOOL: [QUESTIONS]})
+
+    await paper_extractor(client=client_for(handler), model=MODEL).extract(document())
+
+    assert [sent(request)["max_tokens"] for request in seen] == [DEFAULT_EXTRACT_MAX_TOKENS] * 2
+
+
+async def test_a_batch_that_does_not_validate_is_asked_for_once_more_with_the_errors() -> None:
+    seen, handler = extraction({SKELETON_TOOL: [SHAPE], QUESTIONS_TOOL: [UNUSABLE, QUESTIONS]})
+
+    read = await paper_extractor(client=client_for(handler), model=MODEL).extract(document())
+
+    assert read.paper.questions[0].number == "1"
+    assert len(seen) == 3
+    retried = prompt_of(seen[2])
+    assert "did not fit the structure" in retried
+    assert "number" in retried
+
+
+async def test_a_second_unusable_batch_is_a_generation_error() -> None:
+    _, handler = extraction({SKELETON_TOOL: [SHAPE], QUESTIONS_TOOL: [UNUSABLE]})
+
+    with pytest.raises(GenerationError, match="could not be read after two tries"):
+        await paper_extractor(client=client_for(handler), model=MODEL).extract(document())
+
+
+async def test_a_batch_field_the_model_sent_as_json_text_is_parsed_and_logged(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The live failure: the forced tool call is unconstrained, and a field arrived as text."""
+    stringified = {"questions": json.dumps(QUESTIONS["questions"]), "figures": []}
+    _, handler = extraction({SKELETON_TOOL: [SHAPE], QUESTIONS_TOOL: [stringified]})
+
+    with caplog.at_level(logging.WARNING):
+        read = await paper_extractor(client=client_for(handler), model=MODEL).extract(document())
+
+    assert read.paper.questions[0].stem == "Find $(d y) / (d x)$ when $y = x^3$."
+    assert "QuestionBatch stringified questions" in caplog.text
+
+
+async def test_a_string_that_is_not_an_object_is_still_refused() -> None:
+    """The helper never swallows a real error: only JSON that parses to an object is parsed."""
+    _, handler = extraction(
+        {SKELETON_TOOL: [SHAPE], QUESTIONS_TOOL: [{"questions": "the questions", "figures": []}]}
     )
 
-    assert repaired.paper.title == "Pure Mathematics 1"
-    sent = json.loads(seen[0].content)
-    assert sent["response_format"]["json_schema"]["name"] == PAPER_TOOL
-    assert "does not compile" in sent["messages"][0]["content"]
-    assert "unknown variable: PQ" in sent["messages"][1]["content"]
-    assert "Pure Mathematics 1" in sent["messages"][1]["content"]
+    with pytest.raises(GenerationError, match="could not be read"):
+        await paper_extractor(client=client_for(handler), model=MODEL).extract(document())
+
+
+async def test_what_the_model_actually_sent_is_captured_at_debug(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """One look at this would have answered both of the live run's failures."""
+    _, handler = extraction({SKELETON_TOOL: [SHAPE], QUESTIONS_TOOL: [QUESTIONS]})
+
+    with caplog.at_level(logging.DEBUG, logger="sidereal_generate.openrouter"):
+        await paper_extractor(client=client_for(handler), model=MODEL).extract(document())
+
+    assert f"{SKELETON_TOOL} answered" in caplog.text
+    assert '"board": "Edexcel"' in caplog.text
+    assert all(len(record.getMessage()) < 4000 for record in caplog.records)
+
+
+async def test_page_images_go_up_with_the_pages_prompt_and_are_counted() -> None:
+    spent = {
+        "prompt_tokens": 4000,
+        "completion_tokens": 20,
+        "total_tokens": 4020,
+        "prompt_tokens_details": {"cached_tokens": 0, "image_tokens": 2600},
+    }
+    seen, handler = extraction({SKELETON_TOOL: [SHAPE], QUESTIONS_TOOL: [QUESTIONS]}, spent)
+    usage = UsageTally()
+
+    await paper_extractor(client=client_for(handler), model=MODEL).extract(
+        document(), pages=[b"\xff\xd8one", b"\xff\xd8two"], usage=usage
+    )
+
+    assert sent(seen[0])["messages"][0]["content"] == SKELETON_PAGES_PROMPT
+    assert sent(seen[1])["messages"][0]["content"] == QUESTION_BATCH_PAGES_PROMPT
+    parts = sent(seen[0])["messages"][1]["content"]
+    assert [part["type"] for part in parts] == ["image_url", "image_url", "text"]
+    assert parts[0]["image_url"]["url"].startswith("data:image/jpeg;base64,")
+    # The shape sees the whole paper and the one run sees the pages it spans.
+    assert (usage.provenance() or {})["images"] == 4
+    assert (usage.provenance() or {})["image_tokens"] == 5200
+
+
+async def test_a_retried_batch_sends_the_same_pages_again() -> None:
+    seen, handler = extraction({SKELETON_TOOL: [SHAPE], QUESTIONS_TOOL: [UNUSABLE, QUESTIONS]})
+
+    read = await paper_extractor(client=client_for(handler), model=MODEL).extract(
+        document(), pages=[b"\xff\xd8one"]
+    )
+
+    assert read.paper.title == "Pure Mathematics 1"
+    retried = sent(seen[2])["messages"][1]["content"]
+    assert [part["type"] for part in retried] == ["image_url", "text"]
+    assert "did not fit the structure" in retried[-1]["text"]
+
+
+async def test_a_batch_that_omits_figures_is_refused_rather_than_read_as_none() -> None:
+    """An omitted key and a run with no figures must not look the same."""
+    omitted = {"questions": QUESTIONS["questions"]}
+    seen, handler = extraction({SKELETON_TOOL: [SHAPE], QUESTIONS_TOOL: [omitted, QUESTIONS]})
+
+    with pytest.raises(ValidationError, match="figures"):
+        QuestionBatch.model_validate(omitted)
+
+    read = await paper_extractor(client=client_for(handler), model=MODEL).extract(document())
+
+    assert read.figures == ()
+    assert len(seen) == 3
+    assert "figures" in prompt_of(seen[2])
+
+
+async def test_the_drawn_page_numbers_reach_the_run_that_spans_them() -> None:
+    seen, handler = extraction({SKELETON_TOOL: [SHAPE], QUESTIONS_TOOL: [DRAWN_QUESTIONS]})
+
+    read = await paper_extractor(client=client_for(handler), model=MODEL).extract(
+        document(), pages=[b"\xff\xd8one", b"\xff\xd8two"], drawn=[2]
+    )
+
+    assert [figure.page for figure in read.figures] == [2]
+    assert "Pages 2 carry drawn content" in prompt_of(seen[1])
+
+
+async def test_a_text_only_extraction_is_told_there_is_nothing_to_locate() -> None:
+    seen, handler = extraction({SKELETON_TOOL: [SHAPE], QUESTIONS_TOOL: [QUESTIONS]})
+
+    await paper_extractor(client=client_for(handler), model=MODEL).extract(document())
+
+    assert "`figures` is empty" in sent(seen[1])["messages"][0]["content"]
+    assert all("image_url" not in str(sent(request)["messages"]) for request in seen)
 
 
 async def test_a_mark_scheme_is_a_call_of_its_own_carrying_the_paper_numbering() -> None:
-    seen, handler = replayer(httpx2.Response(200, json=answered(MARK_SCHEME)))
+    seen, handler = extraction({MARK_SCHEME_TOOL: [SCHEME]})
     scheme = Document(
         id=UUID("33333333-3333-4333-8333-333333333333"),
         title="Mark scheme",
@@ -535,131 +702,80 @@ async def test_a_mark_scheme_is_a_call_of_its_own_carrying_the_paper_numbering()
     )
     paper = PaperExtraction.model_validate(PAPER).paper
 
-    extraction = await paper_extractor(client=client_for(handler), model=MODEL).extract_mark_scheme(
+    read = await paper_extractor(client=client_for(handler), model=MODEL).extract_mark_scheme(
         scheme, paper
     )
 
-    assert extraction.mark_scheme.questions[0].answer == "$3 x^2$"
-    sent = json.loads(seen[0].content)
-    assert sent["response_format"]["json_schema"]["name"] == MARK_SCHEME_TOOL
-    assert sent["response_format"]["json_schema"]["schema"] == strict_schema(MarkSchemeExtraction)
-    prompt = sent["messages"][1]["content"]
+    assert read.mark_scheme.questions[0].answer == "$3 x^2$"
+    assert read.mark_scheme.title == "Pure Mathematics 1: mark scheme"
+    assert asked_name(sent(seen[0])) == MARK_SCHEME_TOOL
+    assert schema_of(seen[0]) == strict_schema(MarkSchemeBatch)
+    prompt = prompt_of(seen[0])
     assert "<mark_scheme" in prompt
     assert "$3 x^2$" in prompt
-    assert '<question number="1"' in prompt
+    assert '<question number="1" marks="3"/>' in prompt
 
 
-def test_the_paper_call_and_the_mark_scheme_call_carry_only_their_own_defs() -> None:
-    """Strict mode compiles a grammar per schema, and a whole paper's was too large for one."""
-    paper = strict_schema(PaperExtraction)["$defs"]
-    scheme = strict_schema(MarkSchemeExtraction)["$defs"]
-
-    assert not [name for name in paper if name.startswith("CanonicalMarkScheme")]
-    assert "CanonicalPaper" not in scheme
-    assert "CanonicalSection" not in scheme
-
-
-async def test_a_mark_scheme_that_does_not_validate_is_asked_for_once_more() -> None:
-    seen, handler = replayer(
-        httpx2.Response(200, json=answered({"mark_scheme": {"questions": [{}]}})),
-        httpx2.Response(200, json=answered(MARK_SCHEME)),
-    )
+async def test_a_mark_scheme_run_that_does_not_validate_is_asked_for_once_more() -> None:
+    seen, handler = extraction({MARK_SCHEME_TOOL: [{"questions": [{}]}, SCHEME]})
     paper = PaperExtraction.model_validate(PAPER).paper
 
-    extraction = await paper_extractor(client=client_for(handler), model=MODEL).extract_mark_scheme(
+    read = await paper_extractor(client=client_for(handler), model=MODEL).extract_mark_scheme(
         document(), paper
     )
 
-    assert extraction.mark_scheme.title == "Pure Mathematics 1: mark scheme"
-    assert "mark scheme again" in json.loads(seen[1].content)["messages"][1]["content"]
+    assert read.mark_scheme.questions[0].number == "1"
+    assert "did not fit the structure" in prompt_of(seen[1])
 
 
-async def test_a_second_unusable_mark_scheme_is_a_generation_error() -> None:
-    _, handler = replayer(httpx2.Response(200, json=answered({"mark_scheme": {"questions": [{}]}})))
+async def test_a_second_unusable_mark_scheme_run_is_a_generation_error() -> None:
+    _, handler = extraction({MARK_SCHEME_TOOL: [{"questions": [{}]}]})
     paper = PaperExtraction.model_validate(PAPER).paper
 
-    with pytest.raises(GenerationError, match="unusable mark scheme"):
+    with pytest.raises(GenerationError, match="mark scheme for questions 1 could not be read"):
         await paper_extractor(client=client_for(handler), model=MODEL).extract_mark_scheme(
             document(), paper
         )
 
 
+async def test_a_repair_goes_out_in_the_same_runs_against_the_same_batch_schema() -> None:
+    """The whole-paper schema is the grammar the provider refused; a repair may not send it."""
+    corrected = {
+        "questions": [
+            {"number": "1", "stem": "Find $(d y) / (d x)$ when $y = x^3$, where $P Q$ is a chord."}
+        ],
+        "figures": [],
+    }
+    seen, handler = extraction({QUESTIONS_TOOL: [corrected]})
+    read = PaperExtraction.model_validate(PAPER)
+
+    repaired = await paper_extractor(client=client_for(handler), model=MODEL).repair(
+        read, "line 219, column 42: unknown variable: PQ"
+    )
+
+    assert "$P Q$" in (repaired.paper.questions[0].stem or "")
+    assert repaired.paper.title == "Pure Mathematics 1"
+    assert asked_name(sent(seen[0])) == QUESTIONS_TOOL
+    assert schema_of(seen[0]) == strict_schema(QuestionBatch)
+    assert "does not compile" in sent(seen[0])["messages"][0]["content"]
+    assert "unknown variable: PQ" in prompt_of(seen[0])
+    assert '"number": "1"' in prompt_of(seen[0])
+
+
 async def test_a_mark_scheme_repair_addresses_the_scheme_alone() -> None:
-    seen, handler = replayer(httpx2.Response(200, json=answered(MARK_SCHEME)))
-    extraction = MarkSchemeExtraction.model_validate(MARK_SCHEME)
+    seen, handler = extraction(
+        {MARK_SCHEME_TOOL: [{"questions": [{"number": "1", "answer": "$3 x^2$"}]}]}
+    )
+    read = MarkSchemeExtraction.model_validate(MARK_SCHEME)
 
     await paper_extractor(client=client_for(handler), model=MODEL).repair_mark_scheme(
-        extraction, "line 3, column 1: unknown variable: PQ"
+        read, "line 3, column 1: unknown variable: PQ"
     )
 
-    sent = json.loads(seen[0].content)
-    assert sent["response_format"]["json_schema"]["name"] == MARK_SCHEME_TOOL
-    assert "mark scheme you returned does not compile" in sent["messages"][0]["content"]
-    assert "unknown variable: PQ" in sent["messages"][1]["content"]
-
-
-async def test_a_field_the_model_sent_as_json_text_is_parsed_and_logged(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    """The live failure: the forced tool call is unconstrained, and `paper` arrived as a string."""
-    stringified = {"paper": json.dumps(PAPER["paper"]), "figures": []}
-    _, handler = replayer(
-        unsupported(), httpx2.Response(200, json=called(stringified, name=PAPER_TOOL))
-    )
-
-    with caplog.at_level(logging.WARNING):
-        extraction = await paper_extractor(client=client_for(handler), model=MODEL).extract(
-            document()
-        )
-
-    assert extraction.paper.title == "Pure Mathematics 1"
-    assert "PaperExtraction stringified paper" in caplog.text
-
-
-async def test_a_nested_field_sent_as_json_text_is_parsed_too() -> None:
-    nested = {**PAPER["paper"], "questions": json.dumps(PAPER["paper"]["questions"])}
-    _, handler = replayer(httpx2.Response(200, json=answered({"paper": nested, "figures": []})))
-
-    extraction = await paper_extractor(client=client_for(handler), model=MODEL).extract(document())
-
-    assert [question.number for question in extraction.paper.questions] == ["1"]
-
-
-async def test_a_string_that_is_not_an_object_is_still_refused() -> None:
-    """The helper never swallows a real error: only JSON that parses to an object is parsed."""
-    _, handler = replayer(
-        httpx2.Response(200, json=answered({"paper": "the paper", "figures": []}))
-    )
-
-    with pytest.raises(GenerationError, match="unusable paper"):
-        await paper_extractor(client=client_for(handler), model=MODEL).extract(document())
-
-
-async def test_a_field_that_legitimately_holds_a_string_is_left_alone() -> None:
-    """A stem that happens to read as JSON is the paper's own text, not a stringified object."""
-    quoted = {
-        **PAPER["paper"],
-        "questions": [{**PAPER["paper"]["questions"][0], "stem": '{"a": 1}'}],
-    }
-    _, handler = replayer(httpx2.Response(200, json=answered({"paper": quoted, "figures": []})))
-
-    extraction = await paper_extractor(client=client_for(handler), model=MODEL).extract(document())
-
-    assert extraction.paper.questions[0].stem == '{"a": 1}'
-
-
-async def test_a_refused_strict_mode_is_logged_as_such_with_the_providers_own_words(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    """A shrunk schema that still trips the grammar limit must be visible in the log."""
-    seen, handler = replayer(unsupported(), httpx2.Response(200, json=called(HOMEWORK)))
-
-    with caplog.at_level(logging.WARNING):
-        await generator_for(handler).generate(request())
-
-    assert len(seen) == 2
-    assert "refused strict mode" in caplog.text
-    assert "does not support the response_format json_schema parameter" in caplog.text
+    assert asked_name(sent(seen[0])) == MARK_SCHEME_TOOL
+    assert schema_of(seen[0]) == strict_schema(MarkSchemeBatch)
+    assert "does not compile" in sent(seen[0])["messages"][0]["content"]
+    assert "unknown variable: PQ" in prompt_of(seen[0])
 
 
 async def test_an_extraction_asks_for_little_thinking_and_files_which(
@@ -667,26 +783,24 @@ async def test_an_extraction_asks_for_little_thinking_and_files_which(
 ) -> None:
     """Transcription does not need deep reasoning, and reasoning is spent from the answer."""
     monkeypatch.delenv("SIDEREAL_GENERATE_REASONING", raising=False)
-    body = answered(PAPER)
-    body["usage"] = {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30}
-    seen, handler = replayer(httpx2.Response(200, json=body))
+    seen, handler = extraction({SKELETON_TOOL: [SHAPE], QUESTIONS_TOOL: [QUESTIONS]})
     usage = UsageTally()
 
     await paper_extractor(client=client_for(handler), model=MODEL).extract(document(), usage=usage)
 
-    assert json.loads(seen[0].content)["reasoning"] == {"effort": "low"}
+    assert sent(seen[0])["reasoning"] == {"effort": "low"}
     assert (usage.provenance() or {})["reasoning_effort"] == "low"
 
 
 async def test_the_effort_comes_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SIDEREAL_GENERATE_REASONING", "high")
-    seen, handler = replayer(httpx2.Response(200, json=answered(PAPER)))
+    seen, handler = extraction({QUESTIONS_TOOL: [QUESTIONS]})
 
     await paper_extractor(client=client_for(handler), model=MODEL).repair(
         PaperExtraction.model_validate(PAPER), "unknown variable: PQ"
     )
 
-    assert json.loads(seen[0].content)["reasoning"] == {"effort": "high"}
+    assert sent(seen[0])["reasoning"] == {"effort": "high"}
 
 
 async def test_generating_an_artefact_asks_for_no_particular_effort() -> None:
@@ -698,185 +812,28 @@ async def test_generating_an_artefact_asks_for_no_particular_effort() -> None:
     assert "reasoning" not in json.loads(seen[0].content)
 
 
-async def test_page_images_go_up_with_the_pages_prompt_and_are_counted() -> None:
-    body = answered(PAPER)
-    body["usage"] = {
-        "prompt_tokens": 4000,
-        "completion_tokens": 20,
-        "total_tokens": 4020,
-        "prompt_tokens_details": {"cached_tokens": 0, "image_tokens": 2600},
-    }
-    seen, handler = replayer(httpx2.Response(200, json=body))
-    usage = UsageTally()
-
-    await paper_extractor(client=client_for(handler), model=MODEL).extract(
-        document(), pages=[b"\xff\xd8one", b"\xff\xd8two"], usage=usage
-    )
-
-    sent = json.loads(seen[0].content)
-    assert sent["messages"][0]["content"] == PAPER_PAGES_PROMPT
-    parts = sent["messages"][1]["content"]
-    assert [part["type"] for part in parts] == ["image_url", "image_url", "text"]
-    assert parts[0]["image_url"]["url"].startswith("data:image/jpeg;base64,")
-    assert (usage.provenance() or {})["images"] == 2
-    assert (usage.provenance() or {})["image_tokens"] == 2600
-
-
-async def test_a_gateway_that_prices_no_images_still_counts_the_pages() -> None:
-    _, handler = replayer(httpx2.Response(200, json=answered(PAPER)))
-    usage = UsageTally()
-
-    await paper_extractor(client=client_for(handler), model=MODEL).extract(
-        document(), pages=[b"\xff\xd8one"], usage=usage
-    )
-
-    provenance = usage.provenance() or {}
-    assert provenance["images"] == 1
-    assert "image_tokens" not in provenance
-
-
-async def test_a_retried_extraction_sends_the_same_pages_again() -> None:
-    replies = [
-        httpx2.Response(200, json=answered({"paper": {"title": "x", "questions": [{}]}})),
-        httpx2.Response(200, json=answered(PAPER)),
-    ]
-    seen, handler = replayer(*replies)
-
-    extraction = await paper_extractor(client=client_for(handler), model=MODEL).extract(
-        document(), pages=[b"\xff\xd8one"]
-    )
-
-    assert extraction.paper.title == "Pure Mathematics 1"
-    retried = json.loads(seen[1].content)["messages"][1]["content"]
-    assert [part["type"] for part in retried] == ["image_url", "text"]
-    assert "did not fit the structure" in retried[-1]["text"]
-
-
-def prompt_of(request: httpx2.Request) -> str:
-    """The text the model reads, whether it went up alone or behind the page images."""
-    content = json.loads(request.content)["messages"][1]["content"]
-    return content if isinstance(content, str) else content[-1]["text"]
-
-
-async def test_a_paper_that_omits_figures_is_refused_rather_than_read_as_none() -> None:
-    """An omitted key and a paper with no figures must not look the same."""
-    omitted = {"paper": PAPER["paper"]}
-    seen, handler = replayer(
-        httpx2.Response(200, json=answered(omitted)),
-        httpx2.Response(200, json=answered(PAPER)),
-    )
-
-    with pytest.raises(ValidationError, match="figures"):
-        PaperExtraction.model_validate(omitted)
-
-    extraction = await paper_extractor(client=client_for(handler), model=MODEL).extract(document())
-
-    assert extraction.figures == ()
-    assert len(seen) == 2
-    assert "figures" in prompt_of(seen[1])
-
-
-async def test_the_drawn_page_numbers_reach_the_extraction_and_its_retry() -> None:
-    seen, handler = replayer(
-        httpx2.Response(200, json=answered({"paper": {"title": "x", "questions": [{}]}})),
-        httpx2.Response(200, json=answered(DRAWN_PAPER)),
-    )
-
-    extraction = await paper_extractor(client=client_for(handler), model=MODEL).extract(
-        document(), pages=[b"\xff\xd8one", b"\xff\xd8two", b"\xff\xd8three"], drawn=[2, 3]
-    )
-
-    assert len(extraction.figures) == 1
-    assert len(seen) == 2
-    for request in seen:
-        assert "2, 3" in prompt_of(request)
-
-
-async def test_a_drawn_paper_that_came_back_with_no_figures_is_asked_once_more() -> None:
-    """A second empty answer is taken: a drawn page can be page furniture."""
-    seen, handler = replayer(httpx2.Response(200, json=answered(PAPER)))
-
-    extraction = await paper_extractor(client=client_for(handler), model=MODEL).extract(
-        document(), pages=[b"\xff\xd8one"], drawn=[1]
-    )
-
-    assert extraction.figures == ()
-    assert len(seen) == 2
-    assert "returned no figures" in prompt_of(seen[1])
-
-
-async def test_a_paper_that_answered_with_figures_is_asked_only_once() -> None:
-    seen, handler = replayer(httpx2.Response(200, json=answered(DRAWN_PAPER)))
-
-    extraction = await paper_extractor(client=client_for(handler), model=MODEL).extract(
-        document(), pages=[b"\xff\xd8one", b"\xff\xd8two"], drawn=[2]
-    )
-
-    assert [figure.page for figure in extraction.figures] == [2]
-    assert len(seen) == 1
-
-
-async def test_an_extraction_with_no_page_images_is_never_asked_about_figures() -> None:
-    seen, handler = replayer(httpx2.Response(200, json=answered(PAPER)))
-    extractor = paper_extractor(client=client_for(handler), model=MODEL)
-
-    await extractor.extract(document())
-    # Drawn pages nobody sent the images of say nothing about the figures.
-    await extractor.extract(document(), drawn=[1, 2])
-    # Page images of a paper with nothing drawn on them do not either.
-    await extractor.extract(document(), pages=[b"\xff\xd8one"])
-
-    assert len(seen) == 3
-    assert all("returned no figures" not in prompt_of(request) for request in seen)
-
-
-async def test_a_second_ask_that_is_unusable_keeps_the_paper_that_validated(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    seen, handler = replayer(
-        httpx2.Response(200, json=answered(PAPER)),
-        httpx2.Response(200, json=answered({"paper": {"title": "x", "questions": [{}]}})),
-    )
-
-    with caplog.at_level(logging.WARNING):
-        extraction = await paper_extractor(client=client_for(handler), model=MODEL).extract(
-            document(), pages=[b"\xff\xd8one"], drawn=[1]
-        )
-
-    assert extraction.paper.title == "Pure Mathematics 1"
-    assert len(seen) == 2
-    assert "second ask for figures" in caplog.text
-
-
-async def test_a_payload_that_fails_validation_logs_the_errors_behind_the_retry(
+async def test_a_run_that_fails_validation_logs_the_errors_behind_the_retry(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """60,000 prompt tokens went on the refused attempt and left no trace of what was wrong."""
-    _, handler = replayer(
-        httpx2.Response(200, json=answered({"paper": {"title": "x", "questions": [{}]}})),
-        httpx2.Response(200, json=answered(PAPER)),
-    )
+    _, handler = extraction({SKELETON_TOOL: [SHAPE], QUESTIONS_TOOL: [UNUSABLE, QUESTIONS]})
 
     with caplog.at_level(logging.WARNING):
         await paper_extractor(client=client_for(handler), model=MODEL).extract(document())
 
-    assert "emit_paper returned an unusable paper" in caplog.text
+    assert "questions 1 did not fit the structure" in caplog.text
     assert "number" in caplog.text
 
 
-async def test_a_mark_scheme_that_fails_validation_logs_the_errors_too(
+async def test_a_refused_strict_mode_is_logged_as_such_with_the_providers_own_words(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    _, handler = replayer(
-        httpx2.Response(200, json=answered({"mark_scheme": {"questions": [{}]}})),
-        httpx2.Response(200, json=answered(MARK_SCHEME)),
-    )
-    paper = PaperExtraction.model_validate(PAPER).paper
+    """A schema that still trips the grammar limit must be visible in the log."""
+    seen, handler = replayer(unsupported(), httpx2.Response(200, json=called(HOMEWORK)))
 
     with caplog.at_level(logging.WARNING):
-        await paper_extractor(client=client_for(handler), model=MODEL).extract_mark_scheme(
-            document(), paper
-        )
+        await generator_for(handler).generate(request())
 
-    assert "emit_mark_scheme returned an unusable mark scheme" in caplog.text
-    assert "title" in caplog.text
+    assert len(seen) == 2
+    assert "refused strict mode" in caplog.text
+    assert "does not support the response_format json_schema parameter" in caplog.text

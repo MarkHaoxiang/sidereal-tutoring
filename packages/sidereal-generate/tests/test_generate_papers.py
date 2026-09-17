@@ -21,6 +21,7 @@ from sidereal_core.models import (
 )
 from sidereal_core.testing import FAIL_MARKER, FakeDirectus, FakeTypeset
 from sidereal_generate.base import GenerationError, strict_schema
+from sidereal_generate.chunks import MarkSchemeBatch, PaperSkeleton, QuestionBatch
 from sidereal_generate.claude import (
     NON_STREAMING_MAX_TOKENS,
     AnthropicPaperExtractor,
@@ -35,7 +36,7 @@ from sidereal_generate.fake import (
 from sidereal_generate.jobs import Generators, JobInput, run_job, start_job
 from sidereal_generate.models import MarkSchemeExtraction, PaperExtraction
 from sidereal_generate.papers import PaperError, paper_worksheet, rerender_paper
-from sidereal_generate.prompts import MARK_SCHEME_TOOL, PAPER_TOOL
+from sidereal_generate.prompts import MARK_SCHEME_TOOL, QUESTIONS_TOOL, SKELETON_TOOL
 from sidereal_generate.usage import UsageTally
 
 DOCUMENT_ID = UUID("22222222-2222-4222-8222-222222222222")
@@ -72,17 +73,39 @@ PAPER_INPUT: dict[str, Any] = {
     "figures": [],
 }
 SCHEME_INPUT: dict[str, Any] = {
-    "mark_scheme": {
-        "title": "Pure Mathematics 1: mark scheme",
-        "questions": [
-            {
-                "number": "1",
-                "answer": None,
-                "notes": None,
-                "parts": [{"label": "a", "answer": "$3 x^2$", "marks": 2, "notes": None}],
-            }
-        ],
-    }
+    "questions": [{"number": "1", "parts": [{"label": "a", "answer": "$3 x^2$", "marks": 2}]}]
+}
+SHAPE_INPUT: dict[str, Any] = {
+    "title": "Pure Mathematics 1",
+    "source": "Edexcel 2025",
+    "board": "Edexcel",
+    "year": 2025,
+    "time_minutes": 90,
+    "total_marks": 75,
+    "instructions": None,
+    "questions": [
+        {"number": "1", "stem": "Differentiation", "page": 1, "has_material": False, "marks": 5}
+    ],
+    "sections": [],
+    "passages": [],
+}
+QUESTIONS_INPUT: dict[str, Any] = {
+    "questions": [
+        {
+            "number": "1",
+            "stem": "The curve $C$ has equation $y = x^3$.",
+            "marks": 5,
+            "parts": [
+                {
+                    "label": "a",
+                    "text": "Find $(d y) / (d x)$.",
+                    "marks": 2,
+                    "answer": {"type": "lines", "lines": 3},
+                }
+            ],
+        }
+    ],
+    "figures": [],
 }
 
 
@@ -332,20 +355,13 @@ async def test_the_fake_extractor_produces_a_paper_the_renderer_accepts() -> Non
     assert CanonicalPaper.model_validate(extraction.paper.model_dump()) == extraction.paper
 
 
-def test_the_tool_schema_asks_for_every_field() -> None:
-    schema = strict_schema(PaperExtraction)
+def test_the_batch_schema_asks_for_every_field() -> None:
+    """A strict schema has no optional properties, whatever default the model carries."""
+    schema = strict_schema(QuestionBatch)
 
-    assert schema["required"] == ["paper", "figures"]
-    question = schema["$defs"]["CanonicalQuestion"]
-    assert question["required"] == [
-        "number",
-        "stem",
-        "marks",
-        "parts",
-        "answer_lines",
-        "answer",
-        "blocks",
-    ]
+    assert schema["required"] == ["figures", "questions"]
+    question = schema["$defs"]["BatchQuestion"]
+    assert question["required"] == ["number", "stem", "marks", "answer", "parts"]
     assert question["additionalProperties"] is False
 
 
@@ -356,7 +372,7 @@ def extractor_for(handler: Handler) -> AnthropicPaperExtractor:
     return AnthropicPaperExtractor(client=client, model="claude-sonnet-5")
 
 
-def message(tool_input: dict[str, Any], *, name: str = PAPER_TOOL) -> dict[str, Any]:
+def message(tool_input: dict[str, Any], *, name: str = QUESTIONS_TOOL) -> dict[str, Any]:
     return {
         "id": "msg_1",
         "type": "message",
@@ -369,6 +385,20 @@ def message(tool_input: dict[str, Any], *, name: str = PAPER_TOOL) -> dict[str, 
     }
 
 
+def extraction(replies: dict[str, list[dict[str, Any]]]) -> tuple[list[httpx2.Request], Handler]:
+    """Answers each forced tool call with the next payload queued for its name."""
+    seen: list[httpx2.Request] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        seen.append(request)
+        name = json.loads(request.content)["tools"][0]["name"]
+        queue = replies[name]
+        payload = queue.pop(0) if len(queue) > 1 else queue[0]
+        return httpx2.Response(200, json=message(payload, name=name))
+
+    return seen, handler
+
+
 def document() -> Document:
     return Document(
         id=DOCUMENT_ID,
@@ -378,91 +408,71 @@ def document() -> Document:
     )
 
 
-async def test_one_tool_call_becomes_a_paper() -> None:
-    seen: list[httpx2.Request] = []
+async def test_each_call_is_a_forced_strict_tool_call_of_its_own() -> None:
+    seen, handler = extraction({SKELETON_TOOL: [SHAPE_INPUT], QUESTIONS_TOOL: [QUESTIONS_INPUT]})
 
-    def handler(request: httpx2.Request) -> httpx2.Response:
-        seen.append(request)
-        return httpx2.Response(200, json=message(PAPER_INPUT))
+    extraction_read = await extractor_for(handler).extract(document())
 
-    extraction = await extractor_for(handler).extract(document())
-
-    assert extraction.paper.board == "Edexcel"
-
-    sent = json.loads(seen[0].content)
-    assert sent["tool_choice"] == {"type": "tool", "name": PAPER_TOOL}
-    assert sent["tools"][0]["strict"] is True
-    assert sent["tools"][0]["input_schema"] == strict_schema(PaperExtraction)
-    assert "numbering" in sent["system"].lower()
-    assert "Typst" in sent["system"]
-    assert "The curve $C$" in sent["messages"][0]["content"]
+    assert extraction_read.paper.board == "Edexcel"
+    sent = [json.loads(request.content) for request in seen]
+    assert [body["tools"][0]["name"] for body in sent] == [SKELETON_TOOL, QUESTIONS_TOOL]
+    assert all(body["tools"][0]["strict"] is True for body in sent)
+    assert sent[0]["tools"][0]["input_schema"] == strict_schema(PaperSkeleton)
+    assert sent[1]["tools"][0]["input_schema"] == strict_schema(QuestionBatch)
+    assert sent[0]["tool_choice"] == {"type": "tool", "name": SKELETON_TOOL}
+    assert "The curve $C$" in sent[0]["messages"][0]["content"]
 
 
-async def test_the_mark_scheme_is_a_second_tool_call_against_its_own_schema() -> None:
-    seen: list[httpx2.Request] = []
-
-    def handler(request: httpx2.Request) -> httpx2.Response:
-        seen.append(request)
-        return httpx2.Response(200, json=message(SCHEME_INPUT, name=MARK_SCHEME_TOOL))
-
+async def test_the_mark_scheme_is_a_call_of_its_own_against_its_own_schema() -> None:
+    seen, handler = extraction({MARK_SCHEME_TOOL: [SCHEME_INPUT]})
     paper = PaperExtraction.model_validate(PAPER_INPUT).paper
-    extraction = await extractor_for(handler).extract_mark_scheme(document(), paper)
 
-    assert extraction.mark_scheme.questions[0].parts[0].answer == "$3 x^2$"
+    read = await extractor_for(handler).extract_mark_scheme(document(), paper)
 
+    assert read.mark_scheme.questions[0].parts[0].answer == "$3 x^2$"
     sent = json.loads(seen[0].content)
-    assert sent["tool_choice"] == {"type": "tool", "name": MARK_SCHEME_TOOL}
-    assert sent["tools"][0]["input_schema"] == strict_schema(MarkSchemeExtraction)
+    assert sent["tools"][0]["input_schema"] == strict_schema(MarkSchemeBatch)
     assert '<part number="1" label="a" marks="2"/>' in sent["messages"][0]["content"]
 
 
-async def test_a_paper_field_sent_as_json_text_is_parsed_and_logged(
+async def test_a_batch_field_sent_as_json_text_is_parsed_and_logged(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """The live failure: an unconstrained tool call returned `paper` as a JSON string."""
-    body = message({"paper": json.dumps(PAPER_INPUT["paper"]), "figures": []})
+    """The live failure: an unconstrained tool call returned a field as a JSON string."""
+    stringified = {"questions": json.dumps(QUESTIONS_INPUT["questions"]), "figures": []}
+    _, handler = extraction({SKELETON_TOOL: [SHAPE_INPUT], QUESTIONS_TOOL: [stringified]})
 
     with caplog.at_level(logging.WARNING):
-        extraction = await extractor_for(lambda _: httpx2.Response(200, json=body)).extract(
-            document()
-        )
+        read = await extractor_for(handler).extract(document())
 
-    assert extraction.paper.title == "Pure Mathematics 1"
-    assert "PaperExtraction stringified paper" in caplog.text
+    assert read.paper.questions[0].parts[0].label == "a"
+    assert "QuestionBatch stringified questions" in caplog.text
 
 
-async def test_a_paper_field_that_is_not_json_is_still_refused() -> None:
-    body = message({"paper": "the paper you asked for", "figures": []})
+async def test_a_batch_that_does_not_validate_is_asked_for_once_more_with_the_errors() -> None:
+    seen, handler = extraction(
+        {
+            SKELETON_TOOL: [SHAPE_INPUT],
+            QUESTIONS_TOOL: [{"questions": [{}], "figures": []}, QUESTIONS_INPUT],
+        }
+    )
 
-    with pytest.raises(GenerationError, match="unusable paper"):
-        await extractor_for(lambda _: httpx2.Response(200, json=body)).extract(document())
+    read = await extractor_for(handler).extract(document())
 
-
-async def test_a_payload_that_does_not_validate_is_asked_for_once_more_with_the_errors() -> None:
-    seen: list[httpx2.Request] = []
-    replies = [
-        message({"paper": {"title": "x", "questions": [{}]}}),
-        message(PAPER_INPUT),
-    ]
-
-    def handler(request: httpx2.Request) -> httpx2.Response:
-        seen.append(request)
-        return httpx2.Response(200, json=replies[min(len(seen) - 1, len(replies) - 1)])
-
-    extraction = await extractor_for(handler).extract(document())
-
-    assert extraction.paper.title == "Pure Mathematics 1"
-    assert len(seen) == 2
-    retried = json.loads(seen[1].content)["messages"][0]["content"]
+    assert read.paper.questions[0].number == "1"
+    assert len(seen) == 3
+    retried = json.loads(seen[2].content)["messages"][0]["content"]
     assert "did not fit the structure" in retried
     assert "number" in retried
 
 
-async def test_a_second_unusable_payload_is_a_generation_error() -> None:
-    body = message({"paper": {"title": "x", "questions": [{}]}})
+async def test_a_second_unusable_batch_is_a_generation_error() -> None:
+    _, handler = extraction(
+        {SKELETON_TOOL: [SHAPE_INPUT], QUESTIONS_TOOL: [{"questions": [{}], "figures": []}]}
+    )
 
-    with pytest.raises(GenerationError, match="unusable paper"):
-        await extractor_for(lambda _: httpx2.Response(200, json=body)).extract(document())
+    with pytest.raises(GenerationError, match="could not be read after two tries"):
+        await extractor_for(handler).extract(document())
 
 
 async def test_a_reply_with_no_tool_call_is_a_generation_error() -> None:
@@ -496,11 +506,7 @@ async def test_an_extraction_never_asks_anthropic_for_more_than_it_answers_unstr
 ) -> None:
     """The SDK refuses a non-streaming request above its ceiling, and nothing here streams."""
     monkeypatch.setenv("SIDEREAL_GENERATE_EXTRACT_MAX_TOKENS", "128000")
-    seen: list[httpx2.Request] = []
-
-    def handler(request: httpx2.Request) -> httpx2.Response:
-        seen.append(request)
-        return httpx2.Response(200, json=message(PAPER_INPUT))
+    seen, handler = extraction({SKELETON_TOOL: [SHAPE_INPUT], QUESTIONS_TOOL: [QUESTIONS_INPUT]})
 
     await extractor_for(handler).extract(document())
 
@@ -700,35 +706,3 @@ async def test_a_render_that_works_clears_an_earlier_failure_warning() -> None:
 
     assert paper.rendered_pdf is not None
     assert "warning" not in (paper.generated_from or {})
-
-
-async def test_an_anthropic_payload_that_fails_validation_logs_the_errors(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    """The refused attempt is paid for in full, so what was wrong with it must be on record."""
-    seen: list[httpx2.Request] = []
-    replies = [message({"paper": {"title": "x", "questions": [{}]}}), message(PAPER_INPUT)]
-
-    def handler(request: httpx2.Request) -> httpx2.Response:
-        seen.append(request)
-        return httpx2.Response(200, json=replies[min(len(seen) - 1, len(replies) - 1)])
-
-    with caplog.at_level(logging.WARNING):
-        await extractor_for(handler).extract(document())
-
-    assert "emit_paper returned an unusable paper" in caplog.text
-    assert "number" in caplog.text
-
-
-async def test_an_anthropic_paper_that_omits_figures_drives_the_retry() -> None:
-    seen: list[httpx2.Request] = []
-    replies = [message({"paper": PAPER_INPUT["paper"]}), message(PAPER_INPUT)]
-
-    def handler(request: httpx2.Request) -> httpx2.Response:
-        seen.append(request)
-        return httpx2.Response(200, json=replies[min(len(seen) - 1, len(replies) - 1)])
-
-    extraction = await extractor_for(handler).extract(document())
-
-    assert extraction.figures == ()
-    assert len(seen) == 2
